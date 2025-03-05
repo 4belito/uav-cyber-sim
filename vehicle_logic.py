@@ -47,7 +47,7 @@ class VehicleLogic:
         self.action_i = -1
         self.wp_i = 0
         self.is_done = True 
-        self.is_reached = True
+        self.is_reached = False
 
     def act(self,action):
         if action == 'check_pos_est':
@@ -66,13 +66,16 @@ class VehicleLogic:
         if action == 'takeoff':
             wp=self.wps[0]
             self.send_takeoff(altitude=wp[-1])
-            self.is_done = self.check_reached(point=wp)
-            if self.is_done: self.wp_i+=1
+            self.is_reached = self.check_reached(point=wp)
+            if self.is_reached:
+                self.is_done = True
+                self.wp_i+=1
         if action == 'fly':
             if self.wp_i < self.n_wps:
                 wp=self.wps[self.wp_i]
                 self.send_go_to(point=wp)
-                if self.check_reached(point=wp):
+                self.is_reached = self.check_reached(point=wp)
+                if self.is_reached:
                     self.wp_i+=1
             else:
                 self.is_done = True
