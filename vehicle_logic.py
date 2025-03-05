@@ -37,7 +37,12 @@ class VehicleLogic:
         self.reset_plan()
         print(f'vehicle {self.sys} created')
 
-
+    def update_waypoints(self,new_waypoints):
+        self.wps=new_waypoints
+        self.n_wps= len(self.wps)
+        self.wp_i = 1
+        self.is_reached=False
+        
     def reset_plan(self):
         self.action_i = -1
         self.wp_i = 0
