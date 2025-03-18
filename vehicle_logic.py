@@ -73,7 +73,6 @@ class VehicleLogic:
                 self.wp_i+=1
         if action == 'fly':
             if self.wp_i < self.n_wps:
-                print(self.wps)
                 wp=self.wps[self.wp_i]
                 self.send_local_position(point=wp)
                 self.is_reached = self.check_reached(point=wp)

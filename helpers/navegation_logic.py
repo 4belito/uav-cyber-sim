@@ -35,17 +35,17 @@ def in_same_orthant(current: np.ndarray, target: np.ndarray, waypoints: np.ndarr
     return np.all(((target_rel >= -eps) & (waypoints_rel >= -eps))| ((target_rel <= eps) & (waypoints_rel <= eps)), axis=1)
 
 
-# def in_same_corredor(curr_pos,waypoint,eps=1):
+# def in_same_corredor(current,waypoint,eps=1):
 #     x_way, y_way = waypoint
-#     x_cur, y_cur = curr_pos
+#     x_cur, y_cur = current
 #     return abs(x_way -x_cur)<eps or abs(y_way - y_cur)<eps
 
-def in_same_corridor(curr_pos: np.ndarray, waypoints: np.ndarray, eps=1,dims=[0,1]) -> np.ndarray:
+def in_same_corridor(current: np.ndarray, waypoints: np.ndarray, eps=1,dims=[0,1]) -> np.ndarray:
     """
     Vectorized function to check if waypoints are in the same corridor as the current position.
 
     Parameters:
-    - curr_pos: np.ndarray of shape (2,) (current position [x, y])
+    - current: np.ndarray of shape (2,) (current position [x, y])
     - waypoints: np.ndarray of shape (N,2) (list of waypoints)
     - eps: float (tolerance for corridor check)
 
@@ -53,33 +53,36 @@ def in_same_corridor(curr_pos: np.ndarray, waypoints: np.ndarray, eps=1,dims=[0,
     - np.ndarray of shape (N,) (boolean array indicating which waypoints are in the same corridor)
     """
     # Compute absolute difference along x and y directions
-    delta = np.abs(waypoints[:,dims] - curr_pos[dims])
+    delta = np.abs(waypoints[:,dims] - current[dims])
 
     # Check if waypoints lie within the corridor (x or y within eps)
     return np.any(delta < eps, axis=1)
 
 
-def find_best_waypoint(curr_pos, target_pos, waypoints,eps=1):
+def find_best_waypoint(current, target, waypoints,eps=1,same_orth=False):
     # Filter points that share x or y with the target AND are in the correct quadrant
-    mask=in_same_corridor(curr_pos,waypoints,eps=eps)
+    if same_orth:
+        same_quadrant=in_same_orthant(current, target,waypoints,eps=eps)
+        waypoints= waypoints[same_quadrant]
+    mask=in_same_corridor(current,waypoints,eps=eps)
     valid_waypoints = waypoints[mask]
     if valid_waypoints.shape[0] == 0:
         return None,None  # No valid moves available
     
-    dist_to_curr = manhattan_distance(valid_waypoints, curr_pos)
-    dist_to_target = manhattan_distance(valid_waypoints, target_pos)
+    dist_to_curr = manhattan_distance(valid_waypoints, current)
+    dist_to_target = manhattan_distance(valid_waypoints, target)
     best_i_valid = np.argmin(dist_to_curr + dist_to_target)
     best_i_original = np.where(mask)[0][best_i_valid]
     # Find the move that gets closest to the current position (gredy search)
-    #best_move = min(valid_waypoints, key=lambda w: manhattan_distance(w, curr_pos)+manhattan_distance(w, target_pos))
+    #best_move = min(valid_waypoints, key=lambda w: manhattan_distance(w, current)+manhattan_distance(w, target))
     return valid_waypoints[best_i_valid],np.delete(waypoints, best_i_original, axis=0) 
 
 def find_path(start, target, waypoints,eps=1):
     path = [start]
     current = start
     while not np.array_equal(current, target):
-        same_quadrant=in_same_orthant(current, target,waypoints,eps=eps)
-        waypoints = waypoints[same_quadrant]
+        # same_quadrant=in_same_orthant(current, target,waypoints,eps=eps)
+        # waypoints = waypoints[same_quadrant]
         next_waypoint,waypoints= find_best_waypoint(current, target, waypoints,eps=eps)
         if next_waypoint is None:
             break  # No valid path found
