@@ -176,7 +176,7 @@
           <wrench>53.7955 -8.00685 -44.3187 0 -0 0</wrench>
         </link>
       </model>
-      <model name="green_waypoint">
+      <model name="green_waypoint_0">
         <pose>40 -10 5 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name="link">
@@ -186,7 +186,7 @@
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
-      <model name="green_waypoint_0">
+      <model name="green_waypoint_1">
         <pose>15 -10 5 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name="link">
@@ -196,7 +196,7 @@
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
-      <model name="green_waypoint_1">
+      <model name="green_waypoint_2">
         <pose>0 -10 5 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name="link">
@@ -206,7 +206,7 @@
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
-      <model name="green_waypoint_2">
+      <model name="green_waypoint_3">
         <pose>0 4 5 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name="link">
@@ -216,7 +216,7 @@
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
-      <model name="green_waypoint_3">
+      <model name="green_waypoint_4">
         <pose>40 20 5 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name="link">
@@ -226,7 +226,7 @@
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
-      <model name="green_waypoint_3_clone">
+      <model name="green_waypoint_5">
         <pose>15 20 5 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name="link">
@@ -236,7 +236,7 @@
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
-      <model name="green_waypoint_3_clone_clone">
+      <model name="green_waypoint_6">
         <pose>0 20 5 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name="link">
@@ -407,335 +407,6 @@
         <projection_type>perspective</projection_type>
       </camera>
     </gui>
-    <model name="green_waypoint">
-      <link name="link">
-        <inertial>
-          <mass>1</mass>
-          <inertia>
-            <ixx>0.1</ixx>
-            <ixy>0</ixy>
-            <ixz>0</ixz>
-            <iyy>0.1</iyy>
-            <iyz>0</iyz>
-            <izz>0.1</izz>
-          </inertia>
-          <pose>0 0 0 0 -0 0</pose>
-        </inertial>
-        <self_collide>0</self_collide>
-        <enable_wind>0</enable_wind>
-        <kinematic>0</kinematic>
-        <pose>0 0 0 0 -0 0</pose>
-        <gravity>0</gravity>
-        <visual name="visual">
-          <geometry>
-            <sphere>
-              <radius>0.2</radius>
-            </sphere>
-          </geometry>
-          <material>
-            <script>
-              <name>Gazebo/Grey</name>
-              <uri>file://media/materials/scripts/gazebo.material</uri>
-            </script>
-            <shader type="pixel">
-              <normal_map>__default__</normal_map>
-            </shader>
-            <ambient>0.3 0.3 0.3 1</ambient>
-            <diffuse>0.306 0.604 0.024 1</diffuse>
-            <specular>0.01 0.01 0.01 1</specular>
-            <emissive>0 0 0 1</emissive>
-          </material>
-          <pose>0 0 0 0 -0 0</pose>
-          <transparency>0.05</transparency>
-          <cast_shadows>1</cast_shadows>
-        </visual>
-      </link>
-      <static>0</static>
-      <allow_auto_disable>1</allow_auto_disable>
-      <pose>2.24254 1.34751 0 0 -0 0</pose>
-    </model>
-    <model name="green_waypoint_0">
-      <link name="link">
-        <inertial>
-          <mass>1</mass>
-          <inertia>
-            <ixx>0.1</ixx>
-            <ixy>0</ixy>
-            <ixz>0</ixz>
-            <iyy>0.1</iyy>
-            <iyz>0</iyz>
-            <izz>0.1</izz>
-          </inertia>
-          <pose>0 0 0 0 -0 0</pose>
-        </inertial>
-        <self_collide>0</self_collide>
-        <enable_wind>0</enable_wind>
-        <kinematic>0</kinematic>
-        <pose>0 0 0 0 -0 0</pose>
-        <gravity>0</gravity>
-        <visual name="visual">
-          <geometry>
-            <sphere>
-              <radius>0.2</radius>
-            </sphere>
-          </geometry>
-          <material>
-            <script>
-              <name>Gazebo/Grey</name>
-              <uri>file://media/materials/scripts/gazebo.material</uri>
-            </script>
-            <shader type="pixel">
-              <normal_map>__default__</normal_map>
-            </shader>
-            <ambient>0.3 0.3 0.3 1</ambient>
-            <diffuse>0.306 0.604 0.024 1</diffuse>
-            <specular>0.01 0.01 0.01 1</specular>
-            <emissive>0 0 0 1</emissive>
-          </material>
-          <pose>0 0 0 0 -0 0</pose>
-          <transparency>0.05</transparency>
-          <cast_shadows>1</cast_shadows>
-        </visual>
-      </link>
-      <static>0</static>
-      <allow_auto_disable>1</allow_auto_disable>
-      <pose>14.9851 -0.636937 0 0 -0 0</pose>
-    </model>
-    <model name="green_waypoint_1">
-      <link name="link">
-        <inertial>
-          <mass>1</mass>
-          <inertia>
-            <ixx>0.1</ixx>
-            <ixy>0</ixy>
-            <ixz>0</ixz>
-            <iyy>0.1</iyy>
-            <iyz>0</iyz>
-            <izz>0.1</izz>
-          </inertia>
-          <pose>0 0 0 0 -0 0</pose>
-        </inertial>
-        <self_collide>0</self_collide>
-        <enable_wind>0</enable_wind>
-        <kinematic>0</kinematic>
-        <pose>0 0 0 0 -0 0</pose>
-        <gravity>0</gravity>
-        <visual name="visual">
-          <geometry>
-            <sphere>
-              <radius>0.2</radius>
-            </sphere>
-          </geometry>
-          <material>
-            <script>
-              <name>Gazebo/Grey</name>
-              <uri>file://media/materials/scripts/gazebo.material</uri>
-            </script>
-            <shader type="pixel">
-              <normal_map>__default__</normal_map>
-            </shader>
-            <ambient>0.3 0.3 0.3 1</ambient>
-            <diffuse>0.306 0.604 0.024 1</diffuse>
-            <specular>0.01 0.01 0.01 1</specular>
-            <emissive>0 0 0 1</emissive>
-          </material>
-          <pose>0 0 0 0 -0 0</pose>
-          <transparency>0.05</transparency>
-          <cast_shadows>1</cast_shadows>
-        </visual>
-      </link>
-      <static>0</static>
-      <allow_auto_disable>1</allow_auto_disable>
-      <pose>3.63173 -3.29993 0 0 -0 0</pose>
-    </model>
-    <model name="green_waypoint_2">
-      <link name="link">
-        <inertial>
-          <mass>1</mass>
-          <inertia>
-            <ixx>0.1</ixx>
-            <ixy>0</ixy>
-            <ixz>0</ixz>
-            <iyy>0.1</iyy>
-            <iyz>0</iyz>
-            <izz>0.1</izz>
-          </inertia>
-          <pose>0 0 0 0 -0 0</pose>
-        </inertial>
-        <self_collide>0</self_collide>
-        <enable_wind>0</enable_wind>
-        <kinematic>0</kinematic>
-        <pose>0 0 0 0 -0 0</pose>
-        <gravity>0</gravity>
-        <visual name="visual">
-          <geometry>
-            <sphere>
-              <radius>0.2</radius>
-            </sphere>
-          </geometry>
-          <material>
-            <script>
-              <name>Gazebo/Grey</name>
-              <uri>file://media/materials/scripts/gazebo.material</uri>
-            </script>
-            <shader type="pixel">
-              <normal_map>__default__</normal_map>
-            </shader>
-            <ambient>0.3 0.3 0.3 1</ambient>
-            <diffuse>0.306 0.604 0.024 1</diffuse>
-            <specular>0.01 0.01 0.01 1</specular>
-            <emissive>0 0 0 1</emissive>
-          </material>
-          <pose>0 0 0 0 -0 0</pose>
-          <transparency>0.05</transparency>
-          <cast_shadows>1</cast_shadows>
-        </visual>
-      </link>
-      <static>0</static>
-      <allow_auto_disable>1</allow_auto_disable>
-      <pose>3.35099 -5.01842 0 0 -0 0</pose>
-    </model>
-    <model name="green_waypoint_3">
-      <link name="link">
-        <inertial>
-          <mass>1</mass>
-          <inertia>
-            <ixx>0.1</ixx>
-            <ixy>0</ixy>
-            <ixz>0</ixz>
-            <iyy>0.1</iyy>
-            <iyz>0</iyz>
-            <izz>0.1</izz>
-          </inertia>
-          <pose>0 0 0 0 -0 0</pose>
-        </inertial>
-        <self_collide>0</self_collide>
-        <enable_wind>0</enable_wind>
-        <kinematic>0</kinematic>
-        <pose>0 0 0 0 -0 0</pose>
-        <gravity>0</gravity>
-        <visual name="visual">
-          <geometry>
-            <sphere>
-              <radius>0.2</radius>
-            </sphere>
-          </geometry>
-          <material>
-            <script>
-              <name>Gazebo/Grey</name>
-              <uri>file://media/materials/scripts/gazebo.material</uri>
-            </script>
-            <shader type="pixel">
-              <normal_map>__default__</normal_map>
-            </shader>
-            <ambient>0.3 0.3 0.3 1</ambient>
-            <diffuse>0.306 0.604 0.024 1</diffuse>
-            <specular>0.01 0.01 0.01 1</specular>
-            <emissive>0 0 0 1</emissive>
-          </material>
-          <pose>0 0 0 0 -0 0</pose>
-          <transparency>0.05</transparency>
-          <cast_shadows>1</cast_shadows>
-        </visual>
-      </link>
-      <static>0</static>
-      <allow_auto_disable>1</allow_auto_disable>
-      <pose>16.8713 7.34193 0 0 -0 0</pose>
-    </model>
-    <model name="green_waypoint_3_clone">
-      <link name="link">
-        <inertial>
-          <mass>1</mass>
-          <inertia>
-            <ixx>0.1</ixx>
-            <ixy>0</ixy>
-            <ixz>0</ixz>
-            <iyy>0.1</iyy>
-            <iyz>0</iyz>
-            <izz>0.1</izz>
-          </inertia>
-          <pose>0 0 0 0 -0 0</pose>
-        </inertial>
-        <self_collide>0</self_collide>
-        <enable_wind>0</enable_wind>
-        <kinematic>0</kinematic>
-        <pose>0 0 0 0 -0 0</pose>
-        <gravity>0</gravity>
-        <visual name="visual">
-          <geometry>
-            <sphere>
-              <radius>0.2</radius>
-            </sphere>
-          </geometry>
-          <material>
-            <script>
-              <name>Gazebo/Grey</name>
-              <uri>file://media/materials/scripts/gazebo.material</uri>
-            </script>
-            <shader type="pixel">
-              <normal_map>__default__</normal_map>
-            </shader>
-            <ambient>0.3 0.3 0.3 1</ambient>
-            <diffuse>0.306 0.604 0.024 1</diffuse>
-            <specular>0.01 0.01 0.01 1</specular>
-            <emissive>0 0 0 1</emissive>
-          </material>
-          <pose>0 0 0 0 -0 0</pose>
-          <transparency>0.05</transparency>
-          <cast_shadows>1</cast_shadows>
-        </visual>
-      </link>
-      <static>0</static>
-      <allow_auto_disable>1</allow_auto_disable>
-      <pose>10.931 12.8938 5 0 -0 0</pose>
-    </model>
-    <model name="green_waypoint_3_clone_clone">
-      <link name="link">
-        <inertial>
-          <mass>1</mass>
-          <inertia>
-            <ixx>0.1</ixx>
-            <ixy>0</ixy>
-            <ixz>0</ixz>
-            <iyy>0.1</iyy>
-            <iyz>0</iyz>
-            <izz>0.1</izz>
-          </inertia>
-          <pose>0 0 0 0 -0 0</pose>
-        </inertial>
-        <self_collide>0</self_collide>
-        <enable_wind>0</enable_wind>
-        <kinematic>0</kinematic>
-        <pose>0 0 0 0 -0 0</pose>
-        <gravity>0</gravity>
-        <visual name="visual">
-          <geometry>
-            <sphere>
-              <radius>0.2</radius>
-            </sphere>
-          </geometry>
-          <material>
-            <script>
-              <name>Gazebo/Grey</name>
-              <uri>file://media/materials/scripts/gazebo.material</uri>
-            </script>
-            <shader type="pixel">
-              <normal_map>__default__</normal_map>
-            </shader>
-            <ambient>0.3 0.3 0.3 1</ambient>
-            <diffuse>0.306 0.604 0.024 1</diffuse>
-            <specular>0.01 0.01 0.01 1</specular>
-            <emissive>0 0 0 1</emissive>
-          </material>
-          <pose>0 0 0 0 -0 0</pose>
-          <transparency>0.05</transparency>
-          <cast_shadows>1</cast_shadows>
-        </visual>
-      </link>
-      <static>0</static>
-      <allow_auto_disable>1</allow_auto_disable>
-      <pose>0.675424 11.2097 5 0 -0 0</pose>
-    </model>
     <model name="euro_pallet">
       <link name="link">
         <pose>0 0 0 0 -0 0</pose>
@@ -835,53 +506,6 @@
         <kinematic>0</kinematic>
       </link>
       <pose>24.4822 -0.315964 0 0 -0 0</pose>
-    </model>
-    <model name="red_waypoint">
-      <link name="link">
-        <inertial>
-          <mass>1</mass>
-          <inertia>
-            <ixx>0.1</ixx>
-            <ixy>0</ixy>
-            <ixz>0</ixz>
-            <iyy>0.1</iyy>
-            <iyz>0</iyz>
-            <izz>0.1</izz>
-          </inertia>
-          <pose>0 0 10 0 -0 0</pose>
-        </inertial>
-        <self_collide>0</self_collide>
-        <enable_wind>0</enable_wind>
-        <kinematic>0</kinematic>
-        <pose>0 0 0 0 -0 0</pose>
-        <gravity>0</gravity>
-        <visual name="visual">
-          <geometry>
-            <sphere>
-              <radius>0.2</radius>
-            </sphere>
-          </geometry>
-          <material>
-            <script>
-              <name>Gazebo/Grey</name>
-              <uri>file://media/materials/scripts/gazebo.material</uri>
-            </script>
-            <shader type="pixel">
-              <normal_map>__default__</normal_map>
-            </shader>
-            <ambient>0.3 0.3 0.3 1</ambient>
-            <diffuse>0.937 0.161 0.161 1</diffuse>
-            <specular>0.01 0.01 0.01 1</specular>
-            <emissive>0 0 0 1</emissive>
-          </material>
-          <pose>0 0 0 0 -0 0</pose>
-          <transparency>0.05</transparency>
-          <cast_shadows>1</cast_shadows>
-        </visual>
-      </link>
-      <static>0</static>
-      <allow_auto_disable>1</allow_auto_disable>
-      <pose>15.8973 -6.3155 0 0 -0 0</pose>
     </model>
     <model name="ground_plane_0">
       <static>1</static>
@@ -1781,5 +1405,5 @@
       </link>
       <pose>-8.53045 0.63822 0 0 -0 0</pose>
     </model>
-  <model name="drone1"><pose>40 -10 0 0 0 -0.0</pose><include><uri>model://drone1</uri></include></model></world>
+  <model name="green_waypoint_0"><pose>40 -10 5 0 0 0</pose><link name="link"><inertial><mass>1</mass><inertia><ixx>0.1</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.1</iyy><iyz>0</iyz><izz>0.1</izz></inertia><pose>0 0 0 0 -0 0</pose></inertial><self_collide>0</self_collide><enable_wind>0</enable_wind><kinematic>0</kinematic><pose>0 0 0 0 -0 0</pose><gravity>0</gravity><visual name="visual"><geometry><sphere><radius>0.2</radius></sphere></geometry><material><script><name>Gazebo/Grey</name><uri>file://media/materials/scripts/gazebo.material</uri></script><shader type="pixel"><normal_map>__default__</normal_map></shader><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.306 0.604 0.024 1</diffuse><specular>0.01 0.01 0.01 1</specular><emissive>0 0 0 1</emissive></material><pose>0 0 0 0 -0 0</pose><transparency>0.05</transparency><cast_shadows>1</cast_shadows></visual></link><static>0</static><allow_auto_disable>1</allow_auto_disable></model><model name="green_waypoint_1"><pose>15 -10 5 0 0 0</pose><link name="link"><inertial><mass>1</mass><inertia><ixx>0.1</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.1</iyy><iyz>0</iyz><izz>0.1</izz></inertia><pose>0 0 0 0 -0 0</pose></inertial><self_collide>0</self_collide><enable_wind>0</enable_wind><kinematic>0</kinematic><pose>0 0 0 0 -0 0</pose><gravity>0</gravity><visual name="visual"><geometry><sphere><radius>0.2</radius></sphere></geometry><material><script><name>Gazebo/Grey</name><uri>file://media/materials/scripts/gazebo.material</uri></script><shader type="pixel"><normal_map>__default__</normal_map></shader><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.306 0.604 0.024 1</diffuse><specular>0.01 0.01 0.01 1</specular><emissive>0 0 0 1</emissive></material><pose>0 0 0 0 -0 0</pose><transparency>0.05</transparency><cast_shadows>1</cast_shadows></visual></link><static>0</static><allow_auto_disable>1</allow_auto_disable></model><model name="green_waypoint_2"><pose>0 -10 5 0 0 0</pose><link name="link"><inertial><mass>1</mass><inertia><ixx>0.1</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.1</iyy><iyz>0</iyz><izz>0.1</izz></inertia><pose>0 0 0 0 -0 0</pose></inertial><self_collide>0</self_collide><enable_wind>0</enable_wind><kinematic>0</kinematic><pose>0 0 0 0 -0 0</pose><gravity>0</gravity><visual name="visual"><geometry><sphere><radius>0.2</radius></sphere></geometry><material><script><name>Gazebo/Grey</name><uri>file://media/materials/scripts/gazebo.material</uri></script><shader type="pixel"><normal_map>__default__</normal_map></shader><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.306 0.604 0.024 1</diffuse><specular>0.01 0.01 0.01 1</specular><emissive>0 0 0 1</emissive></material><pose>0 0 0 0 -0 0</pose><transparency>0.05</transparency><cast_shadows>1</cast_shadows></visual></link><static>0</static><allow_auto_disable>1</allow_auto_disable></model><model name="green_waypoint_3"><pose>0 4 5 0 0 0</pose><link name="link"><inertial><mass>1</mass><inertia><ixx>0.1</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.1</iyy><iyz>0</iyz><izz>0.1</izz></inertia><pose>0 0 0 0 -0 0</pose></inertial><self_collide>0</self_collide><enable_wind>0</enable_wind><kinematic>0</kinematic><pose>0 0 0 0 -0 0</pose><gravity>0</gravity><visual name="visual"><geometry><sphere><radius>0.2</radius></sphere></geometry><material><script><name>Gazebo/Grey</name><uri>file://media/materials/scripts/gazebo.material</uri></script><shader type="pixel"><normal_map>__default__</normal_map></shader><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.306 0.604 0.024 1</diffuse><specular>0.01 0.01 0.01 1</specular><emissive>0 0 0 1</emissive></material><pose>0 0 0 0 -0 0</pose><transparency>0.05</transparency><cast_shadows>1</cast_shadows></visual></link><static>0</static><allow_auto_disable>1</allow_auto_disable></model><model name="green_waypoint_4"><pose>40 20 5 0 0 0</pose><link name="link"><inertial><mass>1</mass><inertia><ixx>0.1</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.1</iyy><iyz>0</iyz><izz>0.1</izz></inertia><pose>0 0 0 0 -0 0</pose></inertial><self_collide>0</self_collide><enable_wind>0</enable_wind><kinematic>0</kinematic><pose>0 0 0 0 -0 0</pose><gravity>0</gravity><visual name="visual"><geometry><sphere><radius>0.2</radius></sphere></geometry><material><script><name>Gazebo/Grey</name><uri>file://media/materials/scripts/gazebo.material</uri></script><shader type="pixel"><normal_map>__default__</normal_map></shader><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.306 0.604 0.024 1</diffuse><specular>0.01 0.01 0.01 1</specular><emissive>0 0 0 1</emissive></material><pose>0 0 0 0 -0 0</pose><transparency>0.05</transparency><cast_shadows>1</cast_shadows></visual></link><static>0</static><allow_auto_disable>1</allow_auto_disable></model><model name="green_waypoint_5"><pose>15 20 5 0 0 0</pose><link name="link"><inertial><mass>1</mass><inertia><ixx>0.1</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.1</iyy><iyz>0</iyz><izz>0.1</izz></inertia><pose>0 0 0 0 -0 0</pose></inertial><self_collide>0</self_collide><enable_wind>0</enable_wind><kinematic>0</kinematic><pose>0 0 0 0 -0 0</pose><gravity>0</gravity><visual name="visual"><geometry><sphere><radius>0.2</radius></sphere></geometry><material><script><name>Gazebo/Grey</name><uri>file://media/materials/scripts/gazebo.material</uri></script><shader type="pixel"><normal_map>__default__</normal_map></shader><ambient>0.3 0.3 0.3 1</ambient><diffuse>0.306 0.604 0.024 1</diffuse><specular>0.01 0.01 0.01 1</specular><emissive>0 0 0 1</emissive></material><pose>0 0 0 0 -0 0</pose><transparency>0.05</transparency><cast_shadows>1</cast_shadows></visual></link><static>0</static><allow_auto_disable>1</allow_auto_disable></model><model name="orange_waypoint_6"><pose>0 20 5 0 0 0</pose><link name="link"><inertial><mass>1</mass><inertia><ixx>0.1</ixx><ixy>0</ixy><ixz>0</ixz><iyy>0.1</iyy><iyz>0</iyz><izz>0.1</izz></inertia><pose>0 0 0 0 -0 0</pose></inertial><self_collide>0</self_collide><enable_wind>0</enable_wind><kinematic>0</kinematic><pose>0 0 0 0 -0 0</pose><gravity>0</gravity><visual name="visual"><geometry><sphere><radius>0.2</radius></sphere></geometry><material><script><name>Gazebo/Grey</name><uri>file://media/materials/scripts/gazebo.material</uri></script><shader type="pixel"><normal_map>__default__</normal_map></shader><ambient>0.3 0.3 0.3 1</ambient><diffuse>1.0 0.5 0.0 1</diffuse><specular>0.01 0.01 0.01 1</specular><emissive>0 0 0 1</emissive></material><pose>0 0 0 0 -0 0</pose><transparency>0.05</transparency><cast_shadows>1</cast_shadows></visual></link><static>0</static><allow_auto_disable>1</allow_auto_disable></model><model name="drone1"><pose>40 -10 0 0 0 -0.0</pose><include><uri>model://drone1</uri></include></model><model name="drone2"><pose>40 20 0 0 0 -0.0</pose><include><uri>model://drone2</uri></include></model></world>
 </sdf>

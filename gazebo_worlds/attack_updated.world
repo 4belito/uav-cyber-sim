@@ -1082,5 +1082,5 @@
       </link>
       <pose>23.7201 2.14936 0 0 -0 0</pose>
     </model>
-  <model name="drone1"><pose>40 -10 0 0 0 -0.0</pose><include><uri>model://drone1</uri></include></model></world>
+  <model name="drone1"><pose>20 -10 0 0 0 -0.0</pose><include><uri>model://drone1</uri></include></model></world>
 </sdf>

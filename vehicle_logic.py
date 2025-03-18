@@ -2,6 +2,7 @@ import time
 import json
 from pymavlink import mavutil
 import math
+from helpers.change_coordinates import GLOBAL_switch_LOCAL_NED
 with open('mode_codes.json', 'r') as file:
     mode_code = json.load(file)
 
@@ -11,7 +12,7 @@ land_code = mavutil.mavlink.MAV_CMD_NAV_LAND
 ext_state_code = mavutil.mavlink.MAVLINK_MSG_ID_EXTENDED_SYS_STATE
 req_msg_code=mavutil.mavlink.MAV_CMD_REQUEST_MESSAGE
 on_ground_code=mavutil.mavlink.MAV_LANDED_STATE_ON_GROUND
-coordinate_frame = mavutil.mavlink.MAV_FRAME_LOCAL_NED
+coordinate_frame = mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT #mavutil.mavlink.MAV_FRAME_LOCAL_NED
 #change_speed_code=mavutil.mavlink.MAV_CMD_DO_CHANGE_SPEED
 lotier_code=mavutil.mavlink.MAV_CMD_NAV_LOITER_UNLIM
 type_mask = int(0b110111111000)
@@ -72,8 +73,9 @@ class VehicleLogic:
                 self.wp_i+=1
         if action == 'fly':
             if self.wp_i < self.n_wps:
+                print(self.wps)
                 wp=self.wps[self.wp_i]
-                self.send_go_to(point=wp)
+                self.send_local_position(point=wp)
                 self.is_reached = self.check_reached(point=wp)
                 if self.is_reached:
                     self.wp_i+=1
@@ -125,10 +127,10 @@ class VehicleLogic:
     def send_arm(self):
         self.conn.mav.command_long_send(self.sys, self.comp, arm_code, 0, 1, 0, 0, 0, 0, 0, 0)
     
-    def get_position(self):
+    def get_local_position(self):
         msg = self.conn.recv_match(type='LOCAL_POSITION_NED', blocking=True)
         if msg:
-            return (msg.x, msg.y, msg.z)
+            return GLOBAL_switch_LOCAL_NED(msg.x, msg.y, msg.z)
 
     def get_global_position(self):
         msg = self.conn.recv_match(type='GLOBAL_POSITION_INT', blocking=True)
@@ -143,7 +145,7 @@ class VehicleLogic:
 
 
     def check_reached(self,point):
-        pos = self.get_position()
+        pos = self.get_local_position()
         if pos:
             wd_dist = math.dist(pos, point) 
             return wd_dist < self.wp_margin
@@ -159,12 +161,22 @@ class VehicleLogic:
             return False
         
     def send_takeoff(self,altitude):
-        self.conn.mav.command_long_send(self.sys, self.comp, takeoff_code, 0, 0, 0, 0, 0, 0,0,-altitude)
+        self.conn.mav.command_long_send(self.sys, self.comp, takeoff_code, 0, 0, 0, 0, 0, 0,0,altitude)
     
-    def send_go_to(self,point):
+    def send_local_position(self,point):
+        point=GLOBAL_switch_LOCAL_NED(*point)
+        coordinate_frame = mavutil.mavlink.MAV_FRAME_LOCAL_NED
         go_msg=mavutil.mavlink.MAVLink_set_position_target_local_ned_message(
                     10, self.sys, self.comp, coordinate_frame, type_mask, *point, 0, 0, 0, 0, 0, 0, 0, 0)
         self.conn.mav.send(go_msg)
+
+    def send_global_position(self,point):
+        coordinate_frame = mavutil.mavlink.MAVLink_set_position_target_global_int_message
+        type_mask = int(0b110111111000)
+        go_msg=mavutil.mavlink.MAVLink_set_position_target_global_int_message(
+                    10, self.sys, self.comp, coordinate_frame, type_mask, *point, 0, 0, 0, 0, 0, 0, 0, 0)
+        self.conn.mav.send(go_msg)
+
 
     def send_land(self):
         self.conn.mav.command_long_send(self.sys, self.comp, land_code, 0, 0, 0, 0, 0, 0, 0, 0)

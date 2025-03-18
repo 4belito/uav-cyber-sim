@@ -176,7 +176,7 @@
           <wrench>53.7955 -8.00685 -44.3187 0 -0 0</wrench>
         </link>
       </model>
-      <model name='green_waypoint'>
+      <model name='green_waypoint_0'>
         <pose>40 -10 5 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link'>
@@ -186,7 +186,7 @@
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
-      <model name='green_waypoint_0'>
+      <model name='green_waypoint_1'>
         <pose>15 -10 5 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link'>
@@ -196,7 +196,7 @@
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
-      <model name='green_waypoint_1'>
+      <model name='green_waypoint_2'>
         <pose>0 -10 5 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link'>
@@ -206,7 +206,7 @@
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
-      <model name='green_waypoint_2'>
+      <model name='green_waypoint_3'>
         <pose>0 4 5 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link'>
@@ -216,7 +216,7 @@
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
-      <model name='green_waypoint_3'>
+      <model name='green_waypoint_4'>
         <pose>40 20 5 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link'>
@@ -226,7 +226,7 @@
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
-      <model name='green_waypoint_3_clone'>
+      <model name='green_waypoint_5'>
         <pose>15 20 5 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link'>
@@ -236,7 +236,7 @@
           <wrench>0 0 0 0 -0 0</wrench>
         </link>
       </model>
-      <model name='green_waypoint_3_clone_clone'>
+      <model name='green_waypoint_6'>
         <pose>0 20 5 0 -0 0</pose>
         <scale>1 1 1</scale>
         <link name='link'>
@@ -407,7 +407,7 @@
         <projection_type>perspective</projection_type>
       </camera>
     </gui>
-    <model name='green_waypoint'>
+    <model name='green_waypoint_0'>
       <link name='link'>
         <inertial>
           <mass>1</mass>
@@ -454,7 +454,7 @@
       <allow_auto_disable>1</allow_auto_disable>
       <pose>2.24254 1.34751 0 0 -0 0</pose>
     </model>
-    <model name='green_waypoint_0'>
+    <model name='green_waypoint_1'>
       <link name='link'>
         <inertial>
           <mass>1</mass>
@@ -501,7 +501,7 @@
       <allow_auto_disable>1</allow_auto_disable>
       <pose>14.9851 -0.636937 0 0 -0 0</pose>
     </model>
-    <model name='green_waypoint_1'>
+    <model name='green_waypoint_2'>
       <link name='link'>
         <inertial>
           <mass>1</mass>
@@ -548,7 +548,7 @@
       <allow_auto_disable>1</allow_auto_disable>
       <pose>3.63173 -3.29993 0 0 -0 0</pose>
     </model>
-    <model name='green_waypoint_2'>
+    <model name='green_waypoint_3'>
       <link name='link'>
         <inertial>
           <mass>1</mass>
@@ -595,7 +595,7 @@
       <allow_auto_disable>1</allow_auto_disable>
       <pose>3.35099 -5.01842 0 0 -0 0</pose>
     </model>
-    <model name='green_waypoint_3'>
+    <model name='green_waypoint_4'>
       <link name='link'>
         <inertial>
           <mass>1</mass>
@@ -642,7 +642,7 @@
       <allow_auto_disable>1</allow_auto_disable>
       <pose>16.8713 7.34193 0 0 -0 0</pose>
     </model>
-    <model name='green_waypoint_3_clone'>
+    <model name='green_waypoint_5'>
       <link name='link'>
         <inertial>
           <mass>1</mass>
@@ -689,7 +689,7 @@
       <allow_auto_disable>1</allow_auto_disable>
       <pose>10.931 12.8938 5 0 -0 0</pose>
     </model>
-    <model name='green_waypoint_3_clone_clone'>
+    <model name='green_waypoint_6'>
       <link name='link'>
         <inertial>
           <mass>1</mass>

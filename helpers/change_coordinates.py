@@ -4,6 +4,11 @@ from pymavlink import mavextra
 def heading_to_yaw(heading_deg):
     return -math.radians(heading_deg)
 
+def GLOBAL_switch_LOCAL_NED(x,y,z):
+    #https://mavlink.io/en/messages/common.html#MAV_FRAME_BODY_FRD
+    return (x,-y,-z) 
+
+
 ## Taken from sim_vehicle.py
 def find_spawns(loc, offsets):
     lat, lon, alt, heading = loc
