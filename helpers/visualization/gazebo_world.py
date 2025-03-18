@@ -25,7 +25,8 @@ def generate_waypoint_element(name, x, y, z, color="green"):
         "green": "0.306 0.604 0.024 1",  # Green
         "red": "0.8 0.0 0.0 1" , # Red
         "yellow": "1.0 1.0 0.0 1" , # Yellow
-        "orange": "1.0 0.5 0.0 1" # Orange
+        "orange": "1.0 0.5 0.0 1" ,# Orange
+        "blue": "0.0 0.0 1.0 1"  # Blue
     }
 
     # Default to green if the color is not recognized
@@ -222,7 +223,7 @@ def generate_waypoint_element(name, x, y, z, color="green"):
 
 
 
-def update_world( drones,waypoints, world_path):
+def update_world( drones,markers, world_path):
     world_file_path = os.path.expanduser(world_path)
 
     # Load the existing SDF file
@@ -232,18 +233,20 @@ def update_world( drones,waypoints, world_path):
     # Find the <world> element
     world_elem = root.find("world")
 
-    # Remove old waypoints and drones
-    for model in world_elem.findall("model"):
-        model_name = model.attrib.get("name", "")
-        if "green_waypoint" in model_name or "red_waypoint" in model_name or "drone" in model_name: #
-            world_elem.remove(model)
+    # # Remove old waypoints and drones
+    # for model in world_elem.findall("model"):
+    #     model_name = model.attrib.get("name", "")
+    #     if "green_waypoint" in model_name or "red_waypoint" in model_name or "drone" in model_name: #
+    #         world_elem.remove(model)
 
-    # Add new waypoints
-    for i, ((x, y, z),color) in enumerate(waypoints.items()):
-        waypoint_elem = generate_waypoint_element(f"{color}_waypoint_{i}", x, y, z,color=color)
-        world_elem.append(waypoint_elem)
+    # Add makers
+    for marker_set in markers.values():
+        color=marker_set['color']
+        for i, (x, y, z) in enumerate(marker_set['pos']):
+            waypoint_elem = generate_waypoint_element(f"{color}_marker_{i}", x, y, z,color=color)
+            world_elem.append(waypoint_elem)
 
-    # Add new drones
+    # Add drones
     for i, (x, y, z, roll, pitch, yaw) in enumerate(drones):
         drone_elem = generate_drone_element(f"drone{i+1}", x, y, z, roll, pitch, yaw)
         world_elem.append(drone_elem)

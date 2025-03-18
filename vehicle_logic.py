@@ -146,6 +146,8 @@ class VehicleLogic:
 
     def check_reached(self,point):
         pos = self.get_local_position()
+        # print(pos)
+        # print(point)
         if pos:
             wd_dist = math.dist(pos, point) 
             return wd_dist < self.wp_margin
