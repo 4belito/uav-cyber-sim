@@ -6,6 +6,10 @@ from helpers.change_coordinates import GLOBAL_switch_LOCAL_NED
 with open('mode_codes.json', 'r') as file:
     mode_code = json.load(file)
 
+
+from typing import Callable
+
+#Mavlink shorts
 arm_code = mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM
 takeoff_code = mavutil.mavlink.MAV_CMD_NAV_TAKEOFF
 land_code = mavutil.mavlink.MAV_CMD_NAV_LAND
@@ -22,7 +26,8 @@ class VehicleLogic:
                 takeoff_pos = None,
                 plan=['check_prearm','check_pos_est','mode_stabilize','mode_guided','arm','takeoff','fly','land'], 
                 waypoints=[(0,0,5)],
-                wp_margin=0.1):
+                wp_margin=0.1,
+                verbose=1):
         self.conn=connection
         self.sys = connection.target_system
         self.comp = connection.target_component
@@ -30,74 +35,87 @@ class VehicleLogic:
         # Plan
         self.plan = plan
         self.n_actions = len(plan)
-    
+        self.plan.append('off')
+
         # waipoints
         self.wps=waypoints
         self.n_wps= len(self.wps)
         self.wp_margin=wp_margin
+        self.verbose = verbose
         self.reset_plan()
         print(f'vehicle {self.sys} created')
 
     def update_waypoints(self,new_waypoints):
         self.wps=new_waypoints
         self.n_wps= len(self.wps)
-        self.wp_i = 1
-        self.is_reached=False
+        self.wp_i = 0
+        self.wp_reached=False
         
     def reset_plan(self):
-        self.action_i = -1
+        self.action_i = 0
         self.wp_i = 0
-        self.is_done = True 
-        self.is_reached = False
+        self.wp_reached = False
+
+    def current_action(self):
+        return self.plan[self.action_i]
+
+    def current_wp(self):
+        return self.current_action()=='fly' and self.wps[self.wp_i]
 
     def act(self,action):
         if action == 'check_pos_est':
-            self.is_done = self.check_for_position_estimate()
+            self.check(self.is_position_estimated)
         if action == 'check_prearm':
-            self.is_done = self.check_for_prearm()
+            self.check(self.is_prearmed) 
         if action == 'mode_stabilize':
             self.send_mode_stabilize()
-            self.is_done = self.check_ack()
+            self.check(self.is_acknowledged) 
         if action == 'mode_guided':
             self.send_mode_guided()
-            self.is_done = self.check_ack()
+            self.check(self.is_acknowledged) 
         if action == 'arm':
             self.send_arm()
-            self.is_done = self.check_ack()
+            self.check(self.is_acknowledged) 
         if action == 'takeoff':
             wp=self.wps[0]
             self.send_takeoff(altitude=wp[-1])
-            self.is_reached = self.check_reached(point=wp)
-            if self.is_reached:
-                self.is_done = True
+            self.wp_reached = self.is_reached(point=wp)
+            if self.wp_reached:
                 self.wp_i+=1
+                self.action_i+=1
         if action == 'fly':
-            if self.wp_i < self.n_wps:
-                wp=self.wps[self.wp_i]
-                self.send_local_position(point=wp)
-                self.is_reached = self.check_reached(point=wp)
-                if self.is_reached:
-                    self.wp_i+=1
-            else:
-                self.is_done = True
+            wp=self.current_wp()
+            self.send_local_position(point=wp)
+            self.wp_reached = self.is_reached(point=wp)
+            if self.wp_reached:
+                self.wp_i+=1
+                if self.wp_i == self.n_wps:
+                    self.action_i+=1
         if action == 'land':
             self.send_land()
-            self.is_done=self.check_landed()
-        if action == 'hover':
-            self.hover(self)
+            self.check(self.is_landed) 
+            
 
-    def act_plan(self):
-        if self.is_done: 
-            print(f'vehicle {self.sys}: action {self.plan[self.action_i]} is done')
+        # if action == 'hover':
+        #     self.hover(self)
+        #     if self.verbose==1:self.inoform()
+
+    def check(self,check:Callable[[], None]):
+        if check():
+            if self.verbose==1:self.inoform()
             self.action_i+=1
-            self.is_done = False
+
+    def inoform(self):
+        print(f'vehicle {self.sys}: action {self.current_action()} is done')
+    
+    def act_plan(self):
         if self.action_i < self.n_actions:
-            self.act(self.plan[self.action_i])
+            self.act(self.current_action())
             return True
         else:
             return False
 
-    def check_for_position_estimate(self):
+    def is_position_estimated(self):
         """Wait until the UAV has a valid position estimate (EKF is ready)"""
         msg = self.conn.recv_match(type='EKF_STATUS_REPORT', blocking=True)
         if msg:
@@ -105,7 +123,7 @@ class VehicleLogic:
         else:
             return False
 
-    def check_for_prearm(self):
+    def is_prearmed(self):
         """ Wait until all pre-arm checks pass """
         msg = self.conn.recv_match(type='SYS_STATUS', blocking=True)
         if msg:
@@ -113,7 +131,7 @@ class VehicleLogic:
         else: 
             return False
 
-    def check_ack(self):
+    def is_acknowledged(self):
         msg = self.conn.recv_match(type='COMMAND_ACK', blocking=True)
         return msg and (not msg.result)
 
@@ -143,7 +161,7 @@ class VehicleLogic:
 
 
 
-    def check_reached(self,point):
+    def is_reached(self,point):
         pos = self.get_local_position()
         # print(pos)
         # print(point)
@@ -153,7 +171,7 @@ class VehicleLogic:
         else:
             return False
         
-    def check_landed(self):
+    def is_landed(self):
         self.conn.mav.command_long_send(self.sys, self.comp,req_msg_code,0,ext_state_code,0, 0, 0, 0, 0, 0  )
         msg = self.conn.recv_match(type='EXTENDED_SYS_STATE', blocking=True)
         if msg:
