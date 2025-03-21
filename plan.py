@@ -40,6 +40,11 @@ EKF_REQUIRED_FLAGS = (
     mavutil.mavlink.EKF_POS_VERT_ABS
 )
 
+
+
+
+
+
 class VehicleLogic:
     def __init__(self,sys_id,
                 home = None,
