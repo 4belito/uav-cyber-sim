@@ -61,7 +61,7 @@ def check_sys_status(conn,blocking=False):
 
 
 
-def make_pre_arm_action(conn):
+def make_pre_arm():
     check_noarmed_step = Step("Check disarmed",check_fn=check_noarmed)
     check_ekf_status_step = Step("Check EKF", check_fn=check_ekf_status)
     check_gps_status_step = Step("Check GPS", check_fn=check_gps_status)

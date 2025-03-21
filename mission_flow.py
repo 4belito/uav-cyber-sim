@@ -38,7 +38,7 @@ class MissionElement:
             self.exec_fn(self.conn, blocking)
             print(f"▶️ Starting {class_name}: {self.name}")
             self.state = State.IN_PROGRESS
-        except StepFailed as e:
+        except Exception as e:
             print(f"❌ {class_name} '{self.name}' execution failed: {e}")
             self.state = State.FAILED
 
