@@ -1,11 +1,13 @@
 from typing import Callable, Optional
-from abc import ABC, abstractmethod
+from pymavlink import mavutil
+from typing import List
 
 
-NOT_STARTED = "NOT_STARTED"
-IN_PROGRESS = "IN_PROGRESS"
-DONE = "DONE"
-FAILED = "FAILED"
+class State:
+    NOT_STARTED = "NOT_STARTED"
+    IN_PROGRESS = "IN_PROGRESS"
+    DONE = "DONE"
+    FAILED = "FAILED"
 
 
 class StepFailed(Exception):
@@ -15,119 +17,106 @@ class StepFailed(Exception):
 
 
 class MissionElement:
-    def __init__(self, name: str, check_fn: Callable[[], bool], exec_fn: Optional[Callable[[bool], None]] = None):
+    def __init__(self, 
+                 name: str, 
+                 check_fn: Callable[[mavutil.mavlink_connection,bool], bool], 
+                 exec_fn: Optional[Callable[[mavutil.mavlink_connection,bool], None]] = None
+                ) -> None:
         self.name = name
-        self.check = check_fn
-        self.exec = exec_fn or (lambda blocking: None)
+        self.check_fn = check_fn
+        self.exec_fn = exec_fn or (lambda conn, blocking: None)
         self.next = None
-        self.state = NOT_STARTED
+        self.state = State.NOT_STARTED
+        self.conn = None
+        print(f"{self.__class__.__name__} '{self.name}' created — no connection yet 🧩")
 
-    def run(self, blocking=False):
+
+    def execute(self,conn:mavutil.mavlink_connection,blocking:bool)->None:
         class_name = self.__class__.__name__
+        try:
+            self.bind_connection(conn)
+            self.exec_fn(self.conn, blocking)
+            print(f"▶️ Starting {class_name}: {self.name}")
+            self.state = State.IN_PROGRESS
+        except StepFailed as e:
+            print(f"❌ {class_name} '{self.name}' execution failed: {e}")
+            self.state = State.FAILED
 
-        if self.state == NOT_STARTED:
-            try:
-                self.exec(blocking)
-                print(f"▶️ Starting {class_name}: {self.name}")
-                self.state = IN_PROGRESS
-            except StepFailed as e:
-                print(f"❌ {class_name} '{self.name}' execution failed: {e}")
-                self.state = FAILED
+    def check(self,blocking:bool)->None:
+        class_name = self.__class__.__name__
+        try:
+            if self.check_fn(self.conn, blocking):
+                print(f"✅ {class_name}: {self.name} is done")
+                self.state = State.DONE
+        except StepFailed as e:
+            print(f"❌ {class_name} '{self.name}' check failed: {e}")
+            self.state = State.FAILED
 
-        elif self.state == IN_PROGRESS:
-            try:
-                if self.check(blocking):
-                    print(f"✅ {class_name}: {self.name} is done")
-                    self.state = DONE
-            except StepFailed as e:
-                print(f"❌ {class_name} '{self.name}' check failed: {e}")
-                self.state = FAILED
 
-        elif self.state == DONE:
-            print(f"ℹ️ {class_name}: '{self.name}' already done")
-
-        elif self.state == FAILED:
-            print(f"⚠️ {class_name}: '{self.name}' previously failed")
-
-    def __repr__(self):
+    def __repr__(self)-> str:
         return f"<{self.__class__.__name__} '{self.name}' — State: {self.state}>"
 
+    def bind_connection(self, connection: mavutil.mavlink_connection) -> None:
+        self.conn = connection  # Set later from the parent Action
+        print(f"{self.__class__.__name__} '{self.name}' is now connected ✅🔗")
 
 class Step(MissionElement):
-    def __init__(self, name: str, check_fn, exec_fn=None):
+    def __init__(self, name: str, 
+                 check_fn: Callable[[mavutil.mavlink_connection, bool], bool],
+                 exec_fn: Optional[Callable[[mavutil.mavlink_connection, bool], None]] = None
+                ) -> None:
+        # No connection here
         super().__init__(name=name, check_fn=check_fn, exec_fn=exec_fn)
 
-class Action(MissionElement):
-    def __init__(self, name: str):
-        self.steps = []
-        self.current_step = None
-        super().__init__(name=name, check_fn=self._run_steps, exec_fn=self._initiate_action)  # ✅ no-op
 
-    def add_step(self, step: Step):
+class Action(MissionElement):
+    def __init__(self, name: str)-> None:
+        self.steps: List[Step] = []
+        self.current_step: Optional[Step]= None
+        super().__init__(name=name,  check_fn=self._check_step)  # ✅ no-op
+
+    def add_step(self, step: Step) -> None:
         if self.steps:
             self.steps[-1].next = step
         self.steps.append(step)
         if not self.current_step:
             self.current_step = step
 
-    def _run_steps(self,blocking):
-        while self.current_step:
-            step = self.current_step
-            step.run(blocking=blocking)
-
-            if step.state == DONE:
-                self.current_step = step.next
-            elif step.state == FAILED:
-                raise StepFailed(f"Step '{step.name}' failed in Action '{self.name}'")
+    def _check_step(self,connection,blocking=False):     
+        step=self.current_step
+        if step.state == State.NOT_STARTED:
+            step.execute(connection,blocking)
+        elif step.state == State.IN_PROGRESS:
+            step.check(blocking)
+        elif step.state == State.DONE: # This create an extra time for introducing other actions
+            step_class_name = step.__class__.__name__
+            if step.next == None:
+                self.state = State.DONE
             else:
-                return False  # Still waiting
+                self.current_step = step.next 
+        elif step.state == State.FAILED:
+            step_class_name = step.__class__.__name__
+            print(f"⚠️ {step_class_name}: '{step.name}' previously failed")
+        
 
-        return True  # All done
+    # This is temporal until plan class
+    def run(self,connection:mavutil.mavlink_connection,blocking:str=True)-> bool:
+        """Runs the action by executing and checking all steps."""    
+        if self.current_step is None:
+            raise RuntimeError(f"❌ Action '{self.name}' has no steps to run!")
+        self.execute(connection,blocking=blocking)
+        print(f"🚀 Running Action: {self.name}")
+        if blocking:
+            while self.state == State.IN_PROGRESS:
+                self.check(blocking=False)
+        else:
+            self.check(blocking=False)
+        return self.state == State.DONE   # All done
 
-    def _initiate_action(self,blocking=False):
-        self.state = IN_PROGRESS        
-
-    def reset(self):
+    def reset(self)-> None:
         for step in self.steps:
-            step.state = NOT_STARTED
+            step.state = State.NOT_STARTED
         self.current_step = self.steps[0] if self.steps else None
-        self.state = NOT_STARTED
+        self.state = State.NOT_STARTED
 
 
-# class Step:
-#     def __init__(self, name: str, check_fn: Callable[[], bool], exec_fn: Optional[Callable[[bool], None]] = None):
-#         self.name = name
-#         self.check = check_fn
-#         self.exec = exec_fn or (lambda blocking: None)
-#         self.next = None
-#         self.state = "NOT_STARTED"
-
-
-#     def run(self, blocking=False):
-#         if self.state == NOT_STARTED:
-#             try:
-#                 print(f"▶️  Starting step: {self.name}")
-#                 self.exec(blocking)
-#                 self.state = IN_PROGRESS
-#             except StepFailed as e:
-#                 print(f"❌ Execution failed: {e}")
-#                 self.state = FAILED
-
-#         elif self.state == IN_PROGRESS:
-#             try:
-#                 if self.check():
-#                     print(f"✅ Step: {self.name} is done")
-#                     self.state = DONE
-#             except StepFailed as e:
-#                 print(f"❌ Check failed: {e}")
-#                 self.state = FAILED
-
-#         elif self.state == DONE:
-#             print(f"ℹ️ Step: '{self.name}' already DONE.")
-
-#         elif self.state == FAILED:
-#             print(f"⚠️ Step: '{self.name}' is in FAILED state.")
-
-#     def __repr__(self):
-#         next_step = self.next.name if self.next else "None"
-#         return f"<UAVStep name='{self.name}', state={self.state}, next='{next_step}'>"
