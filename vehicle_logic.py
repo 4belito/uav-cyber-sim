@@ -13,7 +13,6 @@ class VehicleLogic:
                 sys_id:int,
                 home: np.ndarray,
                 plan: Plan, 
-                blocking: bool=False,
                 verbose=1):
         self.sys_id = sys_id
         self.conn=mavutil.mavlink_connection(f'udp:127.0.0.1:{14551+10*(sys_id-1)}')
@@ -23,7 +22,7 @@ class VehicleLogic:
         self.plan=plan
 
         # Plan
-        self.act_plan = partial(plan.run, conn=self.conn, blocking=blocking)
+        self.act_plan = partial(plan.run, connection=self.conn)
 
         print(f'vehicle {self.sys_id} created')
 
