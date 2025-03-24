@@ -27,13 +27,14 @@ def local2global(positions: np.ndarray, homes: np.ndarray,pairwise=False) -> np.
 
 
 
-## Taken from sim_vehicle.py
+## Taken from sim_vehicle.py and modified to agree with gazeboo
 def find_spawns(loc, homes):
     lat, lon, alt, heading = loc
     spawns = []
-    for (x, y, z, head) in homes:
+    for (x_north, y_east, z, head) in homes:
         if head is None:
             head = heading
-        g = mavextra.gps_offset(lat, lon, x, y)
-        spawns.append((g[0],g[1],alt+z,head))
+        # Swap north and east for gps_offset, which expects (east, north)
+        g = mavextra.gps_offset(lat, lon, y_east, x_north)
+        spawns.append((g[0], g[1], alt + z, head))
     return spawns

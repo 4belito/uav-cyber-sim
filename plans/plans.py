@@ -11,16 +11,22 @@ from plans.actions.change_parameter import make_change_nav_speed
 
 
 
-
-def make_square(side_len:float = 10,alt:float=5,wp_margin:float=0.5,navegation_speed:float=5):
+def create_square_path(side_len:float = 10,alt:float=5):
     wps=np.array([(0, 0, alt), #takeoff point
         (0,side_len, alt),
         (side_len, side_len, alt),
-        (side_len, -side_len, alt),
-        (0, -side_len, alt),
+        (side_len, 0, alt),
         (0, 0, alt)])
+    return wps
+    
 
-    plan=Plan('Square Trajectory')
+def make_square_plan(side_len:float = 10,alt:float=5,wp_margin:float=0.5,navegation_speed:float=5):
+    wps=create_square_path(side_len=side_len,alt=alt)
+    return make_plan_from_wps(wps,alt=alt,wp_margin=wp_margin,navegation_speed=navegation_speed,name='Square Trajectory')
+
+
+def make_plan_from_wps(wps:np.ndarray,alt:float=5,wp_margin:float=0.5,navegation_speed:float=5,name='Waypoints Trajectory'):
+    plan=Plan(name)
     plan.add(make_pre_arm())
     if navegation_speed!=5:
         plan.add(make_change_nav_speed(speed=navegation_speed))
