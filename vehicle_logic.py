@@ -3,8 +3,9 @@ import math
 import numpy as np
 from typing import Callable
 from functools import partial
+from typing import Optional
 
-from plans.planner import Plan
+from plan.planner import Plan
 from helpers.change_coordinates import GLOBAL_switch_LOCAL_NED
 
 
@@ -12,17 +13,17 @@ class VehicleLogic:
     def __init__(self,
                 sys_id:int,
                 home: np.ndarray,
-                plan: Plan, 
+                plan: Optional[Plan] = None, 
                 verbose=1):
         self.sys_id = sys_id
         self.conn=mavutil.mavlink_connection(f'udp:127.0.0.1:{14551+10*(sys_id-1)}')
         self.conn.wait_heartbeat()
         self.home = home
         self.verbose = verbose
-        self.plan=plan
+        self.plan= plan if plan is not None else Plan.basic()
 
         # Plan
-        self.act_plan = partial(plan.run, connection=self.conn)
+        self.act_plan = partial(self.plan.run, connection=self.conn)
 
         print(f'vehicle {self.sys_id} created')
 
@@ -31,16 +32,16 @@ class VehicleLogic:
         pass
 
     def current_action(self):
-        return self.plan[self.action_i]
+        return self.plan.current
+    
+    def current_step(self):
+        return self.current_action().current
 
     def current_wp(self):
         return self.current_action()=='fly' and self.wps[self.wp_i]
 
 
-    def get_local_position(self):
-        msg = self.conn.recv_match(type='LOCAL_POSITION_NED', blocking=True)
-        if msg:
-            return GLOBAL_switch_LOCAL_NED(msg.x, msg.y, msg.z)
+
 
     def get_global_position(self):
         msg = self.conn.recv_match(type='GLOBAL_POSITION_INT', blocking=True)

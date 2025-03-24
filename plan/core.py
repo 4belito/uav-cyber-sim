@@ -4,8 +4,6 @@ from pymavlink import mavutil
 from typing import List,Union
 
 
-
-
 class State:
     NOT_STARTED = "NOT_STARTED"
     IN_PROGRESS = "IN_PROGRESS"
@@ -16,8 +14,6 @@ class State:
 class StepFailed(Exception):
     """Raised when a step fails due to known issues (like battery too low, GPS not ready, etc)."""
     pass
-
-
 
 class MissionElement:
     def __init__(self, 
@@ -39,20 +35,20 @@ class MissionElement:
         try:
             self.bind_connection(conn)
             self.exec_fn(self.conn)
-            print(f"▶️ Starting {class_name}: {self.name}")
+            print(f"Vehicle {conn.target_system}: ▶️ Starting {class_name}: {self.name}")
             self.state = State.IN_PROGRESS
         except Exception as e:
-            print(f"❌ {class_name} '{self.name}' execution failed: {e}")
+            print(f"Vehicle {conn.target_system}: ❌ {class_name} '{self.name}' execution failed: {e}")
             self.state = State.FAILED
 
     def check(self)->None:
         class_name = self.__class__.__name__
         try:
             if self.check_fn(self.conn):
-                print(f"✅ {class_name}: {self.name} is done")
+                print(f"Vehicle {self.conn.target_system}: ✅ {class_name}: {self.name} is done")
                 self.state = State.DONE
         except StepFailed as e:
-            print(f"❌ {class_name} '{self.name}' check failed: {e}")
+            print(f"Vehicle {self.conn.target_system}: ❌ {class_name} '{self.name}' check failed: {e}")
             self.state = State.FAILED
 
     def rest(self):
@@ -63,7 +59,7 @@ class MissionElement:
 
     def bind_connection(self, connection: mavutil.mavlink_connection) -> None:
         self.conn = connection  # Set later from the parent Action
-        print(f"{self.__class__.__name__} '{self.name}' is now connected ✅🔗")
+        print(f"Vehicle {self.conn.target_system}: {self.__class__.__name__} '{self.name}' is now connected ✅🔗")
 
 class Step(MissionElement):
     def __init__(self, name: str, 
@@ -93,20 +89,18 @@ class Action(MissionElement):
 
     def run(self,connection):     
         step=self.current
+        if step is None:
+            self.state = State.DONE
+            return True
         if step.state == State.NOT_STARTED:
             step.execute(connection)
         elif step.state == State.IN_PROGRESS:
             step.check()
         elif step.state == State.DONE: # This create an extra time for introducing other actions
-            #step_class_name = step.__class__.__name__
-            if step.next is None:
-                self.state = State.DONE
-                return True
-            else:
-                self.current = step.next 
+            self.current = step.next 
         elif step.state == State.FAILED:
             step_class_name = step.__class__.__name__
-            print(f"❌ {step_class_name}: '{step.name}' previously failed")
+            print(f"Vehicle {self.conn.target_system}: ❌ {step_class_name}: '{step.name}' previously failed")
         return False
         
     def run_all(self,connection):
@@ -119,6 +113,20 @@ class Action(MissionElement):
         self.current = self.steps[0] if self.steps else None
         super().reset()
 
-class Plan(Action):
-    def __init__(self, name: str) -> None:
-        super().__init__(name)
+    def insert_now(self, new_step: Union[Step, Action]) -> None:
+        """
+        Inserts a new step/action immediately after the current step.
+        Maintains chaining and updates the 'next' pointers accordingly.
+        """
+        if self.current is None:
+            # If no current step exists, treat it like a normal add
+            self.add(new_step)
+            return
+
+        next_step = self.current.next
+        self.current.next = new_step
+        new_step.next = next_step
+
+        # Insert in the list just after the current step
+        current_index = self.steps.index(self.current)
+        self.steps.insert(current_index + 1, new_step)

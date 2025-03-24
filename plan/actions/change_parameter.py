@@ -1,6 +1,6 @@
 from pymavlink import mavutil
 from functools import partial
-from plans.planner import Step, Action, StepFailed 
+from plan.core import Step, Action, StepFailed 
 
 class ParamType:
     INT8 = mavutil.mavlink.MAV_PARAM_TYPE_INT8
@@ -39,7 +39,7 @@ def exec_set_nav_speed(conn: mavutil.mavlink_connection, blocking: bool = False,
     Sends a SET_PARAM command to change WPNAV_SPEED (navigation speed).
     """
     speed_cmps = speed * 100  # ArduPilot uses cm/s
-    print(f"📤 Sending WPNAV_SPEED = {speed_cmps:.0f} cm/s ({speed:.2f} m/s)")
+    print(f"Vehicle {conn.target_system}: 📤 Sending WPNAV_SPEED = {speed_cmps:.0f} cm/s ({speed:.2f} m/s)")
     conn.mav.param_set_send(
         conn.target_system,
         conn.target_component,
@@ -62,7 +62,7 @@ def check_set_nav_speed(conn: mavutil.mavlink_connection, blocking: bool = False
     speed_cmps = speed * 100
 
     if msg.param_id == expected and msg.param_value == speed_cmps:
-        print(f"✅ Parameter '{msg.param_id}' confirmed at {msg.param_value:.0f} cm/s ({speed:.2f} m/s)")
+        print(f"Vehicle {conn.target_system}: ✅ Parameter '{msg.param_id}' confirmed at {msg.param_value:.0f} cm/s ({speed:.2f} m/s)")
         return True
     else:
         raise StepFailed(f"Parameter '{msg.param_id}' value {msg.param_value:.1f} ≠ {speed_cmps:.1f}")

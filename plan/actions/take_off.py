@@ -4,8 +4,8 @@ from functools import partial
 import numpy as np
 
 # Custom Modules
-from plans.planner import Step, Action
-from plans.actions.navegation import check_reach_wp
+from plan.core import Step, Action
+from plan.actions.navegation import check_reach_wp
 
 
 

@@ -1,7 +1,7 @@
 # actions/pre_arm.py
 
 from pymavlink import mavutil
-from plans.planner import Step, Action, StepFailed  # assuming these are in your core module
+from plan.core import Step, Action, StepFailed  # assuming these are in your core module
 
 # Required EKF and sensor flags
 EKF_FLAGS = {
@@ -36,7 +36,7 @@ def check_ekf_status(conn,blocking=False):
         return False
     missing = [name for name, bit in EKF_FLAGS.items() if not msg.flags & bit]
     if missing:
-        print(f"EKF is not ready — missing: {', '.join(missing)}")
+        print(f"Vehicle {conn.target_system}: EKF is not ready — missing: {', '.join(missing)}")
         return False
     return True
 

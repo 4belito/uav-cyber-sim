@@ -1,6 +1,6 @@
 
 from pymavlink import mavutil
-from plans.planner import Step, Action, StepFailed 
+from plan.core import Step, Action, StepFailed 
 
 
 class MAVCommand:
@@ -12,7 +12,7 @@ class MAVCommand:
 
 def exec_arm(conn: mavutil.mavlink_connection, blocking: bool = False) -> None:
     """Send ARM command to the UAV."""
-    print("🛰️ Sending ARM command...")
+    print(f"Vehicle {conn.target_system}: 🛰️ Sending ARM command...")
     conn.mav.command_long_send(
         conn.target_system,
         conn.target_component,
@@ -28,7 +28,7 @@ def check_arm(conn: mavutil.mavlink_connection, blocking: bool = False) -> bool:
         return False  # Still waiting
     is_armed = msg.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED
     if not is_armed:
-        print("UAV is not armed yet.")
+        print(f"Vehicle {conn.target_system}: not armed yet.")
         return False
     return True
 
