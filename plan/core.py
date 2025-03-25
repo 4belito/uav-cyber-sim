@@ -94,8 +94,10 @@ class Action(MissionElement):
         if not self.current:
             self.current = step
 
-    def run(self,connection):     
+    def run(self,connection):   
         step=self.current
+        if step is None:
+            return True
         if step.state == State.NOT_STARTED:
             step.execute(connection)
         elif step.state == State.IN_PROGRESS:
@@ -104,7 +106,7 @@ class Action(MissionElement):
             self.current = step.next 
             if self.current is None:
                 self.state = State.DONE
-                return True
+                return True 
         elif step.state == State.FAILED:
             step_class_name = step.__class__.__name__
             print(f"Vehicle {self.conn.target_system}: ❌ {step_class_name}: '{step.name}' previously failed")
