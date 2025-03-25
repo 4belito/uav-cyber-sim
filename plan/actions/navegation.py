@@ -13,7 +13,7 @@ LOCAL_COORD= mavutil.mavlink.MAV_FRAME_LOCAL_NED
 def get_local_position(conn: mavutil.mavlink_connection, blocking=False):
     msg = conn.recv_match(type='LOCAL_POSITION_NED', blocking=blocking, timeout=2)
     if msg:
-        return GLOBAL_switch_LOCAL_NED(msg.x, msg.y, msg.z)
+        return np.array(GLOBAL_switch_LOCAL_NED(msg.x, msg.y, msg.z))
     else:
         return False
 
@@ -31,15 +31,16 @@ def check_reach_wp(conn: mavutil.mavlink_connection, blocking=False, wp: np.ndar
     """Check if the UAV has reached the target altitude within an acceptable margin."""
     pos = get_local_position(conn, blocking=blocking) 
     
-    if pos:
+    if pos is False:
+        return False
+    else:
         # Compute distance to target waypoint
         dist = np.linalg.norm(pos - wp)
         print(f"Vehicle {conn.target_system}:📍 Distance to target: {dist:.2f} m")
 
         # Check if the UAV has reached the waypoint within the margin
-        if dist < wp_margin:
-            return True
-    return False  # UAV has reached the waypoint
+        return dist < wp_margin
+
 
 
 def make_path(wps:np.ndarray = np.empty((0, 3)),wp_margin:float=0.5):
@@ -47,8 +48,11 @@ def make_path(wps:np.ndarray = np.empty((0, 3)),wp_margin:float=0.5):
     if wps is None or len(wps) == 0:
         return go_local_action  # Return empty action if no waypoints
     for wp in wps:
-        go_local_action.add(Step(f"go to -> {tuple(wp)}",
-                                check_fn=partial(check_reach_wp,wp=wp,wp_margin=wp_margin),
-                                exec_fn=partial(exec_go_local,wp=wp)))
+        go_local_action.add(make_go_to(wp,wp_margin))
 
     return go_local_action
+
+def make_go_to(wp:np.ndarray = np.empty((0, 3)),wp_margin:float=0.5):
+    return Step(f"go to -> {tuple(wp)}",
+            check_fn=partial(check_reach_wp,wp=wp,wp_margin=wp_margin),
+            exec_fn=partial(exec_go_local,wp=wp))

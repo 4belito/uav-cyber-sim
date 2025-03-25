@@ -31,16 +31,21 @@ def delete(current: np.ndarray, waypoints: np.ndarray, eps=1,dims=[0,1]) -> np.n
     delta = np.abs(waypoints[:,dims] - current[dims])
     return np.any(delta < eps, axis=1)
 
-def remove_wp(arr: np.ndarray, row: np.ndarray):
-     """
-     Removes a specific row from a 2D NumPy array if it exists.
-     """
-     mask = ~np.all(arr == row, axis=1) 
-     return arr[mask]
+def remove_wp(arr: np.ndarray, row: np.ndarray,eps:float=1):
+    """
+    Removes rows from a 2D NumPy array that are within a distance <= eps from a given row.
+    """
+    # Compute Euclidean distance from each row to the target row
+    distances = np.linalg.norm(arr - row, axis=1)
+    
+    # Keep only rows with distance > eps
+    mask = distances > eps
+    
+    return arr[mask]
 
 def find_best_waypoint(current, target, waypoints,eps=1,same_orthant=False):
     # Filter points that share x or y with the target AND are in the correct quadrant
-    waypoints=remove_wp(waypoints,current)
+    waypoints=remove_wp(waypoints,current,eps=eps)
     if same_orthant:
         same_quadrant=in_same_orthant(current, target,waypoints,eps=eps)
         waypoints= waypoints[same_quadrant]
