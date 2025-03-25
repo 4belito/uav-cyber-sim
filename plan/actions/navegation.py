@@ -10,8 +10,8 @@ TYPE_MASK= int(0b110111111000)
 LOCAL_COORD= mavutil.mavlink.MAV_FRAME_LOCAL_NED
 
 
-def get_local_position(conn: mavutil.mavlink_connection, blocking=False):
-    msg = conn.recv_match(type='LOCAL_POSITION_NED', blocking=blocking, timeout=2)
+def get_local_position(conn: mavutil.mavlink_connection):
+    msg = conn.recv_match(type='LOCAL_POSITION_NED')
     if msg:
         return np.array(GLOBAL_switch_LOCAL_NED(msg.x, msg.y, msg.z))
     else:
@@ -24,6 +24,7 @@ def exec_go_local(conn: mavutil.mavlink_connection, wp: np.ndarray = np.array([1
     go_msg=mavutil.mavlink.MAVLink_set_position_target_local_ned_message(
                 10, conn.target_system, conn.target_component, LOCAL_COORD, TYPE_MASK, *wp, 0, 0, 0, 0, 0, 0, 0, 0)
     conn.mav.send(go_msg)
+    print(f'message to go to {tuple(wp)} sent')
 
 
 # 📡 Check if UAV reached the wp
@@ -54,6 +55,8 @@ def make_path(wps:np.ndarray = np.empty((0, 3)),wp_margin:float=0.5,verbose:int=
     return go_local_action
 
 def make_go_to(wp:np.ndarray = np.empty((0, 3)),wp_margin:float=0.5,verbose:int=0):
-    return Step(f"go to -> {tuple(wp)}",
+    goto_step= Step(f"go to -> {tuple(wp)}",
             check_fn=partial(check_reach_wp,wp=wp,wp_margin=wp_margin,verbose=verbose),
             exec_fn=partial(exec_go_local,wp=wp))
+    goto_step.wp=wp
+    return goto_step

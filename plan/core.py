@@ -24,6 +24,7 @@ class MissionElement:
         self.name = name
         self.check_fn = check_fn
         self.exec_fn = exec_fn or (lambda conn: None)
+        self.prev = None
         self.next = None
         self.state = State.NOT_STARTED
         self.conn = None
@@ -83,13 +84,14 @@ class Action(MissionElement):
         self.current: Optional[Union[Step, Action]]= None
         super().__init__(name=name,  check_fn=self.check_steps)  # ✅ no-op
 
-    def add(self, step: Step) -> None:
+    def add(self, step: Union[Step, Action]) -> None:
         """
         Adds a Step or Action to this Action/Plan.
         Maintains chaining via `next` and updates current element.
         """
         if self.steps:
             self.steps[-1].next = step
+            step.prev = self.steps[-1] 
         self.steps.append(step)
         if not self.current:
             self.current = step
@@ -132,20 +134,49 @@ class Action(MissionElement):
         return '\n'.join(output)
 
 
-    def add_now(self, new_step: Union[Step, Action]) -> None:
+    def add_next(self, new_step: Union[Step, Action]) -> None:
         """
         Inserts a new step/action immediately after the current step.
         Maintains chaining and updates the 'next' pointers accordingly.
+        current<new<next
         """
         if self.current is None:
             # If no current step exists, treat it like a normal add
             self.add(new_step)
             return
 
-        next_step = self.current.next
-        self.current.next = new_step
-        new_step.next = next_step
+        next_step = self.current.next # save next step
+        self.current.next = new_step  # current -> new
+        new_step.prev = self.current  # current <- new
+        new_step.next = next_step     #     new -> next
+        if next_step:
+            next_step.prev = new_step  #    new <- next 
+
 
         # Insert in the list just after the current step
         current_index = self.steps.index(self.current)
         self.steps.insert(current_index + 1, new_step)
+
+    def add_now(self, new_step: Union[Step, Action]) -> None:
+        """
+        Inserts a new step/action immediately before the current step.
+        Maintains chaining and updates the 'next' pointers accordingly.
+        prev<new<current
+        """
+        if self.current is None:
+            # If no current step exists, treat it like a normal add
+            self.add(new_step)
+            return
+
+        prev_step = self.current.prev   # save prev_step
+        new_step.next = self.current    # new -> current
+        new_step.prev = prev_step       # prev <- new
+        self.current.prev = new_step    # new <- current
+        if prev_step:
+            prev_step.next = new_step   # prev -> new
+
+        current_index = self.steps.index(self.current)
+        self.steps.insert(current_index, new_step)
+        
+        self.current.reset()
+        self.current = new_step
