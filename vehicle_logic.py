@@ -23,7 +23,7 @@ class VehicleLogic:
         self.plan= plan if plan is not None else Plan.basic()
 
         # Plan
-        self.act_plan = partial(self.plan.run, connection=self.conn)
+        self.act_plan = partial(self.plan.act, connection=self.conn)
 
         print(f'vehicle {self.sys_id} created')
 

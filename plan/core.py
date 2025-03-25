@@ -81,7 +81,7 @@ class Action(MissionElement):
     def __init__(self, name: str)-> None:
         self.steps: List[Union[Step, Action]] = []
         self.current: Optional[Union[Step, Action]]= None
-        super().__init__(name=name,  check_fn=self.run)  # ✅ no-op
+        super().__init__(name=name,  check_fn=self.check_steps)  # ✅ no-op
 
     def add(self, step: Step) -> None:
         """
@@ -94,7 +94,7 @@ class Action(MissionElement):
         if not self.current:
             self.current = step
 
-    def run(self,connection):   
+    def check_steps(self,connection):   
         step=self.current
         if step is None:
             return True
@@ -105,13 +105,12 @@ class Action(MissionElement):
         elif step.state == State.DONE: # This create an extra time for introducing other actions
             self.current = step.next 
             if self.current is None:
-                self.state = State.DONE
                 return True 
         elif step.state == State.FAILED:
             step_class_name = step.__class__.__name__
             print(f"Vehicle {self.conn.target_system}: ❌ {step_class_name}: '{step.name}' previously failed")
         return False
-        
+
     def run_all(self,connection):
         while self.state!=State.DONE and self.state != State.FAILED:
             self.run(connection)

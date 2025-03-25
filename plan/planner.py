@@ -9,10 +9,25 @@ from plan.actions.take_off import make_takeoff
 from plan.actions.land import make_land
 from plan.actions.change_parameter import make_change_nav_speed
 from plan.actions.navegation import make_path
+class State:
+    NOT_STARTED = "NOT_STARTED"
+    IN_PROGRESS = "IN_PROGRESS"
+    DONE = "DONE"
+    FAILED = "FAILED"
 
 class Plan(Action):
     def __init__(self, name: str) -> None:
         super().__init__(name)
+
+
+    def act(self,connection):
+        if self.state == State.NOT_STARTED:
+            self.execute(connection)
+        elif self.state == State.IN_PROGRESS:
+            self.check()
+        elif self.state == State.DONE:
+            return False 
+        return True
 
     @staticmethod
     def create_square_path(side_len: float = 10, alt: float = 5):
@@ -25,19 +40,19 @@ class Plan(Action):
         ])
 
     @classmethod
-    def square(cls, side_len: float = 10, alt: float = 5, wp_margin: float = 0.5, navegation_speed: float = 5):
+    def square(cls, side_len: float = 10, alt: float = 5, wp_margin: float = 0.5, navegation_speed: float = 5,verbose:int=0):
         wps = cls.create_square_path(side_len, alt)
-        return cls.basic(wps=wps, alt=alt, wp_margin=wp_margin, navegation_speed=navegation_speed, name="Square Trajectory")
+        return cls.basic(wps=wps, alt=alt, wp_margin=wp_margin, navegation_speed=navegation_speed, name="Square Trajectory",verbose=verbose)
 
     @classmethod
-    def basic(cls,wps:np.ndarray=None,alt:float=5,wp_margin:float=0.5,navegation_speed:float=5,name='basic plan'):
+    def basic(cls,wps:np.ndarray=None,alt:float=5,wp_margin:float=0.5,navegation_speed:float=5,name='basic plan',verbose:int=0):
         plan=cls(name)
-        plan.add(make_pre_arm())
+        plan.add(make_pre_arm(verbose=verbose))
         if navegation_speed!=5:
-            plan.add(make_change_nav_speed(speed=navegation_speed))
-        plan.add(make_set_mode('GUIDED'))
-        plan.add(make_arm())
-        plan.add(make_takeoff(altitude=alt,wp_margin=wp_margin))
-        plan.add(make_path(wps=wps,wp_margin=wp_margin))
-        plan.add(make_land())
+            plan.add(make_change_nav_speed(speed=navegation_speed,verbose=verbose))
+        plan.add(make_set_mode('GUIDED',verbose=verbose))
+        plan.add(make_arm(verbose=verbose))
+        plan.add(make_takeoff(altitude=alt,wp_margin=wp_margin,verbose=verbose))
+        plan.add(make_path(wps=wps,wp_margin=wp_margin,verbose=verbose))
+        plan.add(make_land(verbose=verbose))
         return plan
