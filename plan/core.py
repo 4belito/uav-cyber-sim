@@ -51,11 +51,18 @@ class MissionElement:
             print(f"Vehicle {self.conn.target_system}: ❌ {class_name} '{self.name}' check failed: {e}")
             self.state = State.FAILED
 
-    def rest(self):
+    def reset(self):
         self.state = State.NOT_STARTED
 
-    def __repr__(self)-> str:
-        return f"<{self.__class__.__name__} '{self.name}' — State: {self.state}>"
+    def __repr__(self) -> str:
+        state_symbols = {
+            State.NOT_STARTED: "🕓",
+            State.IN_PROGRESS: "🚀",
+            State.DONE: "✅",
+            State.FAILED: "❌",
+        }
+        symbol = state_symbols.get(self.state, "❔")
+        return f"{symbol} <{self.__class__.__name__} '{self.name}'>"
 
     def bind_connection(self, connection: mavutil.mavlink_connection) -> None:
         self.conn = connection  # Set later from the parent Action
@@ -108,10 +115,21 @@ class Action(MissionElement):
             self.run(connection)
 
     def reset(self)-> None:
+        # Change the stated of the steps to no started
         for step in self.steps:
             step.reset()
+        # change current to the first step
         self.current = self.steps[0] if self.steps else None
+        # change the action state to no statrted
         super().reset()
+
+    def __repr__(self) -> str:
+        output = [super().__repr__()]
+        for step in self.steps:
+            indented = '\n'.join("  " + line for line in repr(step).splitlines())
+            output.append(indented)
+        return '\n'.join(output)
+
 
     def insert_now(self, new_step: Union[Step, Action]) -> None:
         """
