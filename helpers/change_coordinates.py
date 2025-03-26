@@ -19,7 +19,7 @@ def global2local(positions: np.ndarray, homes: np.ndarray,pairwise=False) -> np.
 def local2global(positions: np.ndarray, homes: np.ndarray,pairwise=False) -> np.ndarray:
     """Computes UAV positions using NumPy broadcasting."""
     if pairwise:
-        assert positions.shape == homes.shape or homes.ndim==1, 'number of positions and homes must agree'
+        assert positions.shape == homes.shape or homes.ndim==1, f'number of positions and homes must agree position shape{positions.shape} != {homes.shape}'
         uav_wps = positions + homes
     else:
         uav_wps =   positions[None, :, :] + homes[:, None, :]

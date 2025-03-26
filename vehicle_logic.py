@@ -8,6 +8,10 @@ from typing import Optional
 from plan.planner import Plan
 from helpers.change_coordinates import GLOBAL_switch_LOCAL_NED
 
+class VehicleMode:
+    MISSION = "NMISSION"     # or "MISSION", "WAYPOINT_NAV"
+    AVOIDANCE = "AVOIDANCE"       # or "COLLISION_AVOIDANCE"
+
 
 class VehicleLogic:
     def __init__(self,
@@ -20,14 +24,24 @@ class VehicleLogic:
         self.conn.wait_heartbeat()
         self.home = home
         self.verbose = verbose
+        self.mode = VehicleMode.MISSION 
         self.plan= plan if plan is not None else Plan.basic()
-
+        self.curr_pos = None
         # Plan
         self.act_plan = partial(self.plan.act, connection=self.conn)
 
         print(f'vehicle {self.sys_id} created')
 
-       
+    def set_current_position(self,pos):
+        self.curr_pos=pos
+
+    def set_mode(self, new_mode: VehicleMode):
+        print(f"Vehigcle {self.sys_id} switched to mode: {new_mode}")
+        self.mode = new_mode
+
+    def get_mode(self):
+        return self.mode    
+
     def reset_plan(self):
         pass
 
@@ -39,8 +53,6 @@ class VehicleLogic:
 
     def current_wp(self):
         return self.current_action()=='fly' and self.wps[self.wp_i]
-
-
 
 
     def get_global_position(self):
