@@ -26,9 +26,8 @@ class VehicleLogic:
         self.verbose = verbose
         self.mode = VehicleMode.MISSION 
         self.plan= plan if plan is not None else Plan.basic()
+        self.plan.start(self.conn)
         self.curr_pos = None
-        # Plan
-        self.act_plan = partial(self.plan.act, connection=self.conn)
 
         print(f'vehicle {self.sys_id} created')
 

@@ -5,6 +5,7 @@ from functools import partial
 
 from plan.core import Step, Action
 from helpers.change_coordinates import GLOBAL_switch_LOCAL_NED
+from helpers.navegation_logic import find_best_waypoint
 
 TYPE_MASK= int(0b110111111000)
 LOCAL_COORD= mavutil.mavlink.MAV_FRAME_LOCAL_NED
@@ -41,18 +42,34 @@ def check_reach_wp(conn: mavutil.mavlink_connection, wp: np.ndarray = np.array([
     """Check if the UAV has reached the target altitude within an acceptable margin."""
     pos = get_local_position(conn) 
     
-    if pos is False:
-        return False
-    else:
-        # Compute distance to target waypoint
-        dist = np.linalg.norm(pos - wp)
-        #if verbose:
-        print(f"Vehicle {conn.target_system}:📍 Distance to target: {dist:.2f} m")
+    # if pos is False:
+    #     return False
+    # else:
+    # Compute distance to target waypoint
+    dist = np.linalg.norm(pos - wp)
+    #if verbose:
+    print(f"Vehicle {conn.target_system}:📍 Distance to target: {dist:.2f} m")
 
-        # Check if the UAV has reached the waypoint within the margin
-        return dist < wp_margin
+    # Check if the UAV has reached the waypoint within the margin
+    return dist < wp_margin
 
 
+
+
+
+
+# def find_goal(conn: mavutil.mavlink_connection, goal_wp:np.ndarray,wps:np.ndarray,wp_margin:float=0.5,verbose:int=0):
+#     curr_pos = get_local_position(conn)
+#     dist = np.linalg.norm(curr_pos - goal_wp)
+#     if dist > 0.5:
+#         next_wp = find_best_waypoint(curr_pos, goal_wp, wps,eps=1)
+#         next_step=make_go_to(wp=next_wp,wp_margin=0.5)
+#     if find_best_waypoint:
+
+
+
+
+## Make the action
 def make_path(wps:np.ndarray = np.empty((0, 3)),wp_margin:float=0.5,verbose:int=0):
     go_local_action = Action("fly")
     if wps is None or len(wps) == 0:

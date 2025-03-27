@@ -21,16 +21,6 @@ class Plan(Action):
     def __init__(self, name: str) -> None:
         super().__init__(name)
 
-
-    def act(self,connection):
-        if self.state == State.NOT_STARTED:
-            self.execute(connection)
-        elif self.state == State.IN_PROGRESS:
-            self.check()
-        elif self.state == State.DONE:
-            return False 
-        return True
-
     @staticmethod
     def create_square_path(side_len: float = 10, alt: float = 5):
         return np.array([

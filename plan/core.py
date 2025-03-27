@@ -17,43 +17,24 @@ class StepFailed(Exception):
 
 class MissionElement:
     def __init__(self, 
-                 name: str, 
-                 check_fn: Callable[[mavutil.mavlink_connection], bool], 
-                 exec_fn: Optional[Callable[[mavutil.mavlink_connection], None]] = None
+                name: str= 'action name', 
                 ) -> None:
         self.name = name
-        self.check_fn = check_fn
-        self.exec_fn = exec_fn or (lambda conn: None)
         self.prev = None
         self.next = None
         self.state = State.NOT_STARTED
         self.conn = None
         print(f"{self.__class__.__name__} '{self.name}' created — no connection yet 🧩")
 
-
-    def execute(self,conn:mavutil.mavlink_connection)->None:
-        class_name = self.__class__.__name__
-        try:
-            self.bind_connection(conn)
-            self.exec_fn(self.conn)
-            print(f"Vehicle {conn.target_system}: ▶️ Starting {class_name}: {self.name}")
-            self.state = State.IN_PROGRESS
-        except Exception as e:
-            print(f"Vehicle {conn.target_system}: ❌ {class_name} '{self.name}' execution failed: {e}")
-            self.state = State.FAILED
-
-    def check(self)->None:
-        class_name = self.__class__.__name__
-        try:
-            if self.check_fn(self.conn):
-                print(f"Vehicle {self.conn.target_system}: ✅ {class_name}: {self.name} is done")
-                self.state = State.DONE
-        except StepFailed as e:
-            print(f"Vehicle {self.conn.target_system}: ❌ {class_name} '{self.name}' check failed: {e}")
-            self.state = State.FAILED
+    def act(self):
+        pass
 
     def reset(self):
         self.state = State.NOT_STARTED
+        
+    def start(self,connection):
+        self.state = State.IN_PROGRESS
+        self.bind_connection(connection) 
 
     def __repr__(self) -> str:
         state_symbols = {
@@ -69,20 +50,54 @@ class MissionElement:
         self.conn = connection  # Set later from the parent Action
         print(f"Vehicle {self.conn.target_system}: {self.__class__.__name__} '{self.name}' is now connected ✅🔗")
 
+
 class Step(MissionElement):
     def __init__(self, name: str, 
                  check_fn: Callable[[mavutil.mavlink_connection, bool], bool],
                  exec_fn: Optional[Callable[[mavutil.mavlink_connection, bool], None]] = None
                 ) -> None:
         # No connection here
-        super().__init__(name=name, check_fn=check_fn, exec_fn=exec_fn)
+        self.exec_fn = exec_fn or (lambda conn: None)
+        self.check_fn = check_fn 
+        super().__init__(name=name)
+
+
+    def execute(self)->None:
+        class_name = self.__class__.__name__
+        try:
+            self.exec_fn(self.conn)
+            print(f"Vehicle {self.conn.target_system}: ▶️ Starting {class_name}: {self.name}")
+            self.state = State.IN_PROGRESS
+        except Exception as e:
+            print(f"Vehicle {self.conn.target_system}: ❌ {class_name} '{self.name}' execution failed: {e}")
+            self.state = State.FAILED
+
+    def check(self)->None:
+        class_name = self.__class__.__name__
+        try:
+            if self.check_fn(self.conn):
+                print(f"Vehicle {self.conn.target_system}: ✅ {class_name}: {self.name} is done")
+                self.state = State.DONE
+        except StepFailed as e:
+            print(f"Vehicle {self.conn.target_system}: ❌ {class_name} '{self.name}' check failed: {e}")
+            self.state = State.FAILED
+
+    def act(self):
+        if self.state == State.NOT_STARTED:
+            self.execute()
+        elif self.state == State.IN_PROGRESS:
+            self.check()
+        elif self.state == State.DONE:
+            print("⚠️ Already done!. Cannot perform this step again!")
+        elif self.state == State.FAILED:
+            print("⚠️ Already failed!. Cannot perform this step again!")
 
 
 class Action(MissionElement):
     def __init__(self, name: str)-> None:
         self.steps: List[Union[Step, Action]] = []
         self.current: Optional[Union[Step, Action]]= None
-        super().__init__(name=name,  check_fn=self.check_steps)  # ✅ no-op
+        super().__init__(name=name)  # ✅ no-op
 
     def add(self, step: Union[Step, Action]) -> None:
         """
@@ -96,26 +111,30 @@ class Action(MissionElement):
         if not self.current:
             self.current = step
 
-    def check_steps(self,connection):   
-        step=self.current
-        if step is None:
-            return True
-        if step.state == State.NOT_STARTED:
-            step.execute(connection)
-        elif step.state == State.IN_PROGRESS:
-            step.check()
-        elif step.state == State.DONE: # This create an extra time for introducing other actions
-            self.current = step.next 
-            if self.current is None:
-                return True 
-        elif step.state == State.FAILED:
-            step_class_name = step.__class__.__name__
-            print(f"Vehicle {self.conn.target_system}: ❌ {step_class_name}: '{step.name}' previously failed")
-        return False
+    def act(self):   
+        if self.state in [State.NOT_STARTED,State.IN_PROGRESS]:
+            self.state = State.IN_PROGRESS
+            step = self.current
+            if step is None:
+                self.state = State.DONE
+            elif step.state==State.DONE:
+                self.current = step.next 
+                if self.current is None:
+                    self.state = State.DONE
+            elif step.state == State.FAILED:
+                self.state = State.FAILED
+                print("⚠️ Already failed!. Cannot perform this again!")
+            else:
+                step.act()
+        elif self.state == State.DONE:
+            print("⚠️ Already done!. Cannot perform this again!")
+        elif self.state == State.FAILED:
+            print("⚠️ Already failed!. Cannot perform this again!")
+        
 
-    def run_all(self,connection):
+    def run_all(self):
         while self.state!=State.DONE and self.state != State.FAILED:
-            self.run(connection)
+            self.run()
 
     def reset(self)-> None:
         # Change the stated of the steps to no started
@@ -125,6 +144,12 @@ class Action(MissionElement):
         self.current = self.steps[0] if self.steps else None
         # change the action state to no statrted
         super().reset()
+
+    def bind_connection(self, connection: mavutil.mavlink_connection) -> None:
+        for step in self.steps:
+            step.bind_connection(connection)
+        super().bind_connection(connection)
+        print(f"Vehicle {self.conn.target_system}: {self.__class__.__name__} '{self.name}' is now connected ✅🔗")
 
     def __repr__(self) -> str:
         output = [super().__repr__()]

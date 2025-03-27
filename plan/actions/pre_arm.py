@@ -23,7 +23,7 @@ REQUIRED_SENSORS = {
 # === CHECK FUNCTIONS ===
 
 
-def check_disarmed(conn):
+def check_disarmed(conn: mavutil.mavlink_connection):
     msg = conn.recv_match(type="HEARTBEAT")
     if not msg:
         return False
@@ -31,7 +31,7 @@ def check_disarmed(conn):
         raise StepFailed("UAV is already armed")
     return True
 
-def check_ekf_status(conn,verbose: int = 0):
+def check_ekf_status(conn: mavutil.mavlink_connection,verbose: int = 0):
     msg = conn.recv_match(type="EKF_STATUS_REPORT")
     if not msg:
         return False
@@ -42,7 +42,7 @@ def check_ekf_status(conn,verbose: int = 0):
         return False
     return True
 
-def check_gps_status(conn):
+def check_gps_status(conn: mavutil.mavlink_connection):
     msg = conn.recv_match(type="GPS_RAW_INT")
     if not msg:
         return False
@@ -50,7 +50,7 @@ def check_gps_status(conn):
         raise StepFailed(f"GPS fix too weak (fix_type = {msg.fix_type})")
     return True
 
-def check_sys_status(conn):
+def check_sys_status(conn: mavutil.mavlink_connection):
     msg = conn.recv_match(type="SYS_STATUS")
     if not msg:
         return False
