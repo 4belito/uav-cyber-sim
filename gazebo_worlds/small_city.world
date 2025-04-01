@@ -68,6 +68,7 @@
       </link>
     </model>
     <light name='sun' type='directional'>
+      <visualize>false</visualize>
       <cast_shadows>1</cast_shadows>
       <pose>0 0 10 0 -0 0</pose>
       <diffuse>0.8 0.8 0.8 1</diffuse>
