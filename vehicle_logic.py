@@ -9,7 +9,7 @@ from plan.planner import Plan
 from helpers.change_coordinates import GLOBAL_switch_LOCAL_NED
 
 class VehicleMode:
-    MISSION = "NMISSION"     # or "MISSION", "WAYPOINT_NAV"
+    MISSION = "MISSION"     # or "MISSION", "WAYPOINT_NAV"
     AVOIDANCE = "AVOIDANCE"       # or "COLLISION_AVOIDANCE"
 
 

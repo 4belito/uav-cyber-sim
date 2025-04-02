@@ -56,6 +56,7 @@ class GCS:
                                     obj_pos=loacl_obj_pos,
                                     goal_pos=wp)
         next_step=make_go_to(wp=next_wp,wp_margin=0.5,verbose=2,cause_text='(avoidance)')
+        next_step.bind_connection(uav.conn)
         uav.plan.current.add_now(next_step)
 
 
