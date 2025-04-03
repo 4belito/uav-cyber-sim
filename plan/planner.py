@@ -43,7 +43,6 @@ class Plan(Action):
         plan.add(make_set_mode('GUIDED',verbose=verbose))
         if navegation_speed!=5:
             plan.add(make_change_nav_speed(speed=navegation_speed,verbose=verbose))
-        
         plan.add(make_arm(verbose=verbose))
         plan.add(make_takeoff(altitude=alt,wp_margin=wp_margin,verbose=verbose))
         plan.add(make_path(wps=wps,wp_margin=wp_margin,verbose=verbose))
@@ -55,11 +54,11 @@ class Plan(Action):
     def hover(cls,wps:np.ndarray=None,alt:float=5,wp_margin:float=0.5,navegation_speed:float=5,name='hover',verbose:int=0):
         plan=cls(name)
         plan.add(make_pre_arm(verbose=verbose))
-        
+        plan.add(make_set_mode('GUIDED',verbose=verbose))
         if navegation_speed!=5:
             plan.add(make_change_nav_speed(speed=navegation_speed,verbose=verbose))        
+
         plan.add(make_arm(verbose=verbose))
-        plan.add(make_set_mode('GUIDED',verbose=verbose))
         plan.add(make_takeoff(altitude=alt,wp_margin=wp_margin,verbose=verbose))
         plan.add(make_path(wps=wps,wp_margin=wp_margin,verbose=verbose))
         return plan

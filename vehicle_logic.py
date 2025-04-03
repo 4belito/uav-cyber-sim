@@ -13,6 +13,7 @@ class VehicleMode:
     AVOIDANCE = "AVOIDANCE"       # or "COLLISION_AVOIDANCE"
 
 
+
 class VehicleLogic:
     def __init__(self,
                 sys_id:int,
