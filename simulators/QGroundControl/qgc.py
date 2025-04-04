@@ -12,19 +12,17 @@ class QGC(Simulator):
     def __init__(self, offsets: List[Tuple],origin:Tuple):
         super().__init__(name=SimName.QGROUND,offsets=offsets) 
         self.add_origin(origin)
-        self.add_vehicle_cmd_fn = self.add_qgc_vehicle_cmd
-        self.launch_fn = self.qgc_launch_fn
 
 
     def add_origin(self, origin):
         self.add_info('origin', origin)
         self.info['spawns'] = find_spawns(origin, self.offsets)
 
-    def add_qgc_vehicle_cmd(self,i):
+    def add_vehicle_cmd_fn(self,i):
         spawn_str=','.join(map(str, self.info['spawns'][i]))
         return f" --custom-location={spawn_str}"
     
-    def qgc_launch_fn(self):
+    def launch(self):
         delete_all_qgc_links()
         add_qgc_links(n=self.n_uavs)
         sim_cmd = [os.path.expanduser(QGC_PATH)]
@@ -35,7 +33,6 @@ class QGC(Simulator):
             shell=False  # Ensure safety when passing arguments
             )
     
-
 
 def add_qgc_links(n:int=1, start_port:int=5763, step:int=10):
     """

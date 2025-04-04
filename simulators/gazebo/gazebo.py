@@ -1,50 +1,167 @@
 import os
 import xml.etree.ElementTree as ET
-from helpers.change_coordinates import heading_to_yaw
 from typing import Dict,List,Tuple
-from config import GAZEBO_WORLD_PATH
+
+import os
+import subprocess
+from simulators.sim import Simulator,SimName
+from helpers.change_coordinates import heading_to_yaw
+
+from typing import List,Tuple
+
+#from config import GAZEBO_PATH
+
+
+class Gazebo(Simulator):
+    def __init__(self, offsets: List[Tuple],world_path,markers):
+        super().__init__(name=SimName.QGROUND,offsets=offsets) 
+        self.add_world(world_path,markers)
+
+
+    def add_world(self, path,markers): 
+        world_path=os.path.expanduser(path)
+        #world_path = update_world(self.offsets,markers,world_path)
+        self.add_info('world_path', world_path)
+
+    def add_vehicle_cmd_fn(self,i):
+        return " -f gazebo-iris"
+    
+    def launch(self):
+        sim_cmd = ["gazebo", "--verbose", self.info['world_path']] #
+        subprocess.Popen(
+            sim_cmd,
+            stdout=subprocess.DEVNULL,  # Suppress standard output
+            stderr=subprocess.DEVNULL,  # Suppress error output
+            shell=False  # Ensure safety when passing arguments
+            )
+        
+
+# def get_gazebo_sim_cmd(offsets:List[Tuple],markers:Dict,world_name:str):
+#     poses = [(east, north, up, 0, 0, heading_to_yaw(heading)) for (east, north, up, heading) in offsets]
+#     updated_world_path = update_world(poses,markers,f'{GAZEBO_PATH}/worlds/{world_name}')
+#     sim_cmd = ["gazebo", "--verbose", updated_world_path] 
+#     return sim_cmd
+
+# def get_gazebo_vehicle_cmd(vehicle_cmd:str,spawn=None):
+#     return vehicle_cmd+" -f gazebo-iris"
+
+
+# def generate_drone_element(instance_name, model_name, x, y, z, roll, pitch, yaw):
+#     model = ET.Element("model", name=instance_name)
+
+#     pose = ET.SubElement(model, "pose")
+#     pose.text = f"{x} {y} {z} {roll} {pitch} {yaw}"
+
+#     include = ET.SubElement(model, "include")
+#     uri = ET.SubElement(include, "uri")
+#     uri.text = f"file://{os.path.abspath(f'{GAZEBO_PATH}/models/vehicles/{model_name}')}"  # only one folder
+#     return model
+
+def generate_drone_element(instance_name, x, y, z, roll, pitch, yaw):
+    model = ET.Element("model", name=instance_name)
+    
+    pose = ET.SubElement(model, "pose")
+    pose.text = f"{x} {y} {z} {roll} {pitch} {yaw}"
+
+    include = ET.SubElement(model, "include")
+    uri = ET.SubElement(include, "uri")
+    # Reference using `model://` if GAZEBO_MODEL_PATH is correctly set
+    uri.text = f"model://{instance_name}"
+
+    return model
+
+# def generate_drone_element(name, x, y, z, roll, pitch, yaw):
+#     """Creates an XML element for a drone model."""
+#     model = ET.Element("model", name=name)
+    
+#     pose = ET.SubElement(model, "pose")
+#     pose.text = f"{x} {y} {z} {roll} {pitch} {yaw}"
+
+#     include = ET.SubElement(model, "include")
+#     uri = ET.SubElement(include, "uri")
+#     uri.text = f"model://{name}"
+
+#     return model
+
+
+    # <model name="iris_demo">
+    #   <include>
+    #     <uri>model://iris_with_ardupilot</uri>
+    #   </include>
+    # </model>
+
+
+# def update_world(drones, markers, world_path):
+#     import xml.etree.ElementTree as ET
+#     import os
+
+#     world_file_path = os.path.expanduser(world_path)
+
+#     tree = ET.parse(world_file_path)
+#     root = tree.getroot()
+
+#     # Namespace fix
+#     ns = {'sdf': root.tag.split('}')[0].strip('{')} if '}' in root.tag else {}
+#     world_elem = root.find('sdf:world', ns) if ns else root.find('world')
+
+#     if world_elem is None:
+#         raise RuntimeError("❌ Could not find <world> element. Check SDF namespace or structure.")
+
+#     # Remove old waypoints and drones
+#     for model in list(world_elem.findall('sdf:model', ns) if ns else world_elem.findall('model')):
+#         model_name = model.attrib.get('name', '')
+#         if "green_waypoint" in model_name or "red_waypoint" in model_name or "drone" in model_name:
+#             world_elem.remove(model)
+
+#     # Add markers
+#     for name, marker_set in markers.items():
+#         positions = marker_set.pop('pos')
+#         for i, (x, y, z) in enumerate(positions):
+#             waypoint_elem = generate_waypoint_element(f"{name}_{i}", x, y, z, **marker_set)
+#             world_elem.append(waypoint_elem)
+
+#     # Add drones
+#     for i, (x, y, z, roll, pitch, yaw) in enumerate(drones):
+#         drone_elem = generate_drone_element(f"drone{i+1}", x, y, z, roll, pitch, yaw)
+#         world_elem.append(drone_elem)
+
+#     # Save the modified world file
+#     updated_world_path = world_path[:-6] + "_updated.world"
+#     updated_world_path = os.path.expanduser(updated_world_path)
+#     tree.write(updated_world_path)
+
+#     return updated_world_path
 
 
 
-def get_gazebo_sim_cmd(offsets:List[Tuple],markers:Dict):
-    drones = [(east, north, up, 0, 0, heading_to_yaw(heading)) for (east, north, up, heading) in offsets]
-    world_path = os.path.expanduser(GAZEBO_WORLD_PATH)
-    updated_world_path = update_world(drones,markers,world_path)
-    sim_cmd = ["gazebo", "--verbose", updated_world_path] 
-    return sim_cmd
-
-def get_gazebo_vehicle_cmd(vehicle_cmd:str,spawn=None):
-    return vehicle_cmd+" -f gazebo-iris"
-
-
-
-def update_world(drones,markers, world_path):
-    world_file_path = os.path.expanduser(world_path)
-
+def update_world(offsets,markers, world_path):
     # Load the existing SDF file
-    tree = ET.parse(world_file_path)
+    tree = ET.parse(world_path)
     root = tree.getroot()
 
     # Find the <world> element
     world_elem = root.find("world")
 
-    # # Remove old waypoints and drones
-    # for model in world_elem.findall("model"):
-    #     model_name = model.attrib.get("name", "")
-    #     if "green_waypoint" in model_name or "red_waypoint" in model_name or "drone" in model_name: #
-    #         world_elem.remove(model)
+    # Remove old waypoints and drones
+    for model in world_elem.findall("model"):
+        model_name = model.attrib.get("name", "")
+        if model_name in ["green_waypoint","red_waypoint", "drone","iris_demo"]:
+            world_elem.remove(model)
 
     # Add makers
-    for name,marker_set in markers.items():
+    for i,(name,marker_set) in enumerate(markers.items()):
+        model = marker_set.pop('vehicle_model')
+        ## Add waypoints
         positions=marker_set.pop('pos')
-        for i, (x, y, z) in enumerate(positions):
-            waypoint_elem = generate_waypoint_element(f"{name}_{i}", x, y, z,**marker_set)
+        for j, (x, y, z) in enumerate(positions):
+            waypoint_elem = generate_waypoint_element(f"{name}{j}", x, y, z,**marker_set)
             world_elem.append(waypoint_elem)
-
-    # Add drones
-    for i, (x, y, z, roll, pitch, yaw) in enumerate(drones):
-        drone_elem = generate_drone_element(f"drone{i+1}", x, y, z, roll, pitch, yaw)
+        
+        # Add vehicles
+        x, y, z, heading = offsets[i]
+        drone_elem = generate_drone_element(f"drone{i+1}", x, y, z, 0, 0, heading_to_yaw(heading))
         world_elem.append(drone_elem)
+
 
     # Save the modified world file
     updated_world_path = world_path[:-6] + "_updated.world"
@@ -55,22 +172,11 @@ def update_world(drones,markers, world_path):
 
 
 
-def generate_drone_element(name, x, y, z, roll, pitch, yaw):
-    """Creates an XML element for a drone model."""
-    model = ET.Element("model", name=name)
-    
-    pose = ET.SubElement(model, "pose")
-    pose.text = f"{x} {y} {z} {roll} {pitch} {yaw}"
 
-    include = ET.SubElement(model, "include")
-    uri = ET.SubElement(include, "uri")
-    uri.text = f"model://{name}"
-
-    return model
 
 def generate_waypoint_element(name, x, y, z, color="green", radius=0.2, alpha=0.05):
     """Creates a fully defined XML element for a waypoint model with configurable color, radius, and transparency."""
-    import xml.etree.ElementTree as ET
+   
 
     # Define color mappings
     color_map = {
