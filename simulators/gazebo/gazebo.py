@@ -1,6 +1,6 @@
 import os
 import xml.etree.ElementTree as ET
-from typing import Dict,List,Tuple
+from typing import List,Tuple
 from plan import Plan
 import os
 import subprocess
@@ -10,10 +10,10 @@ from typing import List,Tuple
 import numpy as np
 
 class Gazebo(Simulator):
-    def __init__(self, offsets: List[Tuple],plans:List[Plan],world_path:str,vehicle_models:List[str],waypoints:np.ndarray):
+    def __init__(self, offsets: List[Tuple],plans:List[Plan],world_path:str,vehicle_models:List[str],markers:np.ndarray):
         super().__init__(name=SimName.QGROUND,offsets=offsets,plans=plans) 
         self.add_info('vehicle_models',vehicle_models)
-        self.add_info('waypoints',waypoints)
+        self.add_info('markers',markers)
         self.add_info('world_path',self.update_world(world_path))
 
 
@@ -61,24 +61,25 @@ class Gazebo(Simulator):
         # Find the <world> element
         world_elem = root.find("world")
 
-        # Remove old waypoints and drones
+        # Remove old markers and drones
         for model in world_elem.findall("model"):
             model_name = model.attrib.get("name", "")
             if model_name in ["green_waypoint","red_waypoint", "drone","iris_demo"]:
                 world_elem.remove(model)
 
         # Add makers
-        for i,(model_name,(waypoint_name,waypoint_data)) in enumerate(zip(self.info['vehicle_models'],self.info['waypoints'].items())):
-            ## Add waypoints
-            positions=waypoint_data.pop('pos')
+        for marker_name,marker_data in self.info['markers'].items():
+            ## Add markers
+            positions=marker_data.pop('pos')
             for j, (x, y, z) in enumerate(positions):
-                waypoint_elem = self.generate_waypoint_element(f"{waypoint_name}_{j}", x, y, z,**waypoint_data)
-                world_elem.append(waypoint_elem)
+                marker_elem = self.generate_waypoint_element(f"{marker_name}_{j}", x, y, z,**marker_data)
+                world_elem.append(marker_elem)
                 tree.write(updated_world_path)
-            
-            # Add vehicles
+
+        # Add vehicles
+        for i,model_name in enumerate(self.info['vehicle_models']):
             x, y, z, heading = self.offsets[i]
-            #ensure there is enough model folders with model_name(this may be changedto directly write the code as is done for waypoints)
+            #ensure there is enough model folders with model_name(this may be changedto directly write the code as is done for markers)
             drone_elem = self.generate_drone_element(f"{model_name}{i+1}", x, y, z, 0, 0, heading_to_yaw(heading))
             world_elem.append(drone_elem)
             tree.write(updated_world_path)
