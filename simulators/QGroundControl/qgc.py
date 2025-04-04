@@ -3,26 +3,23 @@ import os
 import subprocess
 from simulators.sim import Simulator,SimName
 from helpers.change_coordinates import find_spawns
-
+from plan import Plan
 from typing import List,Tuple
 from config import QGC_INI_PATH,QGC_PATH
 
 
 class QGC(Simulator):
-    def __init__(self, offsets: List[Tuple],origin:Tuple):
-        super().__init__(name=SimName.QGROUND,offsets=offsets) 
-        self.add_origin(origin)
-
-
-    def add_origin(self, origin):
+    def __init__(self, offsets: List[Tuple],plans:List[Plan],origin:Tuple):
+        super().__init__(name=SimName.QGROUND,offsets=offsets,plans=plans) 
         self.add_info('origin', origin)
-        self.info['spawns'] = find_spawns(origin, self.offsets)
+        self.add_info('spawns',find_spawns(origin, offsets))
 
-    def add_vehicle_cmd_fn(self,i):
+
+    def _add_vehicle_cmd_fn(self,i):
         spawn_str=','.join(map(str, self.info['spawns'][i]))
         return f" --custom-location={spawn_str}"
     
-    def launch(self):
+    def _launch_application(self):
         delete_all_qgc_links()
         add_qgc_links(n=self.n_uavs)
         sim_cmd = [os.path.expanduser(QGC_PATH)]
@@ -32,6 +29,12 @@ class QGC(Simulator):
             stderr=subprocess.DEVNULL,  # Suppress error output
             shell=False  # Ensure safety when passing arguments
             )
+        
+    def launch(self):
+        super().launch_vehicles()
+        uavs=super().create_VehicleLogics()
+        self._launch_application()
+        return uavs
     
 
 def add_qgc_links(n:int=1, start_port:int=5763, step:int=10):

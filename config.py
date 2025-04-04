@@ -6,7 +6,7 @@ QGC_INI_PATH =os.path.expanduser("~/.config/QGroundControl.org/QGroundControl.in
 ARDUPILOT_VEHICLE_PATH=os.path.expanduser('~/ardupilot/Tools/autotest/sim_vehicle.py')
 
 
-GAZEBO_WORD_PATH=os.path.expanduser('~/ardupilot_gazebo/worlds/runway.world')
+GAZEBO_WORD_PATH=os.path.expanduser('~/ardupilot_gazebo/worlds/runway_.world')
 
 #GAZEBO_PATH="simulators/gazebo/worlds"
 

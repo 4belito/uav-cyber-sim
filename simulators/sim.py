@@ -1,6 +1,8 @@
 
 from typing import List,Tuple
 from config import ARDUPILOT_VEHICLE_PATH
+from vehicle_logic import VehicleLogic
+from plan import Plan
 # from simulators.QGroundControl.qgc import get_qgc_sim_cmd,get_qgc_vehicle_cmd,add_qgc_links,delete_all_qgc_links
 import subprocess
 
@@ -10,16 +12,20 @@ class SimName:
     GAZEBO = "gazebo"
 
 class Simulator:
-    def __init__(self, name: SimName, offsets: List[Tuple]):
+    def __init__(self, name: SimName, offsets:List[Tuple],plans:List[Plan]):
         self.name = name
         self.info = {} 
         self.offsets = offsets 
         self.n_uavs = len(offsets)
+        self.plans=plans
         self.ardu_path = ARDUPILOT_VEHICLE_PATH
 
     
-    def add_vehicle_cmd_fn(self, i):
+    def _add_vehicle_cmd_fn(self, i):
         return ""
+    
+    def _launch_application(self):
+        print(f"ℹ️  No simulator launcher.")
        
     def add_info(self,key,value):
         self.info[key]=value
@@ -27,11 +33,23 @@ class Simulator:
     def launch_vehicles(self):
         for i in range(self.n_uavs):
             vehicle_cmd = f"python3 {self.ardu_path} -v ArduCopter -I{i} --sysid {i+1} --no-rebuild"
-            vehicle_cmd += self.add_vehicle_cmd_fn(i)
+            vehicle_cmd += self._add_vehicle_cmd_fn(i)
             subprocess.Popen(["gnome-terminal", "--", "bash", "-c", f"{vehicle_cmd}; exec bash"])
 
+    def create_VehicleLogics(self):
+        uavs=[]
+        for i,(plan,offset) in enumerate(zip(self.plans,self.offsets)): 
+            uavs.append(VehicleLogic(sys_id=i+1,
+                        offset=offset,
+                        plan= plan))
+        return uavs
+
+
     def launch(self): 
-        print(f"ℹ️  No simulator launcher.")
+        self.launch_vehicles()
+        self._launch_application()
+        return self.create_VehicleLogics()
+
 
     def __repr__(self):
         return f"SimulatorInfo(name='{self.name}', offsets ={self.offsets}, info={self.info})"

@@ -61,7 +61,9 @@ def check_set_mode(conn: mavutil.mavlink_connection,mode:int=0) -> bool:
         return False
 
     if msg.custom_mode != mode:
-        raise StepFailed(f"Mode not set to {FlightMode.get_name(mode)} (current: {FlightMode.get_name(msg.custom_mode)})")
+        print(f"Mode not set to {FlightMode.get_name(mode)} (current: {FlightMode.get_name(msg.custom_mode)})")
+        return False
+        #raise StepFailed(f"Mode not set to {FlightMode.get_name(mode)} (current: {FlightMode.get_name(msg.custom_mode)})")
     return True   
 
 def make_set_mode(mode_name: str,verbose:int=0) -> Action:

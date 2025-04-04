@@ -1,32 +1,26 @@
 import os
 import xml.etree.ElementTree as ET
 from typing import Dict,List,Tuple
-
+from plan import Plan
 import os
 import subprocess
 from simulators.sim import Simulator,SimName
 from helpers.change_coordinates import heading_to_yaw
-
 from typing import List,Tuple
-
-#from config import GAZEBO_PATH
-
+import numpy as np
 
 class Gazebo(Simulator):
-    def __init__(self, offsets: List[Tuple],world_path,markers):
-        super().__init__(name=SimName.QGROUND,offsets=offsets) 
-        self.add_world(world_path,markers)
+    def __init__(self, offsets: List[Tuple],plans:List[Plan],world_path:str,vehicle_models:List[str],waypoints:np.ndarray):
+        super().__init__(name=SimName.QGROUND,offsets=offsets,plans=plans) 
+        self.add_info('vehicle_models',vehicle_models)
+        self.add_info('waypoints',waypoints)
+        self.add_info('world_path',self.update_world(world_path))
 
 
-    def add_world(self, path,markers): 
-        world_path=os.path.expanduser(path)
-        #world_path = update_world(self.offsets,markers,world_path)
-        self.add_info('world_path', world_path)
-
-    def add_vehicle_cmd_fn(self,i):
+    def _add_vehicle_cmd_fn(self,i):
         return " -f gazebo-iris"
     
-    def launch(self):
+    def _launch_application(self):
         sim_cmd = ["gazebo", "--verbose", self.info['world_path']] #
         subprocess.Popen(
             sim_cmd,
@@ -35,332 +29,144 @@ class Gazebo(Simulator):
             shell=False  # Ensure safety when passing arguments
             )
         
-
-# def get_gazebo_sim_cmd(offsets:List[Tuple],markers:Dict,world_name:str):
-#     poses = [(east, north, up, 0, 0, heading_to_yaw(heading)) for (east, north, up, heading) in offsets]
-#     updated_world_path = update_world(poses,markers,f'{GAZEBO_PATH}/worlds/{world_name}')
-#     sim_cmd = ["gazebo", "--verbose", updated_world_path] 
-#     return sim_cmd
-
-# def get_gazebo_vehicle_cmd(vehicle_cmd:str,spawn=None):
-#     return vehicle_cmd+" -f gazebo-iris"
+    def launch(self):
+        super().launch_vehicles()
+        self._launch_application()
+        return super().create_VehicleLogics()
 
 
-# def generate_drone_element(instance_name, model_name, x, y, z, roll, pitch, yaw):
-#     model = ET.Element("model", name=instance_name)
-
-#     pose = ET.SubElement(model, "pose")
-#     pose.text = f"{x} {y} {z} {roll} {pitch} {yaw}"
-
-#     include = ET.SubElement(model, "include")
-#     uri = ET.SubElement(include, "uri")
-#     uri.text = f"file://{os.path.abspath(f'{GAZEBO_PATH}/models/vehicles/{model_name}')}"  # only one folder
-#     return model
-
-def generate_drone_element(instance_name, x, y, z, roll, pitch, yaw):
-    model = ET.Element("model", name=instance_name)
-    
-    pose = ET.SubElement(model, "pose")
-    pose.text = f"{x} {y} {z} {roll} {pitch} {yaw}"
-
-    include = ET.SubElement(model, "include")
-    uri = ET.SubElement(include, "uri")
-    # Reference using `model://` if GAZEBO_MODEL_PATH is correctly set
-    uri.text = f"model://{instance_name}"
-
-    return model
-
-# def generate_drone_element(name, x, y, z, roll, pitch, yaw):
-#     """Creates an XML element for a drone model."""
-#     model = ET.Element("model", name=name)
-    
-#     pose = ET.SubElement(model, "pose")
-#     pose.text = f"{x} {y} {z} {roll} {pitch} {yaw}"
-
-#     include = ET.SubElement(model, "include")
-#     uri = ET.SubElement(include, "uri")
-#     uri.text = f"model://{name}"
-
-#     return model
-
-
-    # <model name="iris_demo">
-    #   <include>
-    #     <uri>model://iris_with_ardupilot</uri>
-    #   </include>
-    # </model>
-
-
-# def update_world(drones, markers, world_path):
-#     import xml.etree.ElementTree as ET
-#     import os
-
-#     world_file_path = os.path.expanduser(world_path)
-
-#     tree = ET.parse(world_file_path)
-#     root = tree.getroot()
-
-#     # Namespace fix
-#     ns = {'sdf': root.tag.split('}')[0].strip('{')} if '}' in root.tag else {}
-#     world_elem = root.find('sdf:world', ns) if ns else root.find('world')
-
-#     if world_elem is None:
-#         raise RuntimeError("❌ Could not find <world> element. Check SDF namespace or structure.")
-
-#     # Remove old waypoints and drones
-#     for model in list(world_elem.findall('sdf:model', ns) if ns else world_elem.findall('model')):
-#         model_name = model.attrib.get('name', '')
-#         if "green_waypoint" in model_name or "red_waypoint" in model_name or "drone" in model_name:
-#             world_elem.remove(model)
-
-#     # Add markers
-#     for name, marker_set in markers.items():
-#         positions = marker_set.pop('pos')
-#         for i, (x, y, z) in enumerate(positions):
-#             waypoint_elem = generate_waypoint_element(f"{name}_{i}", x, y, z, **marker_set)
-#             world_elem.append(waypoint_elem)
-
-#     # Add drones
-#     for i, (x, y, z, roll, pitch, yaw) in enumerate(drones):
-#         drone_elem = generate_drone_element(f"drone{i+1}", x, y, z, roll, pitch, yaw)
-#         world_elem.append(drone_elem)
-
-#     # Save the modified world file
-#     updated_world_path = world_path[:-6] + "_updated.world"
-#     updated_world_path = os.path.expanduser(updated_world_path)
-#     tree.write(updated_world_path)
-
-#     return updated_world_path
-
-
-
-def update_world(offsets,markers, world_path):
-    # Load the existing SDF file
-    tree = ET.parse(world_path)
-    root = tree.getroot()
-
-    # Find the <world> element
-    world_elem = root.find("world")
-
-    # Remove old waypoints and drones
-    for model in world_elem.findall("model"):
-        model_name = model.attrib.get("name", "")
-        if model_name in ["green_waypoint","red_waypoint", "drone","iris_demo"]:
-            world_elem.remove(model)
-
-    # Add makers
-    for i,(name,marker_set) in enumerate(markers.items()):
-        model = marker_set.pop('vehicle_model')
-        ## Add waypoints
-        positions=marker_set.pop('pos')
-        for j, (x, y, z) in enumerate(positions):
-            waypoint_elem = generate_waypoint_element(f"{name}{j}", x, y, z,**marker_set)
-            world_elem.append(waypoint_elem)
+    def generate_drone_element(self,instance_name, x, y, z, roll, pitch, yaw):
+        import xml.etree.ElementTree as ET
+        model = ET.Element("model", name=instance_name)
         
-        # Add vehicles
-        x, y, z, heading = offsets[i]
-        drone_elem = generate_drone_element(f"drone{i+1}", x, y, z, 0, 0, heading_to_yaw(heading))
-        world_elem.append(drone_elem)
+        pose = ET.SubElement(model, "pose")
+        pose.text = f"{x} {y} {z} {roll} {pitch} {yaw}"
+
+        include = ET.SubElement(model, "include")
+        uri = ET.SubElement(include, "uri")
+        uri.text = f"model://{instance_name}"
+
+        return model
+
+    def update_world(self,world_path):
+        # Save the modified world file
+        updated_world_path = world_path[:-6] + "_updated.world"
+        updated_world_path = os.path.expanduser(updated_world_path)
 
 
-    # Save the modified world file
-    updated_world_path = world_path[:-6] + "_updated.world"
-    updated_world_path = os.path.expanduser(updated_world_path)
-    tree.write(updated_world_path)
+        # Load the existing SDF file
+        tree = ET.parse(world_path)
+        root = tree.getroot()
 
-    return updated_world_path
+        # Find the <world> element
+        world_elem = root.find("world")
 
+        # Remove old waypoints and drones
+        for model in world_elem.findall("model"):
+            model_name = model.attrib.get("name", "")
+            if model_name in ["green_waypoint","red_waypoint", "drone","iris_demo"]:
+                world_elem.remove(model)
 
+        # Add makers
+        for i,(model_name,(waypoint_name,waypoint_data)) in enumerate(zip(self.info['vehicle_models'],self.info['waypoints'].items())):
+            ## Add waypoints
+            positions=waypoint_data.pop('pos')
+            for j, (x, y, z) in enumerate(positions):
+                waypoint_elem = self.generate_waypoint_element(f"{waypoint_name}_{j}", x, y, z,**waypoint_data)
+                world_elem.append(waypoint_elem)
+                tree.write(updated_world_path)
+            
+            # Add vehicles
+            x, y, z, heading = self.offsets[i]
+            #ensure there is enough model folders with model_name(this may be changedto directly write the code as is done for waypoints)
+            drone_elem = self.generate_drone_element(f"{model_name}{i+1}", x, y, z, 0, 0, heading_to_yaw(heading))
+            world_elem.append(drone_elem)
+            tree.write(updated_world_path)
 
+        # Save the modified world file
+        updated_world_path = world_path[:-6] + "_updated.world"
+        updated_world_path = os.path.expanduser(updated_world_path)
+        tree.write(updated_world_path)
 
-
-def generate_waypoint_element(name, x, y, z, color="green", radius=0.2, alpha=0.05):
-    """Creates a fully defined XML element for a waypoint model with configurable color, radius, and transparency."""
-   
-
-    # Define color mappings
-    color_map = {
-        "green": "0.306 0.604 0.024 1",
-        "red": "0.8 0.0 0.0 1",
-        "yellow": "1.0 1.0 0.0 1",
-        "orange": "1.0 0.5 0.0 1",
-        "blue": "0.0 0.0 1.0 1"
-    }
-
-    diffuse_color = color_map.get(color.lower(), color_map["green"])
-
-    model = ET.Element("model", name=name)
-
-    pose = ET.SubElement(model, "pose")
-    pose.text = f"{x} {y} {z} 0 0 0"
-
-    link = ET.SubElement(model, "link", name="link")
-
-    # Inertial properties
-    inertial = ET.SubElement(link, "inertial")
-    for tag, value in {
-        "mass": "1",
-        "ixx": "0.1", "ixy": "0", "ixz": "0",
-        "iyy": "0.1", "iyz": "0", "izz": "0.1"
-    }.items():
-        if tag == "mass":
-            ET.SubElement(inertial, tag).text = value
-        else:
-            ET.SubElement(ET.SubElement(inertial, "inertia"), tag).text = value
-    ET.SubElement(inertial, "pose").text = "0 0 0 0 -0 0"
-
-    # Physics
-    for tag in ["self_collide", "enable_wind", "kinematic", "gravity"]:
-        ET.SubElement(link, tag).text = "0"
-    ET.SubElement(link, "pose").text = "0 0 0 0 -0 0"
-
-    # Visual
-    visual = ET.SubElement(link, "visual", name="visual")
-    geometry = ET.SubElement(visual, "geometry")
-    sphere = ET.SubElement(geometry, "sphere")
-    ET.SubElement(sphere, "radius").text = str(radius)
-
-    material = ET.SubElement(visual, "material")
-    script = ET.SubElement(material, "script")
-    ET.SubElement(script, "name").text = "Gazebo/Grey"
-    ET.SubElement(script, "uri").text = "file://media/materials/scripts/gazebo.material"
-
-    shader = ET.SubElement(material, "shader", type="pixel")
-    ET.SubElement(shader, "normal_map").text = "__default__"
-
-    ET.SubElement(material, "ambient").text = "0.3 0.3 0.3 1"
-    ET.SubElement(material, "diffuse").text = diffuse_color
-    ET.SubElement(material, "specular").text = "0.01 0.01 0.01 1"
-    ET.SubElement(material, "emissive").text = "0 0 0 1"
-
-    ET.SubElement(visual, "pose").text = "0 0 0 0 -0 0"
-    ET.SubElement(visual, "transparency").text = str(alpha)
-    ET.SubElement(visual, "cast_shadows").text = "1"
-
-    # Static properties
-    ET.SubElement(model, "static").text = "0"
-    ET.SubElement(model, "allow_auto_disable").text = "1"
-
-    return model
+        return updated_world_path
 
 
-
-
-
-
-
-
-
-
-
-
-
-# def generate_waypoint_element(name, x, y, z, color="green"):
-#     """Creates a fully defined XML element for a waypoint model with configurable color."""
+    def generate_waypoint_element(self,name, x, y, z, color="green", radius=0.2, alpha=0.05):
+        """Creates a fully defined XML element for a waypoint model with configurable color, radius, and transparency."""
     
-#     # Define color mappings
-#     color_map = {
-#         "green": "0.306 0.604 0.024 1",  # Green
-#         "red": "0.8 0.0 0.0 1" , # Red
-#         "yellow": "1.0 1.0 0.0 1" , # Yellow
-#         "orange": "1.0 0.5 0.0 1" ,# Orange
-#         "blue": "0.0 0.0 1.0 1"  # Blue
-#     }
 
-#     # Default to green if the color is not recognized
-#     diffuse_color = color_map.get(color.lower(), color_map["green"])
+        # Define color mappings
+        color_map = {
+            "green": "0.306 0.604 0.024 1",
+            "red": "0.8 0.0 0.0 1",
+            "yellow": "1.0 1.0 0.0 1",
+            "orange": "1.0 0.5 0.0 1",
+            "blue": "0.0 0.0 1.0 1"
+        }
 
-#     model = ET.Element("model", name=name)
+        diffuse_color = color_map.get(color.lower(), color_map["green"])
 
-#     pose = ET.SubElement(model, "pose")
-#     pose.text = f"{x} {y} {z} 0 0 0"
+        model = ET.Element("model", name=name)
 
-#     link = ET.SubElement(model, "link", name="link")
+        pose = ET.SubElement(model, "pose")
+        pose.text = f"{x} {y} {z} 0 0 0"
 
-#     # Inertial properties
-#     inertial = ET.SubElement(link, "inertial")
-#     mass = ET.SubElement(inertial, "mass")
-#     mass.text = "1"
-#     inertia = ET.SubElement(inertial, "inertia")
-#     ixx = ET.SubElement(inertia, "ixx")
-#     ixx.text = "0.1"
-#     ixy = ET.SubElement(inertia, "ixy")
-#     ixy.text = "0"
-#     ixz = ET.SubElement(inertia, "ixz")
-#     ixz.text = "0"
-#     iyy = ET.SubElement(inertia, "iyy")
-#     iyy.text = "0.1"
-#     iyz = ET.SubElement(inertia, "iyz")
-#     iyz.text = "0"
-#     izz = ET.SubElement(inertia, "izz")
-#     izz.text = "0.1"
+        link = ET.SubElement(model, "link", name="link")
 
-#     inertial_pose = ET.SubElement(inertial, "pose")
-#     inertial_pose.text = "0 0 0 0 -0 0"
+        # Inertial properties
+        inertial = ET.SubElement(link, "inertial")
+        for tag, value in {
+            "mass": "1",
+            "ixx": "0.1", "ixy": "0", "ixz": "0",
+            "iyy": "0.1", "iyz": "0", "izz": "0.1"
+        }.items():
+            if tag == "mass":
+                ET.SubElement(inertial, tag).text = value
+            else:
+                ET.SubElement(ET.SubElement(inertial, "inertia"), tag).text = value
+        ET.SubElement(inertial, "pose").text = "0 0 0 0 -0 0"
 
-#     # Physics settings
-#     self_collide = ET.SubElement(link, "self_collide")
-#     self_collide.text = "0"
-    
-#     enable_wind = ET.SubElement(link, "enable_wind")
-#     enable_wind.text = "0"
-    
-#     kinematic = ET.SubElement(link, "kinematic")
-#     kinematic.text = "0"
-    
-#     link_pose = ET.SubElement(link, "pose")
-#     link_pose.text = "0 0 0 0 -0 0"
-    
-#     gravity = ET.SubElement(link, "gravity")
-#     gravity.text = "0"
+        # Physics
+        for tag in ["self_collide", "enable_wind", "kinematic", "gravity"]:
+            ET.SubElement(link, tag).text = "0"
+        ET.SubElement(link, "pose").text = "0 0 0 0 -0 0"
 
-#     # Visual properties
-#     visual = ET.SubElement(link, "visual", name="visual")
-#     geometry = ET.SubElement(visual, "geometry")
-#     sphere = ET.SubElement(geometry, "sphere")
-#     radius = ET.SubElement(sphere, "radius")
-#     radius.text = "0.2"
+        # Visual
+        visual = ET.SubElement(link, "visual", name="visual")
+        geometry = ET.SubElement(visual, "geometry")
+        sphere = ET.SubElement(geometry, "sphere")
+        ET.SubElement(sphere, "radius").text = str(radius)
 
-#     material = ET.SubElement(visual, "material")
-#     script = ET.SubElement(material, "script")
-#     name_script = ET.SubElement(script, "name")
-#     name_script.text = "Gazebo/Grey"
-#     uri = ET.SubElement(script, "uri")
-#     uri.text = "file://media/materials/scripts/gazebo.material"
+        material = ET.SubElement(visual, "material")
+        script = ET.SubElement(material, "script")
+        ET.SubElement(script, "name").text = "Gazebo/Grey"
+        ET.SubElement(script, "uri").text = "file://media/materials/scripts/gazebo.material"
 
-#     shader = ET.SubElement(material, "shader", type="pixel")
-#     normal_map = ET.SubElement(shader, "normal_map")
-#     normal_map.text = "__default__"
+        shader = ET.SubElement(material, "shader", type="pixel")
+        ET.SubElement(shader, "normal_map").text = "__default__"
 
-#     ambient = ET.SubElement(material, "ambient")
-#     ambient.text = "0.3 0.3 0.3 1"
+        ET.SubElement(material, "ambient").text = "0.3 0.3 0.3 1"
+        ET.SubElement(material, "diffuse").text = diffuse_color
+        ET.SubElement(material, "specular").text = "0.01 0.01 0.01 1"
+        ET.SubElement(material, "emissive").text = "0 0 0 1"
 
-#     diffuse = ET.SubElement(material, "diffuse")
-#     diffuse.text = diffuse_color  # Set color dynamically
+        ET.SubElement(visual, "pose").text = "0 0 0 0 -0 0"
+        ET.SubElement(visual, "transparency").text = str(alpha)
+        ET.SubElement(visual, "cast_shadows").text = "1"
 
-#     specular = ET.SubElement(material, "specular")
-#     specular.text = "0.01 0.01 0.01 1"
+        # Static properties
+        ET.SubElement(model, "static").text = "0"
+        ET.SubElement(model, "allow_auto_disable").text = "1"
 
-#     emissive = ET.SubElement(material, "emissive")
-#     emissive.text = "0 0 0 1"
+        return model
 
-#     visual_pose = ET.SubElement(visual, "pose")
-#     visual_pose.text = "0 0 0 0 -0 0"
 
-#     transparency = ET.SubElement(visual, "transparency")
-#     transparency.text = "0.05"
 
-#     cast_shadows = ET.SubElement(visual, "cast_shadows")
-#     cast_shadows.text = "1"
 
-#     # Static properties
-#     static = ET.SubElement(model, "static")
-#     static.text = "0"
 
-#     allow_auto_disable = ET.SubElement(model, "allow_auto_disable")
-#     allow_auto_disable.text = "1"
 
-#     return model
+
+
 
 
 

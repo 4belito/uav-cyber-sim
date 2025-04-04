@@ -17,13 +17,16 @@ class VehicleMode:
 class VehicleLogic:
     def __init__(self,
                 sys_id:int,
-                home: np.ndarray,
+                offset: tuple,
                 plan: Optional[Plan] = None, 
+                model:str = 'drone',
                 verbose=1):
         self.sys_id = sys_id
         self.conn=mavutil.mavlink_connection(f'udp:127.0.0.1:{14551+10*(sys_id-1)}')
         self.conn.wait_heartbeat()
-        self.home = home
+        self.offset = offset
+        self.home = np.array(offset[:3])
+        self.model = model
         self.verbose = verbose
         self.mode = VehicleMode.MISSION 
         self.plan= plan if plan is not None else Plan.basic()
