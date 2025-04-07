@@ -1,6 +1,6 @@
-# Intalling QGroundControl 
+# Installing QGroundControl 
 
-## Adapted from [[Intelligent Quads]](https://github.com/Intelligent-Quads/iq_tutorials/blob/master/docs/installing_gazebo_arduplugin.md)
+## Adapted from [Intelligent Quads](https://github.com/Intelligent-Quads/iq_tutorials/blob/master/docs/installing_gazebo_arduplugin.md)
 
 
 ### Key Features:

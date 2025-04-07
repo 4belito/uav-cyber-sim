@@ -11,7 +11,6 @@ In home directory:
 cd ~
 sudo apt install git
 git clone https://github.com/4belito/ardupilot.git
-cd ardupilot
 ```
 
 ## Install dependencies:
