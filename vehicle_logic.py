@@ -32,8 +32,8 @@ class VehicleLogic:
         self.plan= plan if plan is not None else Plan.basic()
         self.plan.start(self.conn)
         self.curr_pos = None
-
-        print(f'vehicle {self.sys_id} created')
+        if verbose:
+            print(f'Vehicle {self.sys_id} launched 🚀')
 
     def set_current_position(self,pos):
         self.curr_pos=pos

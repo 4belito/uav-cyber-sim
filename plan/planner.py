@@ -1,15 +1,16 @@
 import numpy as np
 
-from plan.core import Action
+from .core import Action
 
-from plan.actions.pre_arm import make_pre_arm
-from plan.actions.change_mode import make_set_mode
-from plan.actions.arm import make_arm
-from plan.actions.take_off import make_takeoff
-from plan.actions.land import make_land
-from plan.actions.change_parameter import make_change_nav_speed
-from plan.actions.navegation import make_path
-
+from plan.actions import (
+    make_pre_arm,
+    make_set_mode,
+    make_arm,
+    make_takeoff,
+    make_land,
+    make_change_nav_speed,
+    make_path
+)
 
 class State:
     NOT_STARTED = "NOT_STARTED"
@@ -18,8 +19,8 @@ class State:
     FAILED = "FAILED"
 
 class Plan(Action):
-    def __init__(self, name: str) -> None:
-        super().__init__(name)
+    def __init__(self, name: str, verbose:bool = False) -> None:
+        super().__init__(name,verbose)
 
     @staticmethod
     def create_square_path(side_len: float = 10, alt: float = 5):

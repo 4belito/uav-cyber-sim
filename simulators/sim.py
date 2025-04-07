@@ -3,16 +3,16 @@ from typing import List,Tuple
 from config import ARDUPILOT_VEHICLE_PATH
 from vehicle_logic import VehicleLogic
 from plan import Plan
-# from simulators.QGroundControl.qgc import get_qgc_sim_cmd,get_qgc_vehicle_cmd,add_qgc_links,delete_all_qgc_links
 import subprocess
 
 
 class SimName:
+    NONE = "none"
     QGROUND = "qgroundcontrol"
     GAZEBO = "gazebo"
 
 class Simulator:
-    def __init__(self, name: SimName, offsets:List[Tuple],plans:List[Plan]):
+    def __init__(self, name: SimName=SimName.NONE, offsets:List[Tuple]= [(0, 0, 0, 0)],plans:List[Plan]=[Plan.basic()]):
         self.name = name
         self.info = {} 
         self.offsets = offsets 
@@ -25,7 +25,7 @@ class Simulator:
         return ""
     
     def _launch_application(self):
-        print(f"ℹ️  No simulator launcher.")
+        print("ℹ️  Running without a simulator.")
        
     def add_info(self,key,value):
         self.info[key]=value
@@ -43,7 +43,6 @@ class Simulator:
                         offset=offset,
                         plan= plan))
         return uavs
-
 
     def launch(self): 
         self.launch_vehicles()

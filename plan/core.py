@@ -1,7 +1,6 @@
 from __future__ import annotations
-from typing import Callable, Optional
+from typing import Callable, Optional,List,Union
 from pymavlink import mavutil
-from typing import List,Union
 
 
 class State:
@@ -17,14 +16,16 @@ class StepFailed(Exception):
 
 class MissionElement:
     def __init__(self, 
-                name: str= 'action name', 
+                name: str= 'action name', verbose:bool = False
                 ) -> None:
         self.name = name
         self.prev = None
         self.next = None
         self.state = State.NOT_STARTED
         self.conn = None
-        print(f"{self.__class__.__name__} '{self.name}' created — no connection yet 🧩")
+        self.verbose = verbose
+        if verbose:
+            print(f"{self.__class__.__name__} '{self.name}' created — no connection yet 🧩")
 
     def act(self):
         pass
@@ -48,18 +49,20 @@ class MissionElement:
 
     def bind_connection(self, connection: mavutil.mavlink_connection) -> None:
         self.conn = connection  # Set later from the parent Action
-        print(f"Vehicle {self.conn.target_system}: {self.__class__.__name__} '{self.name}' is now connected ✅🔗")
+        if self.verbose:
+            print(f"Vehicle {self.conn.target_system}: {self.__class__.__name__} '{self.name}' is now connected ✅🔗")
 
 
 class Step(MissionElement):
     def __init__(self, name: str, 
                  check_fn: Callable[[mavutil.mavlink_connection, bool], bool],
-                 exec_fn: Optional[Callable[[mavutil.mavlink_connection, bool], None]] = None
+                 exec_fn: Optional[Callable[[mavutil.mavlink_connection, bool], None]] = None,
+                 verbose:bool = False
                 ) -> None:
         # No connection here
         self.exec_fn = exec_fn or (lambda conn: None)
         self.check_fn = check_fn 
-        super().__init__(name=name)
+        super().__init__(name=name,verbose = verbose)
 
 
     def execute(self)->None:
@@ -94,10 +97,10 @@ class Step(MissionElement):
 
 
 class Action(MissionElement):
-    def __init__(self, name: str)-> None:
+    def __init__(self, name: str,verbose:bool = False)-> None:
         self.steps: List[Union[Step, Action]] = []
         self.current: Optional[Union[Step, Action]]= None
-        super().__init__(name=name)  # ✅ no-op
+        super().__init__(name=name,verbose=verbose)  # ✅ no-op
 
     def add(self, step: Union[Step, Action]) -> None:
         """
@@ -149,7 +152,8 @@ class Action(MissionElement):
         for step in self.steps:
             step.bind_connection(connection)
         super().bind_connection(connection)
-        print(f"Vehicle {self.conn.target_system}: {self.__class__.__name__} '{self.name}' is now connected ✅🔗")
+        if self.verbose:
+            print(f"Vehicle {self.conn.target_system}: {self.__class__.__name__} '{self.name}' is now connected ✅🔗")
 
     def __repr__(self) -> str:
         output = [super().__repr__()]

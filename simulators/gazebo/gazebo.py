@@ -28,12 +28,6 @@ class Gazebo(Simulator):
             stderr=subprocess.DEVNULL,  # Suppress error output
             shell=False  # Ensure safety when passing arguments
             )
-        
-    def launch(self):
-        super().launch_vehicles()
-        self._launch_application()
-        return super().create_VehicleLogics()
-
 
     def generate_drone_element(self,instance_name, x, y, z, roll, pitch, yaw):
         import xml.etree.ElementTree as ET

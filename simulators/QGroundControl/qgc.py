@@ -5,7 +5,7 @@ from simulators.sim import Simulator,SimName
 from helpers.change_coordinates import find_spawns
 from plan import Plan
 from typing import List,Tuple
-from config import QGC_INI_PATH,QGC_PATH
+from config import QGC_PATH, QGC_INI_PATH
 
 
 class QGC(Simulator):
@@ -20,6 +20,7 @@ class QGC(Simulator):
         return f" --custom-location={spawn_str}"
     
     def _launch_application(self):
+        # This is for connect manually using TCP
         delete_all_qgc_links()
         add_qgc_links(n=self.n_uavs)
         sim_cmd = [os.path.expanduser(QGC_PATH)]
@@ -29,46 +30,48 @@ class QGC(Simulator):
             stderr=subprocess.DEVNULL,  # Suppress error output
             shell=False  # Ensure safety when passing arguments
             )
-        
+    # This is for TCP connections
     def launch(self):
         super().launch_vehicles()
         uavs=super().create_VehicleLogics()
         self._launch_application()
         return uavs
     
-
-def add_qgc_links(n:int=1, start_port:int=5763, step:int=10):
-    """
-    Adds n new TCP link configurations to QGroundControl's .ini file.
-
-    Args:
-        n (int): Number of new links to add.
-        start_port (int): Starting port number.
-        step (int): Step between ports.
-        ini_path (str): Optional path to the .ini file. If None, uses default.
-    """
-    # Read the original file
+def add_qgc_links(n: int = 1, start_port: int = 5763, step: int = 10):
     with open(QGC_INI_PATH, 'r') as file:
         lines = file.readlines()
 
-    # Find the [LinkConfigurations] section
+    section_header = "[LinkConfigurations]"
     start_idx = None
+    count = 0
+
+    # Find existing [LinkConfigurations] section
     for idx, line in enumerate(lines):
-        if line.strip() == '[LinkConfigurations]':
+        if line.strip() == section_header:
             start_idx = idx
             break
 
+    # If section doesn't exist, create it at the end
     if start_idx is None:
-        raise Exception("Could not find the [LinkConfigurations] section")
+        lines.append(f"\n{section_header}\n")
+        lines.append("count=0\n")
+        start_idx = len(lines) - 2  # index of the new section header
+        count_line_idx = start_idx + 1
+    else:
+        # Get current count if section exists
+        try:
+            count_line_idx = next(i for i in range(start_idx, len(lines)) if lines[i].startswith('count='))
+            count = int(lines[count_line_idx].split('=')[1])
+        except StopIteration:
+            # count= line was not found, create one
+            count_line_idx = start_idx + 1
+            lines.insert(count_line_idx, "count=0\n")
+            count = 0
 
-    # Find the 'count=' line and get current count
-    count_line_idx = next(i for i in range(start_idx, len(lines)) if lines[i].startswith('count='))
-    current_count = int(lines[count_line_idx].split('=')[1])
-
-    # Create new connection blocks
+    # Prepare new link entries
     new_lines = []
     for i in range(n):
-        idx = current_count + i
+        idx = count + i
         port = start_port + step * i
         new_lines.extend([
             f'Link{idx}\\auto=true\n',
@@ -78,16 +81,15 @@ def add_qgc_links(n:int=1, start_port:int=5763, step:int=10):
             f'Link{idx}\\port={port}\n',
             f'Link{idx}\\type=2\n'
         ])
+        #print(f"✅ QGroundControl connected to port {port}")
+        
 
-    # Insert new lines before 'count=' and update the count
+    # Insert new lines just before count=
     lines[count_line_idx:count_line_idx] = new_lines
-    lines[count_line_idx + len(new_lines)] = f'count={current_count + n}\n'
+    lines[count_line_idx + len(new_lines)] = f'count={count + n}\n'
 
-    # Save the updated file
     with open(QGC_INI_PATH, 'w') as file:
         file.writelines(lines)
-
-    print(f"✅ {n} new connection(s) added starting from port {start_port}. Restart QGroundControl to see them.")
 
 
 
@@ -115,5 +117,3 @@ def delete_all_qgc_links():
 
     with open(QGC_INI_PATH, 'w') as f:
         f.writelines(new_lines)
-
-    print("🧼 All QGroundControl links deleted (count=0).")
