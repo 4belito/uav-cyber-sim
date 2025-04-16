@@ -134,6 +134,10 @@ class Step(MissionElement):
         elif self.state == State.FAILED:
             print("⚠️ Already failed!. Cannot perform this step again!")
 
+    def reset(self):
+        super().reset()
+        self.curr_pos = None
+
 
 class Action(MissionElement):
     def __init__(

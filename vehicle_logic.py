@@ -3,6 +3,7 @@ import numpy as np
 
 from plan.planner import Plan, State
 from plan.core import ActionNames
+from typing import List
 
 # from helpers.change_coordinates import GLOBAL_switch_LOCAL_NED
 from plan.actions import get_local_position, make_go_to
@@ -36,39 +37,39 @@ class VehicleLogic:
         self.plan = plan if plan is not None else Plan.basic()
         self.start_plan()
         # all these positions are local
-        self.obst_pos = None
-        self.safety_radius = 5
-        self.radar_radius = 10
+        self.neighbors: Neighbors = None
+        self.safety_radius: float = 5
+        self.radar_radius: float = 10
         if verbose:
             print(f"Vehicle {self.sys_id} launched 🚀")
 
     def act(self):
-        if self.obst_pos is not None:
-            avoid_pos = self.check_avoidance()
-            if avoid_pos is not None:
-                self.avoidance_plan_update(avoid_pos)
+        if self.neighbors.vehs:
+            i = np.argmin(self.neighbors.dist)
+            self.check_avoidance(obst_pos=self.neighbors.pos[i])
         self.plan.act()
 
     def avoidance_plan_update(self, avoid_pos):
         avoid_step = make_go_to(
-            wp=avoid_pos, wp_margin=0.1, verbose=2, cause_text="(avoidance)"
+            wp=avoid_pos, wp_margin=0.5, verbose=2, cause_text="(avoidance)"
         )
         avoid_step.bind_connection(self.conn)
         self.plan.current.add_now(avoid_step)
 
-    def check_avoidance(self):
-        distance = np.linalg.norm(self.current_position() - self.obst_pos)
-        if distance > self.safety_radius:
-            self.set_mode(VehicleMode.MISSION)
-        elif (
-            self.current_step().state == State.DONE
-            or self.mode != VehicleMode.AVOIDANCE
-        ):
-            avoid_pos = self.get_avoidance_pos()
-            if avoid_pos is not None:
+    def check_avoidance(self, obst_pos):
+        distance = np.linalg.norm(self.current_position() - obst_pos)
+        avoid_pos = self.get_avoidance_pos(obst_pos)
+        if distance < self.safety_radius and avoid_pos is not None:
+            if (
+                self.mode == VehicleMode.AVOIDANCE
+                and self.current_step().state == State.DONE
+            ):
+                self.avoidance_plan_update(avoid_pos)
+            elif self.mode == VehicleMode.MISSION:
+                self.avoidance_plan_update(avoid_pos)
                 self.set_mode(VehicleMode.AVOIDANCE)
-                return avoid_pos
-            else:
+        else:
+            if self.current_step().state == State.DONE:
                 self.set_mode(VehicleMode.MISSION)
 
     def start_plan(self):
@@ -103,7 +104,8 @@ class VehicleLogic:
 
     def get_avoidance_pos(
         self,
-        distance: float = 1,
+        obst_pos: np.ndarray,
+        distance: float = 5,
         direction: str = "left",
     ):
         """
@@ -111,8 +113,8 @@ class VehicleLogic:
         `direction` can be 'left' or 'right' (relative to wp direction).
         """
         # Normalize wp direction (ignore Z)
-        curr_pos = self.current_position()
-        obj_dir = (self.obst_pos - curr_pos)[:2]
+        curr_pos = self.current_position().copy()
+        obj_dir = (obst_pos - curr_pos)[:2]
         target_pos = self.target_position()
         target_dir = (target_pos - curr_pos)[:2]
         if np.dot(obj_dir, target_dir) < 0:
@@ -129,54 +131,14 @@ class VehicleLogic:
         # Scale to desired speed
         return curr_pos + ortho
 
-    # def get_global_position(self):
-    #     msg = self.conn.recv_match(type="GLOBAL_POSITION_INT", blocking=True)
-    #     if msg:
-    #         # Convert from scaled integers (E7 format) to decimal degrees
-    #         lat = msg.lat / 1e7
-    #         lon = msg.lon / 1e7
-    #         alt = msg.alt / 1000  # Convert mm to meters
-    #         return lat, lon, alt
-    #     return None  # Return None if no data received
 
-    # def move_left(self, speed=0.5):
-    #     """
-    #     Moves the UAV left by overriding position commands with a velocity command.
-
-    #     - speed: Speed in m/s (default 0.5 m/s)
-    #     """
-    #     print(f"Moving left at {speed} m/s")
-    #     # Step 1: Cancel Position Control (ignore position commands)
-    #     type_mask = int(
-    #         0b010111000111
-    #     )  # Only use velocity, ignore position & acceleration
-    #     coordinate_frame = mavutil.mavlink.MAV_FRAME_BODY_NED  # Relative to drone
-
-    #     # Step 2: Send Velocity Command
-    #     vy = -speed  # Negative vy moves left
-
-    #     msg = mavutil.mavlink.MAVLink_set_position_target_local_ned_message(
-    #         10,
-    #         self.sys,
-    #         self.comp,
-    #         coordinate_frame,
-    #         type_mask,
-    #         0,
-    #         0,
-    #         0,  # Position ignored
-    #         0,
-    #         vy,
-    #         0,  # Move left (velocity command)
-    #         0,
-    #         0,
-    #         0,  # Acceleration ignored
-    #         0,
-    #         0,  # Ignore yaw
-    #     )
-    #     print("turn left msg will be sent")
-    #     self.conn.mav.send(msg)
-    #     print("turn left msgsent")
-    #     # Wait for acknowledgment before continuing
-    #     while not self.is_acknowledged():
-    #         print(f"Waiting moving left acknowledge")
-    #         pass  # Keep checking for an acknowledgment
+class Neighbors:
+    def __init__(
+        self,
+        vehicles: List[VehicleLogic],
+        distances: np.ndarray = None,
+        positions: np.ndarray = None,
+    ):
+        self.vehs = vehicles
+        self.dist = distances
+        self.pos = positions
