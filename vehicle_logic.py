@@ -36,11 +36,7 @@ class VehicleLogic:
         self.plan = plan if plan is not None else Plan.basic()
         self.start_plan()
         # all these positions are local
-        self.curr_pos = None
-        self.goal_pos = None
         self.obst_pos = None
-
-        self.onair = False
         self.safety_radius = 5
         self.radar_radius = 10
         if verbose:
@@ -48,40 +44,32 @@ class VehicleLogic:
 
     def act(self):
         if self.obst_pos is not None:
-            self.check_avoidance()
-        if self.mode == VehicleMode.AVOIDANCE:
-            self.avoidance_plan_update()
+            avoid_pos = self.check_avoidance()
+            if avoid_pos is not None:
+                self.avoidance_plan_update(avoid_pos)
         self.plan.act()
-        self.update_oniar()
 
-    def update_oniar(self):
-        current_action = self.current_action()
-        if current_action:
-            if self.onair:
-                self.onair = not (
-                    current_action.name == ActionNames.LAND
-                    and current_action.state == State.DONE
-                )
-            else:
-                self.onair = (
-                    current_action.name == ActionNames.TAKEOFF
-                    and current_action.state == State.IN_PROGRESS
-                )
-
-    def avoidance_plan_update(self):
-        avoid_pos = self.get_avoidance_pos()
+    def avoidance_plan_update(self, avoid_pos):
         avoid_step = make_go_to(
-            wp=avoid_pos, wp_margin=0.5, verbose=2, cause_text="(avoidance)"
+            wp=avoid_pos, wp_margin=0.1, verbose=2, cause_text="(avoidance)"
         )
         avoid_step.bind_connection(self.conn)
         self.plan.current.add_now(avoid_step)
 
     def check_avoidance(self):
-        distance = np.linalg.norm(self.curr_pos - self.obst_pos)
-        if distance < self.safety_radius:
-            self.set_mode(VehicleMode.AVOIDANCE)
-        else:
+        distance = np.linalg.norm(self.current_position() - self.obst_pos)
+        if distance > self.safety_radius:
             self.set_mode(VehicleMode.MISSION)
+        elif (
+            self.current_step().state == State.DONE
+            or self.mode != VehicleMode.AVOIDANCE
+        ):
+            avoid_pos = self.get_avoidance_pos()
+            if avoid_pos is not None:
+                self.set_mode(VehicleMode.AVOIDANCE)
+                return avoid_pos
+            else:
+                self.set_mode(VehicleMode.MISSION)
 
     def start_plan(self):
         self.plan.start(self.conn)
@@ -98,23 +86,20 @@ class VehicleLogic:
     def get_mode(self):
         return self.mode
 
-    def reset_plan(self):
-        pass
-
     def current_action(self):
         return self.plan.current
 
     def current_step(self):
         return self.current_action().current
 
-    def set_local_position(self):
-        answ = get_local_position(self.conn)
-        if answ is not False:
-            self.curr_pos = answ
+    def current_position(self):
+        return self.plan.curr_pos
 
-    def get_global_position(self):
-        self.set_local_position(self.conn)
-        return local2global(self.curr_pos)
+    def is_onair(self):
+        return self.plan.onair
+
+    def target_position(self):
+        return self.current_step().target_pos
 
     def get_avoidance_pos(
         self,
@@ -126,10 +111,12 @@ class VehicleLogic:
         `direction` can be 'left' or 'right' (relative to wp direction).
         """
         # Normalize wp direction (ignore Z)
-        obj_dir = (self.obst_pos - self.curr_pos)[:2]
-        goal_dir = (self.goal_pos - self.curr_pos)[:2]
-        if np.dot(obj_dir, goal_dir) < 0:
-            return self.goal_pos
+        curr_pos = self.current_position()
+        obj_dir = (self.obst_pos - curr_pos)[:2]
+        target_pos = self.target_position()
+        target_dir = (target_pos - curr_pos)[:2]
+        if np.dot(obj_dir, target_dir) < 0:
+            return None
         obj_dir = obj_dir / np.linalg.norm(obj_dir) * distance
         # Get orthogonal direction
         if direction == "left":
@@ -140,7 +127,7 @@ class VehicleLogic:
             raise ValueError("Direction must be 'left' or 'right'")
 
         # Scale to desired speed
-        return self.curr_pos + ortho
+        return curr_pos + ortho
 
     # def get_global_position(self):
     #     msg = self.conn.recv_match(type="GLOBAL_POSITION_INT", blocking=True)

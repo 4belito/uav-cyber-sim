@@ -136,11 +136,17 @@ class Step(MissionElement):
 
 
 class Action(MissionElement):
-    def __init__(self, name: str, verbose: bool = False) -> None:
+    def __init__(
+        self,
+        name: str,
+        onair: bool = None,
+        curr_pos: np.ndarray = None,
+        verbose: bool = False,
+    ) -> None:
         self.steps: List[Union[Step, Action]] = []
         self.current: Optional[Union[Step, Action]] = None
-        self.onair: bool = None
-        self.curr_pos: np.ndarray = None
+        self.onair: bool = onair
+        self.curr_pos: np.ndarray = curr_pos
         super().__init__(name=name, verbose=verbose)  # ✅ no-op
 
     def add(self, step: Union[Step, Action]) -> None:
@@ -162,21 +168,22 @@ class Action(MissionElement):
             step = self.current
             if step is None:
                 self.state = State.DONE
-            elif step.state == State.DONE:
-                if step.next is None:
-                    self.state = State.DONE
-                else:
-                    self.current = step.next
-            elif step.state == State.FAILED:
-                self.state = State.FAILED
-                print("⚠️ Already failed!. Cannot perform this again!")
             else:
-                step.act()
+                if step.state == State.DONE:
+                    if step.next is None:
+                        self.state = State.DONE
+                    else:
+                        self.current = step.next
+                elif step.state == State.FAILED:
+                    self.state = State.FAILED
+                    print("⚠️ Already failed!. Cannot perform this again!")
+                else:
+                    step.act()
+                self.update_pos(step)
         elif self.state == State.DONE:
             print("⚠️ Already done!. Cannot perform this again!")
         elif self.state == State.FAILED:
             print("⚠️ Already failed!. Cannot perform this again!")
-        self.update_pos(step)
 
     def update_pos(self, step):
         self.onair = step.onair

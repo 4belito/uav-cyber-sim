@@ -22,7 +22,7 @@ class State:
 
 class Plan(Action):
     def __init__(self, name: str, verbose: bool = False) -> None:
-        super().__init__(name, verbose=verbose)
+        super().__init__(name, curr_pos=np.zeros(3), verbose=verbose)
 
     @staticmethod
     def create_square_path(side_len: float = 10, alt: float = 5):

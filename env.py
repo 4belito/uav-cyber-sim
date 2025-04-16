@@ -23,21 +23,21 @@ class Enviroment:
         """
         self.vehs.remove(veh)
 
-    def get_closest_position(self, veh):
-        if not veh.onair:
+    def get_closest_position(self, veh: VehicleLogic):
+        if not veh.is_onair():
             return None
         other_vehs = self.vehs - {veh}
         if not other_vehs:
             return None
         other_pos = [
-            local2global(other.curr_pos, other.home, pairwise=True)
+            local2global(other.current_position(), other.home, pairwise=True)
             for other in other_vehs
-            if other.curr_pos is not None
+            if other.is_onair()
         ]
         if not other_pos:
             return None
 
-        pos = local2global(veh.curr_pos, veh.home, pairwise=True)
+        pos = local2global(veh.current_position(), veh.home, pairwise=True)
         norms = np.linalg.norm(other_pos - pos, axis=1)
         min_index = np.argmin(norms)
         if norms[min_index] < veh.radar_radius:
@@ -49,29 +49,5 @@ class Enviroment:
         pos = self.get_closest_position(veh)
         if pos is not None:
             veh.obst_pos = global2local(pos, veh.home, pairwise=True)
-
-    def get_position(self, veh: VehicleLogic):
-        veh.set_local_position()
-
-    def get_positions(self):
-        for veh in self.vehs:
-            if veh.onair:
-                self.get_position(veh)
-
-    # def send_neighborg_position(self, veh: VehicleLogic, neighborg_id: int):
-    #     wp = veh.goal_wp
-
-    #     print(f" pos {veh.global_pos}")
-    #     print(f" obj {self.poss[neighborg_id-1]}")
-    #     print(f"goal wp {veh.goal_wp}")
-    #     local_obj_pos = global2local(
-    #         self.poss[neighborg_id - 1], veh.home, pairwise=True
-    #     )
-    #     next_wp = Enviroment.get_avoidance_wp(
-    #         pos=veh.curr_pos, obj_pos=local_obj_pos, goal_pos=wp
-    #     )
-    #     next_step = make_go_to(
-    #         wp=next_wp, wp_margin=0.5, verbose=2, cause_text="(avoidance)"
-    #     )
-    #     next_step.bind_connection(veh.conn)
-    #     veh.plan.current.add_now(next_step)
+        else:
+            veh.obst_pos = None
