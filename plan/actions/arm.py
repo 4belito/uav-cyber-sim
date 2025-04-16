@@ -1,7 +1,8 @@
-
 from pymavlink import mavutil
-from plan.core import Step, Action, StepFailed 
+from plan.core import Step, Action, StepFailed
 from functools import partial
+from plan.core import ActionNames
+
 
 class MAVCommand:
     ARM = mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM
@@ -9,6 +10,7 @@ class MAVCommand:
     LAND = mavutil.mavlink.MAV_CMD_NAV_LAND
     REQUEST_MESSAGE = mavutil.mavlink.MAV_CMD_REQUEST_MESSAGE
     LOITER_UNLIMITED = mavutil.mavlink.MAV_CMD_NAV_LOITER_UNLIM
+
 
 def exec_arm(conn: mavutil.mavlink_connection, verbose: int = 0) -> None:
     """Send ARM command to the UAV."""
@@ -19,8 +21,15 @@ def exec_arm(conn: mavutil.mavlink_connection, verbose: int = 0) -> None:
         conn.target_component,
         mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM,
         0,
-        1, 0, 0, 0, 0, 0, 0  # 1 = arm
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,  # 1 = arm
     )
+
 
 def check_arm(conn: mavutil.mavlink_connection, verbose: int = 0) -> bool:
     """Check if the UAV is armed via HEARTBEAT."""
@@ -34,9 +43,14 @@ def check_arm(conn: mavutil.mavlink_connection, verbose: int = 0) -> bool:
         return False
     return True
 
-def make_arm(verbose:int=0):
-    arm = Action("Arm")
-    arm.add(Step("arm",
-                 check_fn=partial(check_arm,verbose=verbose),
-                 exec_fn=partial(exec_arm,verbose=verbose)))
+
+def make_arm(verbose: int = 0):
+    arm = Action(ActionNames.ARM)
+    arm.add(
+        Step(
+            "arm",
+            check_fn=partial(check_arm, verbose=verbose),
+            exec_fn=partial(exec_arm, verbose=verbose),
+        )
+    )
     return arm

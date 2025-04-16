@@ -1,7 +1,12 @@
 # actions/pre_arm.py
 
 from pymavlink import mavutil
-from plan.core import Step, Action, StepFailed  # assuming these are in your core module
+from plan.core import (
+    Step,
+    Action,
+    StepFailed,
+    ActionNames,
+)  # assuming these are in your core module
 from functools import partial
 
 # Required EKF and sensor flags
@@ -31,16 +36,20 @@ def check_disarmed(conn: mavutil.mavlink_connection):
         raise StepFailed("UAV is already armed")
     return True
 
-def check_ekf_status(conn: mavutil.mavlink_connection,verbose: int = 0):
+
+def check_ekf_status(conn: mavutil.mavlink_connection, verbose: int = 0):
     msg = conn.recv_match(type="EKF_STATUS_REPORT")
     if not msg:
         return False
     missing = [name for name, bit in EKF_FLAGS.items() if not msg.flags & bit]
     if missing:
-        if verbose ==2:
-            print(f"Vehicle {conn.target_system}: EKF is not ready — missing: {', '.join(missing)}")
+        if verbose == 2:
+            print(
+                f"Vehicle {conn.target_system}: EKF is not ready — missing: {', '.join(missing)}"
+            )
         return False
     return True
+
 
 def check_gps_status(conn: mavutil.mavlink_connection):
     msg = conn.recv_match(type="GPS_RAW_INT")
@@ -50,23 +59,27 @@ def check_gps_status(conn: mavutil.mavlink_connection):
         raise StepFailed(f"GPS fix too weak (fix_type = {msg.fix_type})")
     return True
 
+
 def check_sys_status(conn: mavutil.mavlink_connection):
     msg = conn.recv_match(type="SYS_STATUS")
     if not msg:
         return False
     if msg.battery_remaining < 20:
         raise StepFailed(f"Battery too low ({msg.battery_remaining}%)")
-    missing = [name for name, bit in REQUIRED_SENSORS.items() if not msg.onboard_control_sensors_health & bit]
+    missing = [
+        name
+        for name, bit in REQUIRED_SENSORS.items()
+        if not msg.onboard_control_sensors_health & bit
+    ]
     if missing:
         raise StepFailed(f"Missing or unhealthy sensors: {', '.join(missing)}")
     return True
 
 
-
-def make_pre_arm(verbose:int=0):
-    pre_arm = Action("Pre-Arm Check")    
-    pre_arm.add(Step("Check disarmed",check_fn=check_disarmed))
-    pre_arm.add(Step("Check EKF", check_fn=partial(check_ekf_status,verbose=verbose)))
+def make_pre_arm(verbose: int = 0):
+    pre_arm = Action(ActionNames.PREARM)
+    pre_arm.add(Step("Check disarmed", check_fn=check_disarmed))
+    pre_arm.add(Step("Check EKF", check_fn=partial(check_ekf_status, verbose=verbose)))
     pre_arm.add(Step("Check GPS", check_fn=check_gps_status))
-    pre_arm.add(Step("Check system",check_fn=check_sys_status))
+    pre_arm.add(Step("Check system", check_fn=check_sys_status))
     return pre_arm

@@ -1,8 +1,6 @@
-
 from pymavlink import mavutil
 from functools import partial
-from plan.core import Step, Action, StepFailed 
-
+from plan.core import Step, Action, StepFailed, ActionNames
 
 
 class FlightMode:
@@ -30,7 +28,6 @@ class FlightMode:
     ZIGZAG = 24
     SYSTEM_ID = 25
 
-
     @classmethod
     def get_name(cls, value: int) -> str:
         for key, val in cls.__dict__.items():
@@ -46,13 +43,14 @@ class FlightMode:
             raise ValueError(f"No mode value for name '{name}'")
 
 
-def exec_set_mode(conn: mavutil.mavlink_connection,mode:int=0) -> None:
+def exec_set_mode(conn: mavutil.mavlink_connection, mode: int = 0) -> None:
     """
     Sends the SET_MODE command to switch to GUIDED mode.
     """
     conn.set_mode(mode)
 
-def check_set_mode(conn: mavutil.mavlink_connection,mode:int=0) -> bool:
+
+def check_set_mode(conn: mavutil.mavlink_connection, mode: int = 0) -> bool:
     """
     Confirms the UAV has entered GUIDED mode via heartbeat.
     """
@@ -61,16 +59,23 @@ def check_set_mode(conn: mavutil.mavlink_connection,mode:int=0) -> bool:
         return False
 
     if msg.custom_mode != mode:
-        print(f"Mode not set to {FlightMode.get_name(mode)} (current: {FlightMode.get_name(msg.custom_mode)})")
+        print(
+            f"Mode not set to {FlightMode.get_name(mode)} (current: {FlightMode.get_name(msg.custom_mode)})"
+        )
         return False
-        #raise StepFailed(f"Mode not set to {FlightMode.get_name(mode)} (current: {FlightMode.get_name(msg.custom_mode)})")
-    return True   
+        # raise StepFailed(f"Mode not set to {FlightMode.get_name(mode)} (current: {FlightMode.get_name(msg.custom_mode)})")
+    return True
 
-def make_set_mode(mode_name: str,verbose:int=0) -> Action:
+
+def make_set_mode(mode_name: str, verbose: int = 0) -> Action:
     mode_value = FlightMode.get_value(mode_name)
-    action = Action(f"Set Mode: {mode_name.upper()}")
+    action = Action(
+        f"{ActionNames.CHANGE_FLIGHTMODE}: {mode_name.upper()}"
+    )
     exec_fn = partial(exec_set_mode, mode=mode_value)
     check_fn = partial(check_set_mode, mode=mode_value)
-    step = Step(name=f"Switch to {mode_name.upper()}", check_fn=check_fn, exec_fn=exec_fn)
+    step = Step(
+        name=f"Switch to {mode_name.upper()}", check_fn=check_fn, exec_fn=exec_fn
+    )
     action.add(step)
     return action

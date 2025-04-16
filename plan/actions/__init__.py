@@ -4,9 +4,16 @@ from .arm import make_arm
 from .take_off import make_takeoff
 from .land import make_land
 from .change_parameter import make_change_nav_speed
-from .navegation import make_path
+from .navegation import make_path, get_local_position, make_go_to
 
 __all__ = [
-    "make_pre_arm", "make_set_mode", "make_arm", "make_takeoff",
-    "make_land", "make_change_nav_speed", "make_path"
+    "make_pre_arm",
+    "make_set_mode",
+    "make_arm",
+    "make_takeoff",
+    "make_land",
+    "make_change_nav_speed",
+    "make_path",
+    "get_local_position",
+    "make_go_to",
 ]

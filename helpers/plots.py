@@ -1,8 +1,7 @@
-
-
 import plotly.graph_objects as go
 
-def plot_3d_interactive(markers, title="title",expand=0.2,ground=0):
+
+def plot_3d_interactive(markers, title="title", expand=0.2, ground=0):
     # Create a list to store all waypoints
     data = []
     all_x, all_y, all_z = [], [], []
@@ -14,34 +13,36 @@ def plot_3d_interactive(markers, title="title",expand=0.2,ground=0):
         all_z.extend(z)
         # Add a scatter plot for each marker set
         trace = go.Scatter3d(
-            x=x, y=y, z=z,
-            mode="markers",
-            marker=dict(size=6, color=color),
-            name=label
+            x=x, y=y, z=z, mode="markers", marker=dict(size=6, color=color), name=label
         )
         data.append(trace)
 
     # Compute axis limits with scaling
-    plot_limits=[(min(all_x), max(all_x)),(min(all_y), max(all_y)),(min(all_z), max(all_z))]
-    ranges = [[m-expand[i]*(M-m),M+expand[i]*(M-m)]  for i,(m,M) in enumerate(plot_limits)]
+    plot_limits = [
+        (min(all_x), max(all_x)),
+        (min(all_y), max(all_y)),
+        (min(all_z), max(all_z)),
+    ]
+    ranges = [
+        [m - expand[i] * (M - m), M + expand[i] * (M - m)]
+        for i, (m, M) in enumerate(plot_limits)
+    ]
     if ground is not None:
-        ranges[2][0]=ground
+        ranges[2][0] = ground
     # Create figure with all markers
     fig = go.Figure(data=data)
     fig.update_layout(
-        title=dict(
-            text=title,
-            x=0.5,  # Centers the title
-            xanchor="center"),
+        title=dict(text=title, x=0.5, xanchor="center"),  # Centers the title
         scene=dict(
             xaxis_title="x",
             yaxis_title="y",
             zaxis_title="z",
             xaxis=dict(range=ranges[0]),
             yaxis=dict(range=ranges[1]),
-            zaxis=dict(range=ranges[2])),
+            zaxis=dict(range=ranges[2]),
+        ),
         width=800,  # Adjust figure size
-        height=600
+        height=600,
     )
 
     fig.show()  # Display the interactive plot
