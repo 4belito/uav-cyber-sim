@@ -57,31 +57,48 @@ class Enviroment:
             positions=neigh_poss,
         )
 
-    def get_closest_position(self, veh: VehicleLogic):
-        if not veh.is_onair():
-            return None
-        other_vehs = self.vehs - {veh}
-        if not other_vehs:
-            return None
-        other_pos = [
-            local2global(self.veh_pos.current_position(), other.home, pairwise=True)
-            for other in other_vehs
-            if other.is_onair()
-        ]
-        if not other_pos:
-            return None
+    # def get_closest_position(self, veh: VehicleLogic):
+    #     if not veh.is_onair():
+    #         return None
+    #     other_vehs = self.vehs - {veh}
+    #     if not other_vehs:
+    #         return None
+    #     other_pos = [
+    #         local2global(self.veh_pos.current_position(), other.home, pairwise=True)
+    #         for other in other_vehs
+    #         if other.is_onair()
+    #     ]
+    #     if not other_pos:
+    #         return None
 
-        pos = local2global(veh.current_position(), veh.home, pairwise=True)
-        norms = np.linalg.norm(other_pos - pos, axis=1)
-        min_index = np.argmin(norms)
-        if norms[min_index] < veh.radar_radius:
-            return other_pos[min_index]
-        else:
-            return None
+    #     pos = local2global(veh.current_position(), veh.home, pairwise=True)
+    #     norms = np.linalg.norm(other_pos - pos, axis=1)
+    #     min_index = np.argmin(norms)
+    #     if norms[min_index] < veh.radar_radius:
+    #         return other_pos[min_index]
+    #     else:
+    #         return None
 
-    def send_closest_pos(self, veh):
-        pos = self.get_closest_position(veh)
-        if pos is not None:
-            veh.obst_pos = global2local(pos, veh.home, pairwise=True)
-        else:
-            veh.obst_pos = None
+    # def send_closest_pos(self, veh):
+    #     pos = self.get_closest_position(veh)
+    #     if pos is not None:
+    #         veh.obst_pos = global2local(pos, veh.home, pairwise=True)
+    #     else:
+    #         veh.obst_pos = None
+
+
+class GCS(Enviroment):
+    def __init__(self, vehicles):
+        super().__init__(vehicles)
+        self.paths = {veh: [] for veh in self.vehs}
+
+    def gather_broadcasts(self):
+        self.veh_pos = {
+            veh: local2global(veh.current_position().copy(), veh.home, pairwise=True)
+            for veh in self.vehs
+            if veh.is_onair()
+        }
+
+    def save_pos(self):
+        for veh, pos in self.veh_pos.items():
+            self.paths[veh].append(pos)
