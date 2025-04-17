@@ -4,7 +4,6 @@ from functools import partial
 
 from plan.core import Step, Action, ActionNames
 from helpers.change_coordinates import GLOBAL_switch_LOCAL_NED
-from helpers.navegation_logic import find_best_waypoint
 
 TYPE_MASK = int(0b110111111000)
 LOCAL_COORD = mavutil.mavlink.MAV_FRAME_LOCAL_NED
@@ -109,6 +108,7 @@ def make_go_to(
     verbose: int = 0,
     cause_text="",
 ):
+    wp.astype(float)
     goto_step = Step(
         f"go to {cause_text} -> {tuple(wp)}",
         check_fn=partial(check_reach_wp, wp=wp, wp_margin=wp_margin, verbose=verbose),

@@ -45,7 +45,7 @@ class Simulator:
     def create_VehicleLogics(self):
         uavs = []
         for i, (offset, plan) in enumerate(zip(self.offsets, self.plans)):
-            uavs.append(VehicleLogic(sys_id=i + 1, offset=offset, plan=plan))
+            uavs.append(VehicleLogic(sys_id=i + 1, home=offset[:3], plan=plan))
         return uavs
 
     def launch(self):

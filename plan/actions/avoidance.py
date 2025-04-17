@@ -1,7 +1,6 @@
 from pymavlink import mavutil
 from plan.core import Step, Action
 from functools import partial
-from helpers.change_coordinates import GLOBAL_switch_LOCAL_NED
 
 TYPE_MASK = int(0b010111000111)
 BODY_COORD = mavutil.mavlink.MAV_FRAME_BODY_NED

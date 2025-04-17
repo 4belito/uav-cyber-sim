@@ -44,5 +44,5 @@ def plot_3d_interactive(markers, title="title", expand=0.2, ground=0):
         width=800,  # Adjust figure size
         height=600,
     )
-
+    fig.update_layout(showlegend=True)
     fig.show()  # Display the interactive plot
