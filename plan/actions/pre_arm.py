@@ -28,7 +28,7 @@ REQUIRED_SENSORS = {
 # === CHECK FUNCTIONS ===
 
 
-def check_disarmed(conn: mavutil.mavlink_connection):
+def check_disarmed(conn: mavutil.mavlink_connection, _verbose: int):
     msg = conn.recv_match(type="HEARTBEAT")
     if not msg:
         return False, None
@@ -37,7 +37,7 @@ def check_disarmed(conn: mavutil.mavlink_connection):
     return True, None
 
 
-def check_ekf_status(conn: mavutil.mavlink_connection):
+def check_ekf_status(conn: mavutil.mavlink_connection, _verbose: int):
     msg = conn.recv_match(type="EKF_STATUS_REPORT")
     if not msg:
         return False, None
@@ -47,7 +47,7 @@ def check_ekf_status(conn: mavutil.mavlink_connection):
     return True, None
 
 
-def check_gps_status(conn: mavutil.mavlink_connection):
+def check_gps_status(conn: mavutil.mavlink_connection, _verbose: int):
     msg = conn.recv_match(type="GPS_RAW_INT")
     if not msg:
         return False, None
@@ -56,7 +56,7 @@ def check_gps_status(conn: mavutil.mavlink_connection):
     return True, None
 
 
-def check_sys_status(conn: mavutil.mavlink_connection):
+def check_sys_status(conn: mavutil.mavlink_connection, _verbose: int):
     msg = conn.recv_match(type="SYS_STATUS")
     if not msg:
         return False, None
@@ -73,7 +73,7 @@ def check_sys_status(conn: mavutil.mavlink_connection):
 
 
 def make_pre_arm():
-    pre_arm = Action(ActionNames.PREARM)
+    pre_arm = Action(name=ActionNames.PREARM, emoji="🔧")
     pre_arm.add(Step("Check disarmed", check_fn=check_disarmed, onair=False))
     pre_arm.add(
         Step(

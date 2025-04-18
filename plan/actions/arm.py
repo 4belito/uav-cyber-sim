@@ -31,19 +31,19 @@ def exec_arm(conn: mavutil.mavlink_connection) -> None:
     )
 
 
-def check_arm(conn: mavutil.mavlink_connection) -> bool:
-    """Check if the UAV is armed via HEARTBEAT."""
+def check_arm(conn: mavutil.mavlink_connection, _verbose: int) -> tuple[bool, None]:
+    """Check if the UAV is armed using a HEARTBEAT message.
+
+    Returns:
+        Tuple[bool, None]: True if armed, False otherwise. Second value reserved for position.
+    """
     msg = conn.recv_match(type="HEARTBEAT")
-    if not msg:
-        return False, None  # Still waiting
-    is_armed = msg.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED
-    if not is_armed:
-        return False, None
-    return True, None
+    armed = msg and (msg.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED)
+    return armed, None
 
 
 def make_arm():
-    arm = Action(ActionNames.ARM)
+    arm = Action(name=ActionNames.ARM, emoji="🔐")
     arm.add(
         Step(
             "arm",

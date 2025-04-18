@@ -21,8 +21,8 @@ class State:
 
 
 class Plan(Action):
-    def __init__(self, name: str, verbose: bool = False) -> None:
-        super().__init__(name, curr_pos=np.zeros(3), verbose=verbose)
+    def __init__(self, name: str, emoji: str = "📋") -> None:
+        super().__init__(name, emoji=emoji, curr_pos=np.zeros(3))
 
     @staticmethod
     def create_square_path(side_len: float = 10, alt: float = 5):
@@ -43,38 +43,37 @@ class Plan(Action):
         alt: float = 5,
         wp_margin: float = 0.5,
         navegation_speed: float = 5,
+        verbose: int = 1,
     ):
         wps = cls.create_square_path(side_len, alt)
         return cls.basic(
             wps=wps,
-            alt=alt,
             wp_margin=wp_margin,
             navegation_speed=navegation_speed,
             name="Square Trajectory",
+            verbose=verbose,
         )
 
     @classmethod
     def basic(
         cls,
-        wps: np.ndarray = None,
-        alt: float = 5,
+        wps: np.ndarray = np.array([[0, 0, 5]]),
         wp_margin: float = 0.5,
         navegation_speed: float = 5,
-        name="basic",
+        name: str = "basic",
+        verbose: int = 1,
     ):
-        plan = cls(name)
+        land_wp = wps[-1].copy()
+        land_wp[2] = 0
+        plan = cls(name=name)
         plan.add(make_pre_arm())
         plan.add(make_set_mode("GUIDED"))
         if navegation_speed != 5:
             plan.add(make_change_nav_speed(speed=navegation_speed))
         plan.add(make_arm())
-        plan.add(make_takeoff(altitude=alt, wp_margin=wp_margin))
+        plan.add(make_takeoff(altitude=1))
         plan.add(make_path(wps=wps, wp_margin=wp_margin))
-        if wps is None:
-            land_wp = np.zeros(3)
-        else:
-            land_wp = wps[-1].copy()
-            land_wp[2] = 0
+
         plan.add(make_land(wp=np.zeros(3)))
         return plan
 

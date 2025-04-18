@@ -24,8 +24,9 @@ def get_local_position(conn: mavutil.mavlink_connection):
         0,
     )
     ## Check this to make blocking optional parameter
-    # msg = conn.recv_match(type="LOCAL_POSITION_NED", blocking=True, timeout=2)
-    msg = conn.recv_match(type="LOCAL_POSITION_NED")
+    msg = conn.recv_match(type="LOCAL_POSITION_NED", blocking=True, timeout=0.001)
+    # This does not work. I'am not sure why
+    # msg = conn.recv_match(type="LOCAL_POSITION_NED")
     if msg:
         return np.array(GLOBAL_switch_LOCAL_NED(msg.x, msg.y, msg.z))
     else:
@@ -58,24 +59,27 @@ def exec_go_local(
 
 def check_reach_wp(
     conn: mavutil.mavlink_connection,
+    verbose: int,
     wp: np.ndarray = np.array([0, 0, 10]),
     wp_margin=0.5,
 ):
     """Check if the UAV has reached the target altitude within an acceptable margin."""
     pos = get_local_position(conn)
-
     if pos is not None:
         dist = np.linalg.norm(pos - wp)
+        if verbose > 1:
+            print(f"Vehicle {conn.target_system}:📍 Distance to target: {dist:.2f} m")
         answer = dist < wp_margin
     else:
         answer = False
+
     return answer, pos
 
 
 ## Make the action
-def make_path(wps: np.ndarray = np.empty((0, 3)), wp_margin: float = 0.5):
-    go_local_action = Action(ActionNames.FLY)
-    if wps is None or len(wps) == 0:
+def make_path(wps: np.ndarray = None, wp_margin: float = 0.5):
+    go_local_action = Action(name=ActionNames.FLY, emoji="🛩️")
+    if wps is None:
         return go_local_action  # Return empty action if no waypoints
     for wp in wps:
         go_local_action.add(make_go_to(wp, wp_margin))

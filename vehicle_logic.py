@@ -34,7 +34,7 @@ class VehicleLogic:
         # Properties declaration
         self.mode = VehicleMode.MISSION
         self.plan = plan if plan is not None else Plan.basic()
-        self.start_plan()
+        self.plan.bind(self.conn, verbose)
         # all these positions are local
         self.neighbors = Neighbors(vehicles=[])
         self.safety_radius: float = safety_radius
@@ -68,9 +68,6 @@ class VehicleLogic:
         else:
             if self.current_step.state == State.DONE:
                 self.set_mode(VehicleMode.MISSION)
-
-    def start_plan(self):
-        self.plan.start(self.conn)
 
     def set_dynamic_mission(self, goal_wp: np.ndarray):
         self.set_mode(VehicleMode.DYNAMIC_MISSION)

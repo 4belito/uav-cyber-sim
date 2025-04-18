@@ -53,7 +53,9 @@ def exec_set_nav_speed(conn: mavutil.mavlink_connection, speed: float = 5) -> No
     )
 
 
-def check_set_nav_speed(conn: mavutil.mavlink_connection, speed: float = 0) -> bool:
+def check_set_nav_speed(
+    conn: mavutil.mavlink_connection, _verbose: int, speed: float = 0
+) -> bool:
     """
     Checks whether the WPNAV_SPEED parameter has been updated.
     """
@@ -65,23 +67,14 @@ def check_set_nav_speed(conn: mavutil.mavlink_connection, speed: float = 0) -> b
     expected = ParamName.NAV_SPEED.decode("utf-8")
     speed_cmps = speed * 100
 
-    if msg.param_id == expected and msg.param_value == speed_cmps:
-        # if verbose == 2:
-        #     print(
-        #         f"Vehicle {conn.target_system}: ✅ Parameter '{msg.param_id}' confirmed at {msg.param_value:.0f} cm/s ({speed:.2f} m/s)"
-        #     )
-        return True, None
-    else:
-        raise StepFailed(
-            f"Parameter '{msg.param_id}' value {msg.param_value:.1f} ≠ {speed_cmps:.1f}"
-        )
+    return (msg.param_id == expected and msg.param_value == speed_cmps), None
 
 
 def make_change_nav_speed(speed: float) -> Action:
     """
     Returns an Action that changes the UAV's WPNAV_SPEED.
     """
-    action = Action(f"{ActionNames.CHANGE_PARAMETER}: nav speed")
+    action = Action(name=ActionNames.CHANGE_NAVSPEED, emoji="🎚️")
     exec_fn = partial(exec_set_nav_speed, speed=speed)
     check_fn = partial(check_set_nav_speed, speed=speed)
     step = Step(
