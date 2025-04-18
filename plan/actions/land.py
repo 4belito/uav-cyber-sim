@@ -37,7 +37,7 @@ def exec_land(conn: mavutil.mavlink_connection):
     )
 
 
-def make_land(wp, verbose: int = 0):
+def make_land(wp):
     example_action = Action(ActionNames.LAND)
     example_action.add(
         Step("land", check_fn=check_land, exec_fn=exec_land, target_pos=wp, onair=True)

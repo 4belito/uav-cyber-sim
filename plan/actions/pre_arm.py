@@ -31,39 +31,35 @@ REQUIRED_SENSORS = {
 def check_disarmed(conn: mavutil.mavlink_connection):
     msg = conn.recv_match(type="HEARTBEAT")
     if not msg:
-        return False
+        return False, None
     if msg.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED:
         raise StepFailed("UAV is already armed")
-    return True
+    return True, None
 
 
-def check_ekf_status(conn: mavutil.mavlink_connection, verbose: int = 0):
+def check_ekf_status(conn: mavutil.mavlink_connection):
     msg = conn.recv_match(type="EKF_STATUS_REPORT")
     if not msg:
-        return False
+        return False, None
     missing = [name for name, bit in EKF_FLAGS.items() if not msg.flags & bit]
     if missing:
-        if verbose == 2:
-            print(
-                f"Vehicle {conn.target_system}: EKF is not ready — missing: {', '.join(missing)}"
-            )
-        return False
-    return True
+        return False, None
+    return True, None
 
 
 def check_gps_status(conn: mavutil.mavlink_connection):
     msg = conn.recv_match(type="GPS_RAW_INT")
     if not msg:
-        return False
+        return False, None
     if msg.fix_type < 3:
         raise StepFailed(f"GPS fix too weak (fix_type = {msg.fix_type})")
-    return True
+    return True, None
 
 
 def check_sys_status(conn: mavutil.mavlink_connection):
     msg = conn.recv_match(type="SYS_STATUS")
     if not msg:
-        return False
+        return False, None
     if msg.battery_remaining < 20:
         raise StepFailed(f"Battery too low ({msg.battery_remaining}%)")
     missing = [
@@ -73,13 +69,19 @@ def check_sys_status(conn: mavutil.mavlink_connection):
     ]
     if missing:
         raise StepFailed(f"Missing or unhealthy sensors: {', '.join(missing)}")
-    return True
+    return True, None
 
 
-def make_pre_arm(verbose: int = 0):
+def make_pre_arm():
     pre_arm = Action(ActionNames.PREARM)
-    pre_arm.add(Step("Check disarmed", check_fn=check_disarmed))
-    pre_arm.add(Step("Check EKF", check_fn=partial(check_ekf_status, verbose=verbose)))
-    pre_arm.add(Step("Check GPS", check_fn=check_gps_status))
-    pre_arm.add(Step("Check system", check_fn=check_sys_status))
+    pre_arm.add(Step("Check disarmed", check_fn=check_disarmed, onair=False))
+    pre_arm.add(
+        Step(
+            "Check EKF",
+            check_fn=partial(check_ekf_status),
+            onair=False,
+        )
+    )
+    pre_arm.add(Step("Check GPS", check_fn=check_gps_status, onair=False))
+    pre_arm.add(Step("Check system", check_fn=check_sys_status, onair=False))
     return pre_arm

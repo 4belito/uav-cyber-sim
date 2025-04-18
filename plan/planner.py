@@ -43,7 +43,6 @@ class Plan(Action):
         alt: float = 5,
         wp_margin: float = 0.5,
         navegation_speed: float = 5,
-        verbose: int = 0,
     ):
         wps = cls.create_square_path(side_len, alt)
         return cls.basic(
@@ -52,7 +51,6 @@ class Plan(Action):
             wp_margin=wp_margin,
             navegation_speed=navegation_speed,
             name="Square Trajectory",
-            verbose=verbose,
         )
 
     @classmethod
@@ -63,22 +61,21 @@ class Plan(Action):
         wp_margin: float = 0.5,
         navegation_speed: float = 5,
         name="basic",
-        verbose: int = 0,
     ):
         plan = cls(name)
-        plan.add(make_pre_arm(verbose=verbose))
-        plan.add(make_set_mode("GUIDED", verbose=verbose))
+        plan.add(make_pre_arm())
+        plan.add(make_set_mode("GUIDED"))
         if navegation_speed != 5:
-            plan.add(make_change_nav_speed(speed=navegation_speed, verbose=verbose))
-        plan.add(make_arm(verbose=verbose))
-        plan.add(make_takeoff(altitude=alt, wp_margin=wp_margin, verbose=verbose))
-        plan.add(make_path(wps=wps, wp_margin=wp_margin, verbose=verbose))
+            plan.add(make_change_nav_speed(speed=navegation_speed))
+        plan.add(make_arm())
+        plan.add(make_takeoff(altitude=alt, wp_margin=wp_margin))
+        plan.add(make_path(wps=wps, wp_margin=wp_margin))
         if wps is None:
             land_wp = np.zeros(3)
         else:
             land_wp = wps[-1].copy()
             land_wp[2] = 0
-        plan.add(make_land(wp=np.zeros(3), verbose=verbose))
+        plan.add(make_land(wp=np.zeros(3)))
         return plan
 
     ## Improve this for no repeating code
@@ -90,14 +87,13 @@ class Plan(Action):
         wp_margin: float = 0.5,
         navegation_speed: float = 5,
         name="hover",
-        verbose: int = 0,
     ):
         plan = cls(name)
-        plan.add(make_pre_arm(verbose=verbose))
-        plan.add(make_set_mode("GUIDED", verbose=verbose))
+        plan.add(make_pre_arm())
+        plan.add(make_set_mode("GUIDED"))
         if navegation_speed != 5:
-            plan.add(make_change_nav_speed(speed=navegation_speed, verbose=verbose))
-        plan.add(make_arm(verbose=verbose))
-        plan.add(make_takeoff(altitude=alt, wp_margin=wp_margin, verbose=verbose))
-        plan.add(make_path(wps=wps, wp_margin=wp_margin, verbose=verbose))
+            plan.add(make_change_nav_speed(speed=navegation_speed))
+        plan.add(make_arm())
+        plan.add(make_takeoff(altitude=alt, wp_margin=wp_margin))
+        plan.add(make_path(wps=wps, wp_margin=wp_margin))
         return plan

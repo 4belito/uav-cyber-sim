@@ -25,7 +25,7 @@ def exec_takeoff(conn: mavutil.mavlink_connection, altitude: float = 10.0):
     )
 
 
-def make_takeoff(altitude: float = 10.0, wp_margin=0.5, verbose: int = 0) -> Action:
+def make_takeoff(altitude: float = 10.0, wp_margin=0.5) -> Action:
     """
     Creates a takeoff action that consists of a single step:
     - Executing the takeoff command
@@ -36,7 +36,7 @@ def make_takeoff(altitude: float = 10.0, wp_margin=0.5, verbose: int = 0) -> Act
     check_fn = partial(check_reach_wp, wp=target_pos, wp_margin=wp_margin)
     exec_fn = partial(exec_takeoff, altitude=altitude)
     step = Step(
-        "takeoff", check_fn=check_fn, exec_fn=exec_fn,  onair=True, target_pos=target_pos
+        "takeoff", check_fn=check_fn, exec_fn=exec_fn, onair=True, target_pos=target_pos
     )
     takeoff_action.add(step)
     return takeoff_action

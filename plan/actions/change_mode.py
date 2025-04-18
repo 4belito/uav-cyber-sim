@@ -56,26 +56,21 @@ def check_set_mode(conn: mavutil.mavlink_connection, mode: int = 0) -> bool:
     """
     msg = conn.recv_match(type="HEARTBEAT")
     if not msg:
-        return False
+        return False, None
 
-    if msg.custom_mode != mode:
-        print(
-            f"Mode not set to {FlightMode.get_name(mode)} (current: {FlightMode.get_name(msg.custom_mode)})"
-        )
-        return False
-        # raise StepFailed(f"Mode not set to {FlightMode.get_name(mode)} (current: {FlightMode.get_name(msg.custom_mode)})")
-    return True
+    return msg.custom_mode == mode, None
 
 
-def make_set_mode(mode_name: str, verbose: int = 0) -> Action:
+def make_set_mode(mode_name: str, onair=False) -> Action:
     mode_value = FlightMode.get_value(mode_name)
-    action = Action(
-        f"{ActionNames.CHANGE_FLIGHTMODE}: {mode_name.upper()}"
-    )
+    action = Action(f"{ActionNames.CHANGE_FLIGHTMODE}: {mode_name.upper()}")
     exec_fn = partial(exec_set_mode, mode=mode_value)
     check_fn = partial(check_set_mode, mode=mode_value)
     step = Step(
-        name=f"Switch to {mode_name.upper()}", check_fn=check_fn, exec_fn=exec_fn
+        name=f"Switch to {mode_name.upper()}",
+        check_fn=check_fn,
+        exec_fn=exec_fn,
+        onair=onair,
     )
     action.add(step)
     return action

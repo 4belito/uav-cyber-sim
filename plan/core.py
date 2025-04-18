@@ -37,7 +37,7 @@ class MissionElement:
         self.prev = None
         self.next = None
         self.state = State.NOT_STARTED
-        self.conn = None
+        self.conn: mavutil.mavlink_connection = None
         self.verbose = verbose
         if verbose:
             print(
@@ -50,7 +50,7 @@ class MissionElement:
     def reset(self):
         self.state = State.NOT_STARTED
 
-    def start(self, connection):
+    def start(self, connection: mavutil.mavlink_connection):
         self.state = State.IN_PROGRESS
         self.bind_connection(connection)
 
@@ -76,9 +76,9 @@ class Step(MissionElement):
     def __init__(
         self,
         name: str,
+        onair: bool,
         check_fn: Callable[[mavutil.mavlink_connection, bool], bool],
         exec_fn: Optional[Callable[[mavutil.mavlink_connection, bool], None]] = None,
-        onair: bool = False,
         target_pos: np.ndarray = np.zeros(3),
         verbose: bool = False,
     ) -> None:
@@ -107,12 +107,9 @@ class Step(MissionElement):
     def check(self) -> None:
         class_name = self.__class__.__name__
         try:
-            if self.onair:
-                answer, curr_pos = self.check_fn(self.conn)
-                if curr_pos is not None:
-                    self.curr_pos = curr_pos
-            else:
-                answer = self.check_fn(self.conn)
+            answer, curr_pos = self.check_fn(self.conn)
+            if curr_pos is not None:
+                self.curr_pos = curr_pos
             if answer:
                 print(
                     f"Vehicle {self.conn.target_system}: ✅ {class_name}: {self.name} is done"
@@ -189,7 +186,7 @@ class Action(MissionElement):
         elif self.state == State.FAILED:
             print("⚠️ Already failed!. Cannot perform this again!")
 
-    def update_pos(self, step):
+    def update_pos(self, step: Step):
         self.onair = step.onair
         if step.curr_pos is not None:
             self.curr_pos = step.curr_pos

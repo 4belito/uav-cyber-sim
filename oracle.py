@@ -13,8 +13,8 @@ class Oracle:
     """
 
     def __init__(self, vehicles: List[VehicleLogic]) -> None:
-        self.vehs = set(vehicles)
-        self.gather_broadcasts()
+        self.vehs = vehicles
+        self.pos = dict.fromkeys(self.vehs)
 
     def remove(self, veh: VehicleLogic):
         """
@@ -23,24 +23,20 @@ class Oracle:
         self.vehs.remove(veh)
 
     def gather_broadcasts(self):
-        self.veh_pos = {
-            veh: local2global(veh.current_position.copy(), veh.home)
-            for veh in self.vehs
-            if veh.is_onair()
-        }
+        self.pos.update({veh: self.get_global_pos(veh).copy() for veh in self.vehs})
+
+    def get_global_pos(self, veh: VehicleLogic):
+        return local2global(veh.pos, veh.home)
 
     def update_neighbors(self, veh: VehicleLogic):
-        pos = local2global(veh.current_position, veh.home)
-
         neigh_vehs = []
         neigh_poss = []
         neigh_dists = []
-
-        for other, other_pos in self.veh_pos.items():
+        for other, other_pos in self.pos.items():
             if other is veh:
                 continue
 
-            dist = np.linalg.norm(other_pos - pos)
+            dist = np.linalg.norm(other_pos - self.pos[veh])
             if dist < veh.radar_radius:
                 neigh_vehs.append(other)
                 neigh_poss.append(other_pos)  # this is a reference to the array
@@ -49,7 +45,7 @@ class Oracle:
         # Perform transformation only on the selected ones
         if neigh_poss:
             neigh_poss = global2local(np.stack(neigh_poss), veh.home)
-            neigh_dists = (np.array(neigh_dists),)
+            neigh_dists = np.array(neigh_dists)
 
         veh.neighbors = Neighbors(
             neigh_vehs,
@@ -61,15 +57,8 @@ class Oracle:
 class GCS(Oracle):
     def __init__(self, vehicles: VehicleLogic):
         super().__init__(vehicles)
-        self.paths = {veh.sys_id: [] for veh in self.vehs}
-
-    def gather_broadcasts(self):
-        self.veh_pos = {
-            veh: local2global(veh.current_position.copy(), veh.home)
-            for veh in self.vehs
-            if veh.is_onair()
-        }
+        self.paths = dict.fromkeys(vehicles, [])
 
     def save_pos(self):
-        for veh, pos in self.veh_pos.items():
-            self.paths[veh.sys_id].append(pos)
+        for veh, pos in self.pos.items():
+            self.paths[veh].append(pos)

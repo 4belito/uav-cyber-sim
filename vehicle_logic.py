@@ -24,7 +24,7 @@ class VehicleLogic:
         radar_radius: float = 4,
         verbose: int = 1,
     ):
-        self.sys_id = sys_id
+        self.idx = sys_id
         self.conn = mavutil.mavlink_connection(f"udp:127.0.0.1:{14551+10*(sys_id-1)}")
         self.conn.wait_heartbeat()
         ## This positions are global
@@ -40,7 +40,7 @@ class VehicleLogic:
         self.safety_radius: float = safety_radius
         self.radar_radius: float = radar_radius
         if verbose:
-            print(f"Vehicle {self.sys_id} launched 🚀")
+            print(f"Vehicle {self.idx} launched 🚀")
 
     def act(self):
         if self.neighbors.vehs:
@@ -54,7 +54,7 @@ class VehicleLogic:
         self.plan.current.add_now(avoid_step)
 
     def check_avoidance(self, obst_pos: np.ndarray):
-        distance = np.linalg.norm(self.current_position - obst_pos)
+        distance = np.linalg.norm(self.position - obst_pos)
         avoid_pos = self.get_avoidance_pos(obst_pos)
         if distance < self.safety_radius and avoid_pos is not None:
             if (
@@ -78,7 +78,7 @@ class VehicleLogic:
 
     def set_mode(self, new_mode: VehicleMode):
         if new_mode != self.mode:
-            print(f"Vehigcle {self.sys_id} switched to mode: {new_mode}")
+            print(f"Vehigcle {self.idx} switched to mode: {new_mode}")
             self.mode = new_mode
 
     @property
@@ -90,14 +90,14 @@ class VehicleLogic:
         return self.current_action.current
 
     @property
-    def current_position(self):
+    def pos(self):
         return self.plan.curr_pos
 
     def is_onair(self):
         return self.plan.onair
 
     @property
-    def target_position(self):
+    def target_pos(self):
         return self.current_step.target_pos
 
     def get_avoidance_pos(
@@ -111,9 +111,9 @@ class VehicleLogic:
         `direction` can be 'left' or 'right' (relative to wp direction).
         """
         # Normalize wp direction (ignore Z)
-        curr_pos = self.current_position.copy()
+        curr_pos = self.pos.copy()
         obj_dir = (obst_pos - curr_pos)[:2]
-        target_pos = self.target_position
+        target_pos = self.target_pos
         target_dir = (target_pos - curr_pos)[:2]
         if np.dot(obj_dir, target_dir) < 0:
             return None
