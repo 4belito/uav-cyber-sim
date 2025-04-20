@@ -2,7 +2,7 @@ import numpy as np
 from plan.core import ActionNames
 from helpers.change_coordinates import local2global, global2local
 from vehicle_logic import VehicleLogic, Neighbors
-
+from collections import OrderedDict
 from numpy.typing import NDArray
 from typing import List, Set
 
@@ -57,8 +57,9 @@ class Oracle:
 class GCS(Oracle):
     def __init__(self, vehicles: VehicleLogic):
         super().__init__(vehicles)
-        self.paths = dict.fromkeys(vehicles, [])
+        self.paths = {v: [] for v in vehicles}
 
     def save_pos(self):
         for veh, pos in self.pos.items():
-            self.paths[veh].append(pos)
+            if veh.is_onair():
+                self.paths[veh].append(pos)

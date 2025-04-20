@@ -1,5 +1,5 @@
 import numpy as np
-
+from typing import Optional
 from .core import Action
 
 from plan.actions import (
@@ -20,8 +20,36 @@ class State:
     FAILED = "FAILED"
 
 
+class PlanMode:
+    DYNAMIC = "DYNAMIC"
+    STATIC = "STATIC"
+
+
 class Plan(Action):
-    def __init__(self, name: str, emoji: str = "📋") -> None:
+    def __init__(
+        self,
+        name: str,
+        emoji: str = "📋",
+        mode: PlanMode = PlanMode.STATIC,
+        dynamic_wps: Optional[np.ndarray] = None,
+        wp_margin: float = 0.5,
+    ) -> None:
+        self.mode = mode
+        self.wp_margin = wp_margin
+        if mode == PlanMode.STATIC:
+            if dynamic_wps is not None:
+                raise ValueError(
+                    "Do not provide dynamic_waypoints (dynamic_wps) for STATIC plans."
+                )
+            self.dynamic_wps = None
+        elif mode == PlanMode.DYNAMIC:
+            if dynamic_wps is None:
+                raise ValueError(
+                    "Dynamic waypoints (dynamic_wps) are required for DYNAMIC plans."
+                )
+            self.dynamic_wps = dynamic_wps
+        else:
+            raise ValueError(f"Unsupported plan mode: {mode}")
         super().__init__(name, emoji=emoji, curr_pos=np.zeros(3))
 
     @staticmethod
@@ -43,7 +71,6 @@ class Plan(Action):
         alt: float = 5,
         wp_margin: float = 0.5,
         navegation_speed: float = 5,
-        verbose: int = 1,
     ):
         wps = cls.create_square_path(side_len, alt)
         return cls.basic(
@@ -51,7 +78,6 @@ class Plan(Action):
             wp_margin=wp_margin,
             navegation_speed=navegation_speed,
             name="Square Trajectory",
-            verbose=verbose,
         )
 
     @classmethod
@@ -61,11 +87,12 @@ class Plan(Action):
         wp_margin: float = 0.5,
         navegation_speed: float = 5,
         name: str = "basic",
-        verbose: int = 1,
+        mode: PlanMode = PlanMode.STATIC,
+        dynamic_wps: Optional[np.ndarray] = None,
     ):
         land_wp = wps[-1].copy()
         land_wp[2] = 0
-        plan = cls(name=name)
+        plan = cls(name=name, mode=mode, dynamic_wps=dynamic_wps, wp_margin=wp_margin)
         plan.add(make_pre_arm())
         plan.add(make_set_mode("GUIDED"))
         if navegation_speed != 5:
@@ -74,7 +101,7 @@ class Plan(Action):
         plan.add(make_takeoff(altitude=1))
         plan.add(make_path(wps=wps, wp_margin=wp_margin))
 
-        plan.add(make_land(wp=np.zeros(3)))
+        plan.add(make_land(final_wp=land_wp))
         return plan
 
     ## Improve this for no repeating code
@@ -93,6 +120,6 @@ class Plan(Action):
         if navegation_speed != 5:
             plan.add(make_change_nav_speed(speed=navegation_speed))
         plan.add(make_arm())
-        plan.add(make_takeoff(altitude=alt, wp_margin=wp_margin))
+        plan.add(make_takeoff(altitude=1))
         plan.add(make_path(wps=wps, wp_margin=wp_margin))
         return plan

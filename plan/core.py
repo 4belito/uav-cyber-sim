@@ -160,11 +160,13 @@ class Action(MissionElement):
         emoji: str = "🔘",
         onair: bool = None,
         curr_pos: np.ndarray = None,
+        target_pos: np.ndarray = None,
     ) -> None:
         self.steps: List[Union[Step, Action]] = []
         self.current: Optional[Union[Step, Action]] = None
         self.onair: bool = onair
         self.curr_pos: np.ndarray = curr_pos
+        self.target_pos: np.ndarray = target_pos
         super().__init__(name=name, emoji=emoji)  # ✅ no-op
 
     def add(self, step: Union[Step, Action]) -> None:
@@ -179,6 +181,8 @@ class Action(MissionElement):
         if not self.current:
             self.current = step
             self.onair = step.onair
+        if step.target_pos is not None:
+            self.target_pos = step.target_pos
 
     def act(self):
         class_name = self.__class__.__name__

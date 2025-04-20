@@ -24,13 +24,13 @@ def in_same_orthant(
 
 
 def in_same_corridor(
-    current: np.ndarray, waypoints: np.ndarray, eps=1, dims=[0, 1]
+    current: np.ndarray, waypoints: np.ndarray, eps=1, dims=[0, 1, 2]
 ) -> np.ndarray:
     """
     Vectorized function to check if waypoints are in the same corridor as the current position.
     """
     delta = np.abs(waypoints[:, dims] - current[dims])
-    return np.any(delta < eps, axis=1)
+    return np.sum(delta < eps, axis=1) >= 2
 
 
 def delete(

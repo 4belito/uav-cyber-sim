@@ -39,9 +39,15 @@ def exec_land(conn: mavutil.mavlink_connection):
     )
 
 
-def make_land(wp: np.ndarray):
+def make_land(final_wp: np.ndarray):
     example_action = Action(name=ActionNames.LAND, emoji="🛬")
     example_action.add(
-        Step("land", check_fn=check_land, exec_fn=exec_land, target_pos=wp, onair=True)
+        Step(
+            "land",
+            check_fn=check_land,
+            exec_fn=exec_land,
+            target_pos=final_wp,
+            onair=True,
+        )
     )
     return example_action

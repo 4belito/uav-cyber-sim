@@ -42,16 +42,18 @@ class Simulator:
                 ["gnome-terminal", "--", "bash", "-c", f"{vehicle_cmd}; exec bash"]
             )
 
-    def create_VehicleLogics(self):
+    def create_VehicleLogics(self, verbose: int = 1):
         uavs = []
         for i, (offset, plan) in enumerate(zip(self.offsets, self.plans)):
-            uavs.append(VehicleLogic(sys_id=i + 1, home=offset[:3], plan=plan))
+            uavs.append(
+                VehicleLogic(sys_id=i + 1, home=offset[:3], plan=plan, verbose=verbose)
+            )
         return uavs
 
-    def launch(self):
+    def launch(self, verbose: int = 1):
         self.launch_vehicles()
         self._launch_application()
-        return self.create_VehicleLogics()
+        return self.create_VehicleLogics(verbose)
 
     def __repr__(self):
         return f"SimulatorInfo(name='{self.name}', offsets ={self.offsets}, info={self.info})"

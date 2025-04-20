@@ -30,9 +30,9 @@ class QGC(Simulator):
         )
 
     # This is for TCP connections
-    def launch(self):
+    def launch(self, verbose: int = 1):
         super().launch_vehicles()
-        uavs = super().create_VehicleLogics()
+        uavs = super().create_VehicleLogics(verbose)
         self._launch_application()
         return uavs
 

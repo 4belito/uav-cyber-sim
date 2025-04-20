@@ -1,5 +1,5 @@
 from .change_coordinates import local2global, global2local
-from .plots import plot_3d_interactive
+from .visualization import plot_3d_interactive
 from .cleanup import kill_processes
 
 __all__ = [
