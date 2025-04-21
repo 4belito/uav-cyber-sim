@@ -56,31 +56,68 @@ def remove_wp(arr: np.ndarray, row: np.ndarray, eps: float = 1):
     return arr[mask]
 
 
-def find_best_waypoint(current, target, waypoints, eps=1, same_orthant=False):
+def adjust_one_significant_axis_toward_corridor(
+    current: np.ndarray, waypoints: np.ndarray, eps: float = 1.0
+) -> np.ndarray:
+    """
+    Adjusts the closest significant axis (above `eps` difference) to bring the drone closer to a valid corridor,
+    modifying only one coordinate.
+    """
+    import numpy as np
+
+    diffs = np.abs(waypoints - current)  # shape (N, 3)
+    dists = np.sum(diffs, axis=1)  # total Manhattan distance to each waypoint
+
+    j = np.argmin(dists)
+    closest_wp = waypoints[j]
+    axis_diffs = diffs[j]
+
+    # Get axis indices sorted by increasing difference
+    axis_order = np.argsort(axis_diffs)
+
+    for axis in axis_order:
+        if axis_diffs[axis] >= eps:
+            new_pos = np.array(current)
+            new_pos[axis] = closest_wp[axis]
+            return new_pos
+
+    # If all axes are already too close, return current (no need to adjust)
+    return np.array(current)
+
+
+def get_valid_waypoints(current, target, waypoints, eps=1, same_orthant=False):
     # Filter points that share x or y with the target AND are in the correct quadrant
     waypoints = remove_wp(waypoints, current, eps=eps)
     if same_orthant:
         same_quadrant = in_same_orthant(current, target, waypoints, eps=eps)
         waypoints = waypoints[same_quadrant]
     mask = in_same_corridor(current, waypoints, eps=eps)
-    valid_waypoints = waypoints[mask]
+    return waypoints[mask]
 
-    if valid_waypoints.shape[0] == 0:
-        return None, None  # No valid moves available
 
+def find_best_waypoint(current, target, valid_waypoints):
     dist_to_curr = manhattan_distance(valid_waypoints, current)
     dist_to_target = manhattan_distance(valid_waypoints, target)
     best_i_valid = np.argmin(dist_to_curr + dist_to_target)
     return valid_waypoints[best_i_valid]
 
 
+def next_position(current, target, waypoints, eps, same_orthant=False):
+    valid_waypoints = get_valid_waypoints(
+        current, target, waypoints, eps, same_orthant=same_orthant
+    )
+    if valid_waypoints.shape[0] == 0:
+        next_pos = adjust_one_significant_axis_toward_corridor(current, waypoints, eps)
+    else:
+        next_pos = find_best_waypoint(current, target, valid_waypoints)
+    return next_pos
+
+
 def find_path(start, target, waypoints, eps=1):
     path = [start]
     current = start
     while not np.array_equal(current, target):
-        next_waypoint = find_best_waypoint(current, target, waypoints, eps=eps)
-        if next_waypoint is None:
-            break  # No valid path found
-        current = next_waypoint
-        path.append(next_waypoint)
+        next_pos = next_position(current, target, waypoints, eps)
+        current = next_pos
+        path.append(current)
     return np.stack(path, axis=0)

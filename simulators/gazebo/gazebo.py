@@ -1,13 +1,36 @@
+import numpy as np
 import os
 import xml.etree.ElementTree as ET
-from typing import List, Tuple
-from plan import Plan
-import os
 import subprocess
+import shutil
+import re
+from pathlib import Path
+
+from typing import List, Tuple
+
+from plan import Plan
 from simulators.sim import Simulator, SimName
 from helpers.change_coordinates import heading_to_yaw
-from typing import List, Tuple
-import numpy as np
+
+
+# Define color mappings
+class Color:
+    BLUE = "blue"
+    GREEN = "green"
+    RED = "red"
+    ORANGE = "orange"
+    YELLOW = "yellow"
+
+
+COLOR_MAP = {
+    Color.BLUE: "0.0 0.0 1.0 1",
+    Color.GREEN: "0.306 0.604 0.024 1",
+    Color.RED: "0.8 0.0 0.0 1",
+    Color.ORANGE: "1.0 0.5 0.0 1",
+    Color.YELLOW: "1.0 1.0 0.0 1",
+}
+
+from config import ARDUPILOT_GAZEBO_MODELS
 
 
 class Gazebo(Simulator):
@@ -16,11 +39,13 @@ class Gazebo(Simulator):
         offsets: List[Tuple],
         plans: List[Plan],
         world_path: str,
-        vehicle_models: List[str],
+        models: List[str],
+        colors: List[str],
         markers: np.ndarray,
     ):
         super().__init__(name=SimName.QGROUND, offsets=offsets, plans=plans)
-        self.add_info("vehicle_models", vehicle_models)
+        self.add_info("models", models)
+        self.add_info("colors", colors)
         self.add_info("markers", markers)
         self.add_info("world_path", self.update_world(world_path))
 
@@ -28,6 +53,15 @@ class Gazebo(Simulator):
         return " -f gazebo-iris"
 
     def _launch_application(self):
+        base_models = [
+            f"{self.info['models'][i]}_{self.info['colors'][i]}"
+            for i in range(self.n_uavs)
+        ]
+        self.generate_drone_models_from_bases(
+            base_models,  # ← now the only input that determines how many drones
+            base_port_in=9002,
+            step=10,
+        )
         sim_cmd = ["gazebo", "--verbose", self.info["world_path"]]  #
         subprocess.Popen(
             sim_cmd,
@@ -35,6 +69,58 @@ class Gazebo(Simulator):
             stderr=subprocess.DEVNULL,  # Suppress error output
             shell=False,  # Ensure safety when passing arguments
         )
+
+    def generate_drone_models_from_bases(
+        self,
+        base_models,  # ← now the only input that determines how many drones
+        base_port_in=9002,
+        step=10,
+    ):
+        template_path = Path(ARDUPILOT_GAZEBO_MODELS) / "drone"
+        output_dir = Path(ARDUPILOT_GAZEBO_MODELS)
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        for i in range(self.n_uavs):
+            name = f"drone{i+1}"
+            new_model_path = output_dir / name
+
+            # Overwrite existing folder
+            if new_model_path.exists():
+                shutil.rmtree(new_model_path)
+            shutil.copytree(template_path, new_model_path)
+
+            sdf_path = new_model_path / "model.sdf"
+            with open(sdf_path, "r") as f:
+                sdf = f.read()
+
+            # Replace <model name="...">
+            sdf = re.sub(r'<model name="[^"]+">', f'<model name="{name}">', sdf)
+
+            # Replace <include><uri>...</uri></include>
+            sdf = re.sub(
+                r"<include>\s*<uri>model://[^<]+</uri>\s*</include>",
+                f"<include>\n  <uri>model://{base_models[i]}</uri>\n</include>",
+                sdf,
+            )
+
+            # Replace ports (if present)
+            port_in = base_port_in + i * step
+            port_out = port_in + 1
+            sdf = re.sub(
+                r"<fdm_port_in>\d+</fdm_port_in>",
+                f"<fdm_port_in>{port_in}</fdm_port_in>",
+                sdf,
+            )
+            sdf = re.sub(
+                r"<fdm_port_out>\d+</fdm_port_out>",
+                f"<fdm_port_out>{port_out}</fdm_port_out>",
+                sdf,
+            )
+
+            with open(sdf_path, "w") as f:
+                f.write(sdf)
+
+            # print(f"✅ Created {name} | Base: {base_model} | Ports: {port_in}-{port_out}")
 
     def generate_drone_element(self, instance_name, x, y, z, roll, pitch, yaw):
         import xml.etree.ElementTree as ET
@@ -80,11 +166,11 @@ class Gazebo(Simulator):
                 tree.write(updated_world_path)
 
         # Add vehicles
-        for i, model_name in enumerate(self.info["vehicle_models"]):
+        for i in range(self.n_uavs):
             x, y, z, heading = self.offsets[i]
             # ensure there is enough model folders with model_name(this may be changedto directly write the code as is done for markers)
             drone_elem = self.generate_drone_element(
-                f"{model_name}{i+1}", x, y, z, 0, 0, heading_to_yaw(heading)
+                f"drone{i+1}", x, y, z, 0, 0, heading_to_yaw(heading)
             )
             world_elem.append(drone_elem)
             tree.write(updated_world_path)
@@ -101,16 +187,7 @@ class Gazebo(Simulator):
     ):
         """Creates a fully defined XML element for a waypoint model with configurable color, radius, and transparency."""
 
-        # Define color mappings
-        color_map = {
-            "green": "0.306 0.604 0.024 1",
-            "red": "0.8 0.0 0.0 1",
-            "yellow": "1.0 1.0 0.0 1",
-            "orange": "1.0 0.5 0.0 1",
-            "blue": "0.0 0.0 1.0 1",
-        }
-
-        diffuse_color = color_map.get(color.lower(), color_map["green"])
+        diffuse_color = COLOR_MAP.get(color.lower(), COLOR_MAP["green"])
 
         model = ET.Element("model", name=name)
 

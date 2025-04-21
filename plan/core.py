@@ -39,13 +39,12 @@ class StepFailed(Exception):
 
 class MissionElement:
     def __init__(
-        self,
-        name: str = "action name",
-        emoji: str = "📝",
+        self, name: str = "action name", emoji: str = "📝", is_improv: bool = False
     ) -> None:
         # General Properties(Step and Action shared)
         self.name = name
         self.emoji = emoji
+        self.is_improv = is_improv
         self.state = State.NOT_STARTED
 
         ## Building properties
@@ -84,13 +83,14 @@ class Step(MissionElement):
         exec_fn: Optional[Callable[[mavutil.mavlink_connection, bool], None]] = None,
         target_pos: np.ndarray = np.zeros(3),
         emoji: str = "🔹",
+        is_improv=False,
     ) -> None:
         self.exec_fn = exec_fn or (lambda conn: None)
         self.check_fn = check_fn
         self.curr_pos = None
         self.onair = onair
         self.target_pos = target_pos
-        super().__init__(name=name, emoji=emoji)
+        super().__init__(name=name, emoji=emoji, is_improv=is_improv)
 
     def execute(self) -> None:
         class_name = self.__class__.__name__
@@ -161,13 +161,14 @@ class Action(MissionElement):
         onair: bool = None,
         curr_pos: np.ndarray = None,
         target_pos: np.ndarray = None,
+        is_improv: bool = False,
     ) -> None:
         self.steps: List[Union[Step, Action]] = []
         self.current: Optional[Union[Step, Action]] = None
         self.onair: bool = onair
         self.curr_pos: np.ndarray = curr_pos
         self.target_pos: np.ndarray = target_pos
-        super().__init__(name=name, emoji=emoji)  # ✅ no-op
+        super().__init__(name=name, emoji=emoji, is_improv=is_improv)  # ✅ no-op
 
     def add(self, step: Union[Step, Action]) -> None:
         """
@@ -283,7 +284,7 @@ class Action(MissionElement):
         current_index = self.steps.index(self.current)
         self.steps.insert(current_index + 1, new_step)
 
-    def add_now(self, new_step: Union[Step, Action]) -> None:
+    def add_prev(self, new_step: Union[Step, Action]) -> None:
         """
         Inserts a new step/action immediately before the current step.
         Maintains chaining and updates the 'next' pointers accordingly.
@@ -304,5 +305,12 @@ class Action(MissionElement):
         current_index = self.steps.index(self.current)
         self.steps.insert(current_index, new_step)
 
+    def add_over(self, new_step: Union[Step, Action]) -> None:
+        self.add_next(new_step)
+        self.current.state = State.DONE
+        self.current = new_step
+
+    def add_now(self, new_step: Union[Step, Action]) -> None:
+        self.add_prev(new_step)
         self.current.reset()
         self.current = new_step

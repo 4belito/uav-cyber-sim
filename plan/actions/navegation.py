@@ -89,15 +89,20 @@ def make_path(wps: np.ndarray = None, wp_margin: float = 0.5):
 
 
 def make_go_to(
-    wp: np.ndarray = np.empty((0, 3)),
+    wp: np.ndarray = None,
     wp_margin: float = 0.5,
     cause_text="",
+    target_pos: np.ndarray = None,
+    is_improv: bool = False,
 ):
+    if target_pos is None:
+        target_pos = wp
     goto_step = Step(
         f"go to {cause_text} -> {fmt(wp)}",
         check_fn=partial(check_reach_wp, wp=wp, wp_margin=wp_margin),
         exec_fn=partial(exec_go_local, wp=wp),
-        target_pos=wp,
+        target_pos=target_pos,
         onair=True,
+        is_improv=is_improv,
     )
     return goto_step

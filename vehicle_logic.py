@@ -3,7 +3,11 @@ import numpy as np
 
 from plan.planner import Plan, State
 from typing import List
-from helpers.navegation_logic import find_best_waypoint
+from helpers.navegation_logic import (
+    find_best_waypoint,
+    get_valid_waypoints,
+    adjust_one_significant_axis_toward_corridor,
+)
 from plan import ActionNames, PlanMode
 
 # from helpers.change_coordinates import GLOBAL_switch_LOCAL_NED
@@ -22,7 +26,7 @@ class VehicleLogic:
         home: tuple,
         plan: Plan = None,
         safety_radius: float = 5,
-        radar_radius: float = 4,
+        radar_radius: float = 10,
         verbose: int = 1,
     ):
         # Vehicle Creation
@@ -36,7 +40,7 @@ class VehicleLogic:
         self.mode = VehicleMode.MISSION
         self.plan = plan if plan is not None else Plan.basic()
         self.plan.bind(self.conn, verbose)
-        self.back_mode = None
+        self.back_mode = VehicleMode.MISSION
 
         # Communication properties (positions are local)
         self.neighbors = Neighbors(vehicles=[])
@@ -54,6 +58,37 @@ class VehicleLogic:
             self.check_dynamic_action()
         self.plan.act()
 
+    ## Passive avoidance
+    def check_avoidance(self, obst_pos: np.ndarray):
+        obst_dist = np.linalg.norm(self.pos - obst_pos)
+        if obst_dist < self.safety_radius:
+            avoid_pos = self.get_avoidance_pos(obst_pos, obst_dist)
+            if avoid_pos is not None:
+                if (
+                    self.mode == VehicleMode.AVOIDANCE
+                    and self.current_step.state == State.DONE  # check this later
+                ):
+                    avoid_step = self.create_goto(
+                        pos=avoid_pos,
+                        target_pos=self.target_pos,
+                        cause_text="(avoidance)",
+                        is_improv=True,
+                    )
+                    self.inject(avoid_step)
+                elif self.mode != VehicleMode.AVOIDANCE:
+                    avoid_step = self.create_goto(
+                        pos=avoid_pos,
+                        target_pos=self.target_pos,
+                        cause_text="(avoidance)",
+                        is_improv=True,
+                    )
+                    self.inject(avoid_step)
+                    self.back_mode = self.mode
+                    self.set_mode(VehicleMode.AVOIDANCE)
+                return
+        if self.mode == VehicleMode.AVOIDANCE and self.current_step.state == State.DONE:
+            self.set_mode(self.back_mode)
+
     def check_dynamic_action(self):
         if (
             self.current_action.name == ActionNames.FLY
@@ -66,39 +101,45 @@ class VehicleLogic:
 
     def inject_dynamic_action(self):
         final_wp = self.plan.steps[-2].target_pos
-        next_wp = find_best_waypoint(
+        valid_waypoints = get_valid_waypoints(
             self.pos, final_wp, self.plan.dynamic_wps, eps=self.plan.wp_margin
         )
-        self.inject_goto(
-            pos=next_wp, wp_margin=self.plan.wp_margin, cause_text="(dynamic)"
-        )
+        if valid_waypoints.shape[0] == 0:
+            next_wp = adjust_one_significant_axis_toward_corridor(
+                self.pos, self.plan.dynamic_wps, eps=self.plan.wp_margin
+            )
+            goto_step = self.create_goto(
+                pos=next_wp, target_pos=next_wp, cause_text="(dynamic)", is_improv=True
+            )
+        else:
+            next_wp = find_best_waypoint(self.pos, final_wp, valid_waypoints)
+            goto_step = self.create_goto(
+                pos=next_wp, target_pos=next_wp, cause_text="(dynamic)", is_improv=False
+            )
+        self.inject(goto_step)
 
-    def inject_goto(
-        self, pos: np.ndarray, wp_margin: float = 0.5, cause_text="(avoidance)"
+    def inject(self, step):
+        if self.current_step.is_improv:
+            self.current_action.add_over(step)
+        else:
+            self.current_action.add_now(step)
+
+    def create_goto(
+        self,
+        pos: np.ndarray,
+        target_pos: np.ndarray,
+        cause_text: str = "(avoidance)",
+        is_improv: bool = False,
     ):
-        avoid_step = make_go_to(wp=pos, wp_margin=wp_margin, cause_text=cause_text)
-        avoid_step.bind(self.conn)
-        self.plan.current.add_now(avoid_step)
-
-    ## Passive avoidance
-    def check_avoidance(self, obst_pos: np.ndarray):
-        obst_dist = np.linalg.norm(self.pos - obst_pos)
-        in_danger_zone = obst_dist < self.safety_radius
-        # step_done = self.current_step.state == State.NOT_STARTED
-
-        if in_danger_zone:
-            avoid_pos = self.get_avoidance_pos(obst_pos, obst_dist)
-            if avoid_pos is not None:
-                self.inject_goto(avoid_pos)
-                if self.mode != VehicleMode.AVOIDANCE:
-                    self.back_mode = self.mode
-                    self.set_mode(VehicleMode.AVOIDANCE)
-                return
-        self.set_mode(self.back_mode)
-
-    def set_dynamic_mission(self, goal_wp: np.ndarray):
-        self.set_mode(VehicleMode.DYNAMIC_MISSION)
-        self.goal_wp = goal_wp
+        goto_step = make_go_to(
+            wp=pos,
+            target_pos=target_pos,
+            wp_margin=self.plan.wp_margin,
+            cause_text=cause_text,
+            is_improv=is_improv,
+        )
+        goto_step.bind(self.conn)
+        return goto_step
 
     def set_mode(self, new_mode: VehicleMode):
         if new_mode != self.mode:
@@ -129,6 +170,7 @@ class VehicleLogic:
         obst_pos: np.ndarray,
         obst_dist: np.ndarray,
         direction: str = "left",
+        safety_eps: float = 1.0,
     ):
         """
         Sends a velocity command in body frame, orthogonal to the direction of wp.
@@ -141,7 +183,7 @@ class VehicleLogic:
         target_dir = (target_pos - curr_pos)[:2]
         if np.dot(obj_dir, target_dir) < 0:
             return None
-        distance = np.sqrt(self.safety_radius**2 - obst_dist**2)
+        distance = np.sqrt(self.safety_radius**2 - obst_dist**2) + safety_eps
         obj_dir = obj_dir / np.linalg.norm(obj_dir) * distance
         # Get orthogonal direction
         if direction == "left":
