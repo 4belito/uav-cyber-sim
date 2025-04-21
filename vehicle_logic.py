@@ -143,7 +143,7 @@ class VehicleLogic:
 
     def set_mode(self, new_mode: VehicleMode):
         if new_mode != self.mode:
-            print(f"Vehigcle {self.idx} switched to mode: {new_mode}")
+            print(f"Vehicle {self.idx} switched to mode: 🔁 {new_mode}")
             self.mode = new_mode
 
     @property
@@ -170,7 +170,7 @@ class VehicleLogic:
         obst_pos: np.ndarray,
         obst_dist: np.ndarray,
         direction: str = "left",
-        safety_eps: float = 1.0,
+        safety_eps: float = 0.0,
     ):
         """
         Sends a velocity command in body frame, orthogonal to the direction of wp.

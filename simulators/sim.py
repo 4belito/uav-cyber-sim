@@ -50,7 +50,7 @@ class Simulator:
             )
         return uavs
 
-    def launch(self, verbose: int = 1):
+    def launch(self, verbose: int = 1) -> List[VehicleLogic]:
         self.launch_vehicles()
         self._launch_application()
         return self.create_VehicleLogics(verbose)
