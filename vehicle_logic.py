@@ -13,12 +13,15 @@ from plan import ActionNames, PlanMode
 # from helpers.change_coordinates import GLOBAL_switch_LOCAL_NED
 from plan.actions import make_go_to
 
+from config import GCS_BASE_PORT
+
 
 class VehicleMode:
     MISSION = "MISSION"  # or "MISSION", "WAYPOINT_NAV"
     AVOIDANCE = "AVOIDANCE"  # or "COLLISION_AVOIDANCE"
 
 
+# sis_id -> sysid
 class VehicleLogic:
     def __init__(
         self,
@@ -31,7 +34,10 @@ class VehicleLogic:
     ):
         # Vehicle Creation
         self.idx = sys_id
-        self.conn = mavutil.mavlink_connection(f"udp:127.0.0.1:{14551+10*(sys_id-1)}")
+        port = GCS_BASE_PORT + 10 * (sys_id - 1)
+        self.conn = mavutil.mavlink_connection(
+            f"udp:127.0.0.1:{port}", source_system=255
+        )
         self.conn.wait_heartbeat()
         self.home = np.array(home)
         self.verbose = verbose

@@ -50,14 +50,21 @@ def exec_set_mode(conn: mavutil.mavlink_connection, mode: int = 0) -> None:
     conn.set_mode(mode)
 
 
+import time
+
+
 def check_set_mode(
-    conn: mavutil.mavlink_connection, _verbose: int, mode: int = 0
+    conn: mavutil.mavlink_connection, _verbose: int, mode: int = 0, timeout: float = 5.0
 ) -> bool:
-    """
-    Confirms the UAV has entered GUIDED mode via heartbeat.
-    """
-    msg = conn.recv_match(type="HEARTBEAT")
-    return (msg and msg.custom_mode == mode), None
+    start = time.time()
+    while time.time() - start < timeout:
+        msg = conn.recv_match(type="HEARTBEAT", timeout=1)
+        if msg and msg.custom_mode == mode:
+            return True, None
+    return (
+        False,
+        f"Timeout: did not switch to mode {FlightMode.get_name(mode)} in {timeout} seconds",
+    )
 
 
 def make_set_mode(mode_name: str, onair=False) -> Action:
