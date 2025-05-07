@@ -13,7 +13,7 @@ from plan import ActionNames, PlanMode
 # from helpers.change_coordinates import GLOBAL_switch_LOCAL_NED
 from plan.actions import make_go_to
 
-from config import VEH_BASE_PORT, GCS_BASE_PORT
+from config import VEH_BASE_PORT, GCS_BASE_PORT, ORC_BASE_PORT
 
 
 class VehicleMode:
@@ -40,6 +40,7 @@ plans = [Plan.basic(wps=path, wp_margin=0.5) for path in local_paths]
 
 
 # sis_id -> id and start at 0
+# sis_id may go out of the class
 class VehicleLogic:
     def __init__(
         self,
@@ -54,8 +55,10 @@ class VehicleLogic:
         self.idx = sys_id
         ap_port = VEH_BASE_PORT + 10 * (sys_id - 1)
         cs_port = GCS_BASE_PORT + 10 * (sys_id - 1)
+        oc_port = ORC_BASE_PORT + 10 * (sys_id - 1)
         self.ap_conn = mavutil.mavlink_connection(f"udp:127.0.0.1:{ap_port}")
         self.cs_conn = mavutil.mavlink_connection(f"udpout:127.0.0.1:{cs_port}")
+        self.oc_conn = mavutil.mavlink_connection(f"udpout:127.0.0.1:{oc_port}")
         self.ap_conn.wait_heartbeat()
         self.home = home or homes[sys_id - 1]
         self.verbose = verbose

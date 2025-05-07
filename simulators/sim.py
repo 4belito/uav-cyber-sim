@@ -41,7 +41,7 @@ class Simulator:
         for i in range(self.n_uavs):
             vehicle_cmd = f"python3 {self.ardu_path} -v ArduCopter -I{i} --sysid {i+1} --no-rebuild"
             vehicle_cmd += self._add_vehicle_cmd_fn(i)
-            subprocess.Popen(
+            p = subprocess.Popen(
                 [
                     "gnome-terminal",
                     "--",
@@ -50,6 +50,7 @@ class Simulator:
                     f"{vehicle_cmd}; exit",
                 ]  # , exec bash"
             )
+            print(f"🚀 Vehicle {i+1} launched (PID {p.pid})")
 
     def launch_logics(self, visible=True):
         """
@@ -81,7 +82,7 @@ class Simulator:
                 # Background mode (silent, attachable)
                 p = subprocess.Popen(command.split())
 
-            print(f"🚀 Vehicle {sysid} launched (PID {p.pid})")
+            print(f"🚀 Vehicle {sysid} logic launched (PID {p.pid})")
             procs.append(p)
         return procs
 

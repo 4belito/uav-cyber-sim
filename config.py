@@ -8,3 +8,4 @@ ARDUPILOT_GAZEBO_MODELS = os.path.expanduser("~/ardupilot_gazebo/models")
 
 VEH_BASE_PORT = 1551
 GCS_BASE_PORT = 1552
+ORC_BASE_PORT = 1553
