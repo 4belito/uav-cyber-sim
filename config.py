@@ -6,5 +6,5 @@ ARDUPILOT_VEHICLE_PATH = os.path.expanduser("~/ardupilot/Tools/autotest/sim_vehi
 ARDUPILOT_GAZEBO_MODELS = os.path.expanduser("~/ardupilot_gazebo/models")
 
 
-UAV_BASE_PORT = 1551
+VEH_BASE_PORT = 1551
 GCS_BASE_PORT = 1552

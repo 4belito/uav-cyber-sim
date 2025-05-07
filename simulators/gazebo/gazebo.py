@@ -5,7 +5,6 @@ import subprocess
 import shutil
 import re
 from pathlib import Path
-
 from typing import List, Tuple
 
 from plan import Plan
@@ -90,7 +89,7 @@ class Gazebo(Simulator):
             shutil.copytree(template_path, new_model_path)
 
             sdf_path = new_model_path / "model.sdf"
-            with open(sdf_path, "r") as f:
+            with open(sdf_path, "r", encoding="utf-8") as f:
                 sdf = f.read()
 
             # Replace <model name="...">
@@ -117,13 +116,12 @@ class Gazebo(Simulator):
                 sdf,
             )
 
-            with open(sdf_path, "w") as f:
+            with open(sdf_path, "w", encoding="utf-8") as f:
                 f.write(sdf)
 
             # print(f"✅ Created {name} | Base: {base_model} | Ports: {port_in}-{port_out}")
 
     def generate_drone_element(self, instance_name, x, y, z, roll, pitch, yaw):
-        import xml.etree.ElementTree as ET
 
         model = ET.Element("model", name=instance_name)
 

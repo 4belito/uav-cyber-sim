@@ -13,7 +13,7 @@ from plan import ActionNames, PlanMode
 # from helpers.change_coordinates import GLOBAL_switch_LOCAL_NED
 from plan.actions import make_go_to
 
-from config import GCS_BASE_PORT
+from config import VEH_BASE_PORT, GCS_BASE_PORT
 
 
 class VehicleMode:
@@ -21,12 +21,30 @@ class VehicleMode:
     AVOIDANCE = "AVOIDANCE"  # or "COLLISION_AVOIDANCE"
 
 
-# sis_id -> sysid
+### Hardcoded for now as part of a step-by-step development process
+offsets = [  # east, north, up, heading
+    (5, 5, 0, 90),
+    (10, 0, 0, 45),
+    (-5, -10, 0, 225),
+    (-15, 0, 0, 0),
+    (0, -20, 0, 0),
+]
+homes = np.array([offset[:3] for offset in offsets])
+
+side_lens = (5, 7, 4, 1, 2)
+local_paths = [
+    Plan.create_square_path(side_len=side_len, alt=5) for side_len in side_lens
+]
+plans = [Plan.basic(wps=path, wp_margin=0.5) for path in local_paths]
+##################################
+
+
+# sis_id -> id and start at 0
 class VehicleLogic:
     def __init__(
         self,
         sys_id: int,
-        home: tuple,
+        home: np.ndarray = None,
         plan: Plan = None,
         safety_radius: float = 5,
         radar_radius: float = 10,
@@ -34,18 +52,18 @@ class VehicleLogic:
     ):
         # Vehicle Creation
         self.idx = sys_id
-        port = GCS_BASE_PORT + 10 * (sys_id - 1)
-        self.conn = mavutil.mavlink_connection(
-            f"udp:127.0.0.1:{port}", source_system=255
-        )
-        self.conn.wait_heartbeat()
-        self.home = np.array(home)
+        ap_port = VEH_BASE_PORT + 10 * (sys_id - 1)
+        cs_port = GCS_BASE_PORT + 10 * (sys_id - 1)
+        self.ap_conn = mavutil.mavlink_connection(f"udp:127.0.0.1:{ap_port}")
+        self.cs_conn = mavutil.mavlink_connection(f"udpout:127.0.0.1:{cs_port}")
+        self.ap_conn.wait_heartbeat()
+        self.home = home or homes[sys_id - 1]
         self.verbose = verbose
 
         # Mode Properties
         self.mode = VehicleMode.MISSION
-        self.plan = plan if plan is not None else Plan.basic()
-        self.plan.bind(self.conn, verbose)
+        self.plan = plan if plan is not None else plans[sys_id - 1]
+        self.plan.bind(self.ap_conn, verbose)
         self.back_mode = VehicleMode.MISSION
 
         # Communication properties (positions are local)
@@ -144,7 +162,7 @@ class VehicleLogic:
             cause_text=cause_text,
             is_improv=is_improv,
         )
-        goto_step.bind(self.conn)
+        goto_step.bind(self.ap_conn)
         return goto_step
 
     def set_mode(self, new_mode: VehicleMode):

@@ -2,7 +2,37 @@
 
 import argparse
 from pymavlink import mavutil
-from config import UAV_BASE_PORT, GCS_BASE_PORT
+from config import VEH_BASE_PORT, GCS_BASE_PORT
+from vehicle_logic import VehicleLogic
+from plan.planner import Plan, State
+from helpers import kill_processes
+import time
+
+## this is temporal
+
+from pymavlink.dialects.v20 import common as mavlink2
+
+
+def send_done_until_ack(conn, command_id=3000, max_attempts=1000):
+    """
+    Send 'DONE' via STATUSTEXT repeatedly until receiving a COMMAND_ACK.
+    Assumes `conn` is a dedicated MAVLink connection for one UAV.
+    """
+    msg = mavlink2.MAVLink_statustext_message(severity=6, text=b"DONE")
+
+    for attempt in range(max_attempts):
+        print(f"📤 Sending DONE (attempt {attempt + 1})")
+        conn.mav.send(msg)
+
+        start = time.time()
+        while time.time() - start < 2:
+            ack = conn.recv_match(type="COMMAND_ACK", blocking=False)
+            if ack and ack.command == command_id:
+                print("✅ ACK received. DONE message acknowledged.")
+                return
+            time.sleep(0.05)
+
+    print("⚠️ No ACK received after max attempts.")
 
 
 def parse_arguments():
@@ -20,43 +50,47 @@ def parse_arguments():
 def get_ports(idx):
     """Return GCS and UAV ports for a given sysid"""
     i = idx - 1
-    uav_port = UAV_BASE_PORT + 10 * i
+    uav_port = VEH_BASE_PORT + 10 * i
     gcs_port = GCS_BASE_PORT + 10 * i
     return gcs_port, uav_port
 
 
 def start_proxy(idx):
     """Start bidirectional proxy for a given UAV sysid"""
-    gcs_port, uav_port = get_ports(idx)
+    # gcs_port, uav_port = get_ports(idx)
 
-    print(f"\n🔁 Starting proxy for UAV {idx}")
-    print(f"📡 GCS listens on port {gcs_port}")
-    print(f"🛩️ Forwarding to UAV on port {uav_port}")
+    print(f"\n🔁 Starting UAV {idx}")
 
-    gcs = mavutil.mavlink_connection(f"udpout:127.0.0.1:{gcs_port}", source_system=idx)
-    uav = mavutil.mavlink_connection(f"udp:127.0.0.1:{uav_port}")
+    logic = VehicleLogic(sys_id=idx)
 
     try:
         while True:
             # GCS → UAV
-            msg = gcs.recv_msg()
+            msg = logic.cs_conn.recv_msg()
             if msg:
                 print(f"➡️  UAV {idx} ← GCS: {msg.get_type()}")
-                uav.mav.send(msg)
+                logic.ap_conn.mav.send(msg)
 
             # UAV → GCS
-            msg = uav.recv_msg()
+            msg = logic.ap_conn.recv_msg()
             if msg:
                 print(f"⬅️  GCS ← UAV {idx}: {msg.get_type()}")
-                gcs.mav.send(msg)
+                logic.cs_conn.mav.send(msg)
 
-                if msg.get_type() == "MISSION_ITEM" and msg.z == -1:
-                    print(f"🛑 UAV {idx} mission complete. Closing proxy.")
-                    break
+            if logic.plan.state == State.DONE:
+                send_done_until_ack(logic.cs_conn)
+                # msg = mavlink2.MAVLink_statustext_message(
+                #     severity=6, text="DONE".encode("utf-8")
+                # )
+                # logic.cs_conn.mav.send(msg)
+                print(f"🛑 UAV {idx} mission complete. Closing LOGIC.")
+                break
+            else:
+                logic.act()
     finally:
-        gcs.close()
-        uav.close()
-        print(f"✅ Proxy for UAV {idx} closed.")
+        # logic.cs_conn.close()
+        # logic.ap_conn.close()
+        print(f"✅ Logic for UAV {idx} closed.")
 
 
 if __name__ == "__main__":

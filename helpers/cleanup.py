@@ -2,7 +2,6 @@ import os
 
 ALL_PROCESSES = [
     "QGroundControl",
-    "sim_vehicle.py",
     "arducopter",
     "gazebo",
     "mavproxy",

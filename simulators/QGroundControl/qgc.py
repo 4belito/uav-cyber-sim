@@ -38,7 +38,7 @@ class QGC(Simulator):
 
 
 def add_qgc_links(n: int = 1, start_port: int = 5763, step: int = 10):
-    with open(QGC_INI_PATH, "r") as file:
+    with open(QGC_INI_PATH, "r", encoding="utf-8") as file:
         lines = file.readlines()
 
     section_header = "[LinkConfigurations]"
@@ -91,12 +91,12 @@ def add_qgc_links(n: int = 1, start_port: int = 5763, step: int = 10):
     lines[count_line_idx:count_line_idx] = new_lines
     lines[count_line_idx + len(new_lines)] = f"count={count + n}\n"
 
-    with open(QGC_INI_PATH, "w") as file:
+    with open(QGC_INI_PATH, "w", encoding="utf-8") as file:
         file.writelines(lines)
 
 
 def delete_all_qgc_links():
-    with open(QGC_INI_PATH, "r") as f:
+    with open(QGC_INI_PATH, "r", encoding="utf-8") as f:
         lines = f.readlines()
 
     inside_links = False
@@ -117,5 +117,5 @@ def delete_all_qgc_links():
 
         new_lines.append(line)
 
-    with open(QGC_INI_PATH, "w") as f:
+    with open(QGC_INI_PATH, "w", encoding="utf-8") as f:
         f.writelines(new_lines)

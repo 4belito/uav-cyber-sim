@@ -3,11 +3,14 @@ import numpy as np
 
 
 def in_same_orthant(
-    current: np.ndarray, target: np.ndarray, waypoints: np.ndarray, dims=[0, 1], eps=1
+    current: np.ndarray, target: np.ndarray, waypoints: np.ndarray, dims=None, eps=1
 ) -> np.ndarray:
     """
     Vectorized function to check if waypoints are in the same quadrant as the target w.r.t. the current position.
     """
+    if dims is None:
+        dims = [0, 1]
+
     # Extract only relevant dimensions
     current = current[dims]
     target = target[dims]
@@ -24,21 +27,23 @@ def in_same_orthant(
 
 
 def in_same_corridor(
-    current: np.ndarray, waypoints: np.ndarray, eps=1, dims=[0, 1, 2]
+    current: np.ndarray, waypoints: np.ndarray, eps=1, dims=None
 ) -> np.ndarray:
     """
     Vectorized function to check if waypoints are in the same corridor as the current position.
     """
+    if dims is None:
+        dims = [0, 1, 2]
     delta = np.abs(waypoints[:, dims] - current[dims])
     return np.sum(delta < eps, axis=1) >= 2
 
 
-def delete(
-    current: np.ndarray, waypoints: np.ndarray, eps=1, dims=[0, 1]
-) -> np.ndarray:
+def delete(current: np.ndarray, waypoints: np.ndarray, eps=1, dims=None) -> np.ndarray:
     """
     Vectorized function to check if waypoints are in the same corridor as the current position.
     """
+    if dims is None:
+        dims = [0, 1]
     delta = np.abs(waypoints[:, dims] - current[dims])
     return np.any(delta < eps, axis=1)
 
@@ -63,8 +68,6 @@ def adjust_one_significant_axis_toward_corridor(
     Adjusts the closest significant axis (above `eps` difference) to bring the drone closer to a valid corridor,
     modifying only one coordinate.
     """
-    import numpy as np
-
     diffs = np.abs(waypoints - current)  # shape (N, 3)
     dists = np.sum(diffs, axis=1)  # total Manhattan distance to each waypoint
 
