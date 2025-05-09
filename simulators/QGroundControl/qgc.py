@@ -35,14 +35,11 @@ class QGC(Simulator):
         self.add_info("origin", origin)
         self.add_info("spawns", find_spawns(origin, offsets))
 
-        # This is for TCP connections
-
     def _add_vehicle_cmd_fn(self, i):
         spawn_str = ",".join(map(str, self.info["spawns"][i]))
         return f" --custom-location={spawn_str}"
 
     def _launch_visualizer(self):
-        # This is for connect manually using TCP
         self._delete_all_qgc_links()
         self._add_qgc_links(n=self.n_uavs)
         sim_cmd = [os.path.expanduser(QGC_PATH)]
