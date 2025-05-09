@@ -1,0 +1,41 @@
+[MASTER]
+ignore=CVS
+jobs=1
+persistent=yes
+suggestion-mode=yes
+
+[MESSAGES CONTROL]
+disable=
+    #line-too-long,
+    #missing-docstring,
+    
+
+[REPORTS]
+output-format=text
+reports=no
+score=yes
+
+[FORMAT]
+max-line-length=88
+indent-string='    '
+
+[BASIC]
+good-names=i,j,k,ex,Run,_
+bad-names=foo,bar,baz,toto,tutu,tata
+variable-naming-style=snake_case
+function-naming-style=snake_case
+method-naming-style=snake_case
+argument-naming-style=snake_case
+class-naming-style=PascalCase
+const-naming-style=UPPER_CASE
+class-const-naming-style=UPPER_CASE
+
+[TYPECHECK]
+ignore-mixin-members=yes
+ignore-none=yes
+ignore-on-opaque-inference=yes
+
+[SIMILARITIES]
+ignore-comments=yes
+ignore-docstrings=yes
+min-similarity-lines=4

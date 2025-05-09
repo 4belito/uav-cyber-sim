@@ -1,0 +1,13 @@
+LOG_BACKEND_TYPE 0
+
+
+| Value | Description                                               |
+| ----- | --------------------------------------------------------- |
+| `0`   | **Disable all logging** (no logs are saved)               |
+| `1`   | **Log to dataflash** (on-board storage, typically `.bin`) | (default)
+| `2`   | **Log to mavlink** (sent to GCS via telemetry)            |
+| `3`   | **Both dataflash and mavlink**                            |
+| `4`   | **Log to file system** (e.g., when using Linux targets)   |
+| `5`   | **Both mavlink and file system**                          |
+| `6`   | **Both dataflash and file system**                        |
+| `7`   | **Log to all three**: dataflash, mavlink, and file system |

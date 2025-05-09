@@ -1,5 +1,6 @@
-from helpers.math import manhattan_distance
 import numpy as np
+
+from helpers.math import manhattan_distance
 
 
 def in_same_orthant(

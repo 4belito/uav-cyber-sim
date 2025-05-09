@@ -1,7 +1,8 @@
-from pymavlink import mavutil
-from plan.core import Step, Action, StepFailed
 from functools import partial
-from plan.core import ActionNames
+
+from pymavlink import mavutil
+
+from plan.core import Action, ActionNames, Step, StepFailed
 
 
 class MAVCommand:

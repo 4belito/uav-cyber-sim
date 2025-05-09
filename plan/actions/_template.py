@@ -1,6 +1,8 @@
-from pymavlink import mavutil
-from plan.core import Step, Action
 from functools import partial
+
+from pymavlink import mavutil
+
+from plan.core import Action, Step
 
 
 def exec_step(self, conn, blocking=False, extra_arg=0, verbose: int = 0):

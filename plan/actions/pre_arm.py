@@ -1,13 +1,11 @@
 # actions/pre_arm.py
 
-from pymavlink import mavutil
-from plan.core import (
-    Step,
-    Action,
-    StepFailed,
-    ActionNames,
-)  # assuming these are in your core module
 from functools import partial
+
+from pymavlink import mavutil
+
+from plan.core import Action  # assuming these are in your core module
+from plan.core import ActionNames, Step, StepFailed
 
 # Required EKF and sensor flags
 EKF_FLAGS = {

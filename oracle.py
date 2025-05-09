@@ -1,12 +1,13 @@
+from typing import Dict, List
+
 import numpy as np
 from pymavlink import mavutil
-from helpers.change_coordinates import local2global, global2local
-from vehicle_logic import VehicleLogic, Neighbors
-from typing import List, Dict
-from config import GCS_BASE_PORT, ORC_BASE_PORT
-from plan.actions import get_local_position
 from pymavlink.dialects.v20 import common as mavlink2
 
+from config import GCS_BASE_PORT, ORC_BASE_PORT
+from helpers.change_coordinates import global2local, local2global
+from plan.actions import get_local_position
+from vehicle_logic import Neighbors, VehicleLogic
 
 ### Hardcoded for now as part of a step-by-step development process
 offsets = [  # east, north, up, heading

@@ -1,16 +1,18 @@
-import numpy as np
 from typing import Optional
-from .core import Action
+
+import numpy as np
 
 from plan.actions import (
+    make_arm,
+    make_change_nav_speed,
+    make_land,
+    make_path,
     make_pre_arm,
     make_set_mode,
-    make_arm,
     make_takeoff,
-    make_land,
-    make_change_nav_speed,
-    make_path,
 )
+
+from .core import Action
 
 
 class State:

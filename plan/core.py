@@ -1,7 +1,9 @@
 from __future__ import annotations
-from typing import Callable, Optional, List, Union
-from pymavlink import mavutil
+
+from typing import Callable, List, Optional, Union
+
 import numpy as np
+from pymavlink import mavutil
 
 DEBUG = False
 

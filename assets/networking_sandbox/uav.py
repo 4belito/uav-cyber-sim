@@ -1,12 +1,12 @@
 """Uav Logic(Ardupilot Substitute)"""
 
-import time
 import argparse
-import numpy as np
-import matplotlib.pyplot as plt
-from pymavlink import mavutil
+import time
 
 from base_ports import UAV_BASE_PORT
+import matplotlib.pyplot as plt
+import numpy as np
+from pymavlink import mavutil
 
 
 def parse_args():

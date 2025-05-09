@@ -1,14 +1,15 @@
 """Ground Control Station - Modular Version"""
 
-import ast
 import argparse
-import time
-import numpy as np
-import matplotlib.pyplot as plt
-from pymavlink import mavutil
-import subprocess
+import ast
 import platform
+import subprocess
+import time
+
 from base_ports import GCS_BASE_PORT
+import matplotlib.pyplot as plt
+import numpy as np
+from pymavlink import mavutil
 
 SPC_DIM = 3
 COLORS = ["green", "blue", "red"]

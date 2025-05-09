@@ -1,6 +1,7 @@
 import math
-from pymavlink import mavextra
+
 import numpy as np
+from pymavlink import mavextra
 
 
 def heading_to_yaw(heading_deg):

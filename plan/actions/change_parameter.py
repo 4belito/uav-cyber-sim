@@ -1,6 +1,8 @@
-from pymavlink import mavutil
 from functools import partial
-from plan.core import Step, Action, StepFailed, ActionNames
+
+from pymavlink import mavutil
+
+from plan.core import Action, ActionNames, Step, StepFailed
 
 
 class ParamType:

@@ -2,8 +2,9 @@
 
 import argparse
 import time
+
+from base_ports import GCS_BASE_PORT, UAV_BASE_PORT
 from pymavlink import mavutil
-from base_ports import UAV_BASE_PORT, GCS_BASE_PORT
 
 
 def parse_arguments():

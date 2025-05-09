@@ -1,15 +1,16 @@
 import os
 import subprocess
-from simulators.sim import Simulator, SimName
+from typing import List, Tuple
+
+from config import QGC_INI_PATH, QGC_PATH
 from helpers.change_coordinates import find_spawns
 from plan import Plan
-from typing import List, Tuple
-from config import QGC_PATH, QGC_INI_PATH
+from simulators.sim import Simulator, VisualizerName
 
 
 class QGC(Simulator):
     def __init__(self, offsets: List[Tuple], plans: List[Plan], origin: Tuple):
-        super().__init__(name=SimName.QGROUND, offsets=offsets, plans=plans)
+        super().__init__(name=VisualizerName.QGROUND, offsets=offsets, plans=plans)
         self.add_info("origin", origin)
         self.add_info("spawns", find_spawns(origin, offsets))
 
@@ -17,7 +18,7 @@ class QGC(Simulator):
         spawn_str = ",".join(map(str, self.info["spawns"][i]))
         return f" --custom-location={spawn_str}"
 
-    def _launch_application(self):
+    def _launch_visualizer(self):
         # This is for connect manually using TCP
         delete_all_qgc_links()
         add_qgc_links(n=self.n_uavs)
@@ -32,9 +33,9 @@ class QGC(Simulator):
     # This is for TCP connections
     def launch(self, verbose: int = 1):
         super().launch_vehicles()
-        uavs = super().create_VehicleLogics(verbose)
-        self._launch_application()
-        return uavs
+        # uavs = super().create_VehicleLogics(verbose)
+        self._launch_visualizer()
+        # return uavs
 
 
 def add_qgc_links(n: int = 1, start_port: int = 5763, step: int = 10):
