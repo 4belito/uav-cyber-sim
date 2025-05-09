@@ -1,6 +1,7 @@
 import os
-from config import LOGS_PATH
 import shutil
+
+from config import LOGS_PATH
 
 ALL_PROCESSES = [
     "QGroundControl",

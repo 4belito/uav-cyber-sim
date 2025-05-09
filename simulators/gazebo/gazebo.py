@@ -69,6 +69,19 @@ class Waypoint:
     alpha: float = 0.05
 
 
+@dataclass
+class Pose:
+    x: float
+    y: float
+    z: float
+    roll: float
+    pitch: float
+    yaw: float
+
+    def __str__(self) -> str:
+        return f"{self.x} {self.y} {self.z} {self.roll} {self.pitch} {self.yaw}"
+
+
 class Gazebo(Simulator):
     """
     Gazebo-specific simulator that launches UAVs in a Gazebo world.
@@ -80,7 +93,7 @@ class Gazebo(Simulator):
         self.add_info("models", config.models)
         self.add_info("colors", config.colors)
         self.add_info("markers", config.markers)
-        self.add_info("world_path", self.update_world(config.world_path))
+        self.add_info("world_path", self._update_world(config.world_path))
 
     def _add_vehicle_cmd_fn(self, i: int) -> str:
         return f" -f gazebo-{self.info['models'][i]}"
@@ -91,7 +104,8 @@ class Gazebo(Simulator):
             for i in range(self.n_uavs)
         ]
         self._generate_drone_models_from_bases(base_models, base_port_in=9002, step=10)
-        sim_cmd = ["gazebo", "--verbose", self.info["world_path"]]
+        sim_cmd = ["gazebo", self.info["world_path"]]
+        # pylint: disable=consider-using-with
         subprocess.Popen(
             sim_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=False
         )
@@ -141,52 +155,47 @@ class Gazebo(Simulator):
             with open(sdf_path, "w", encoding="utf-8") as f:
                 f.write(sdf)
 
-    def _generate_drone_element(
-        self,
-        instance_name: str,
-        x: float,
-        y: float,
-        z: float,
-        roll: float,
-        pitch: float,
-        yaw: float,
-    ) -> ET.Element:
+    def _generate_drone_element(self, instance_name: str, pose: Pose) -> ET.Element:
         model = ET.Element("model", name=instance_name)
-        ET.SubElement(model, "pose").text = f"{x} {y} {z} {roll} {pitch} {yaw}"
+        ET.SubElement(model, "pose").text = f"{pose}"
         include = ET.SubElement(model, "include")
         ET.SubElement(include, "uri").text = f"model://{instance_name}"
         return model
 
-    def update_world(self, world_path: str) -> str:
+    def _update_world(self, world_path: str) -> str:
         updated_world_path = os.path.expanduser(world_path[:-6] + "_updated.world")
         tree = ET.parse(world_path)
         root = tree.getroot()
         world_elem = root.find("world")
 
-        for model in world_elem.findall("model"):
-            model_name = model.attrib.get("name", "")
-            if model_name in ["green_waypoint", "red_waypoint", "drone", "iris_demo"]:
-                world_elem.remove(model)
-
-        for marker_name, marker_data in self.info["markers"].items():
-            positions = marker_data.pop("pos")
-            for j, (x, y, z) in enumerate(positions):
-                w = Waypoint(f"{marker_name}_{j}", x, y, z, **marker_data)
-                marker_elem = self._generate_waypoint_element(w)
-                world_elem.append(marker_elem)
-
-        for i in range(self.n_uavs):
-            x, y, z, heading = self.offsets[i]
-            drone_elem = self._generate_drone_element(
-                f"drone{i+1}", x, y, z, 0, 0, heading_to_yaw(heading)
-            )
-            world_elem.append(drone_elem)
+        self._remove_old_models(world_elem)
+        self._add_marker_elements(world_elem)
+        self._add_drone_elements(world_elem)
 
         tree.write(updated_world_path)
         return updated_world_path
 
-    def _generate_waypoint_element(self, w: Waypoint) -> ET.Element:
+    def _remove_old_models(self, world_elem) -> None:
+        for model in world_elem.findall("model"):
+            model_name = model.attrib.get("name", "")
+            if model_name in {"green_waypoint", "red_waypoint", "drone", "iris_demo"}:
+                world_elem.remove(model)
 
+    def _add_marker_elements(self, world_elem) -> None:
+        for marker_name, marker_data in self.info["markers"].items():
+            positions = marker_data.pop("pos")
+            for j, (x, y, z) in enumerate(positions):
+                waypoint = Waypoint(f"{marker_name}_{j}", x, y, z, **marker_data)
+                marker_elem = self._generate_waypoint_element(waypoint)
+                world_elem.append(marker_elem)
+
+    def _add_drone_elements(self, world_elem) -> None:
+        for i, (x, y, z, heading) in enumerate(self.offsets):
+            pose = Pose(x, y, z, 0, 0, heading_to_yaw(heading))
+            drone_elem = self._generate_drone_element(f"drone{i + 1}", pose)
+            world_elem.append(drone_elem)
+
+    def _generate_waypoint_element(self, w: Waypoint) -> ET.Element:
         model = ET.Element("model", name=w.name)
         ET.SubElement(model, "pose").text = f"{w.x} {w.y} {w.z} 0 0 0"
         link = ET.SubElement(model, "link", name="link")
