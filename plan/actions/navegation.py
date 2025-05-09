@@ -1,17 +1,19 @@
+# type: ignore
+
 from functools import partial
 
 import numpy as np
+from numpy.typing import NDArray
 from pymavlink import mavutil
 
 from helpers.change_coordinates import GLOBAL_switch_LOCAL_NED
-from helpers.visualization import fmt
 from plan.core import Action, ActionNames, Step
 
 TYPE_MASK = int(0b110111111000)
 LOCAL_COORD = mavutil.mavlink.MAV_FRAME_LOCAL_NED
 
 
-def get_local_position(conn: mavutil.mavlink_connection):
+def get_local_position(conn: mavutil.mavfile):
     conn.mav.command_long_send(
         conn.target_system,
         conn.target_component,
@@ -36,7 +38,7 @@ def get_local_position(conn: mavutil.mavlink_connection):
 
 
 def exec_go_local(
-    conn: mavutil.mavlink_connection,
+    conn: mavutil.mavfile,
     wp: np.ndarray = np.array([1, 1, 10]),
 ):
     wp = GLOBAL_switch_LOCAL_NED(*wp)
@@ -60,7 +62,7 @@ def exec_go_local(
 
 
 def check_reach_wp(
-    conn: mavutil.mavlink_connection,
+    conn: mavutil.mavfile,
     verbose: int,
     wp: np.ndarray = np.array([0, 0, 10]),
     wp_margin=0.5,
@@ -107,3 +109,7 @@ def make_go_to(
         is_improv=is_improv,
     )
     return goto_step
+
+
+def fmt(wp: NDArray[np.float64]):
+    return tuple(int(x) if float(x).is_integer() else round(float(x), 2) for x in wp)

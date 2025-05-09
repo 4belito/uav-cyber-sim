@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 from typing import Optional
 
 import numpy as np
+from numpy.typing import NDArray
 
 from plan.actions import (
     make_arm,
@@ -98,14 +101,14 @@ class Plan(Action):
     @classmethod
     def basic(
         cls,
-        wps: np.ndarray = np.array([[0, 0, 5]]),
+        wps: Optional[NDArray[np.float64]] = np.array([[0, 0, 5]]),
         wp_margin: float = 0.5,
         navegation_speed: float = 5,
         name: str = "basic",
         mode: PlanMode = PlanMode.STATIC,
-        dynamic_wps: Optional[np.ndarray] = None,
-        takeoof_alt=1,
-    ):
+        dynamic_wps: Optional[NDArray[np.float64]] = None,
+        takeoff_alt=1,
+    ) -> Plan:
         land_wp = wps[-1].copy()
         land_wp[2] = 0
         plan = cls(name=name, mode=mode, dynamic_wps=dynamic_wps, wp_margin=wp_margin)
@@ -114,7 +117,7 @@ class Plan(Action):
         if navegation_speed != 5:
             plan.add(make_change_nav_speed(speed=navegation_speed))
         plan.add(make_arm())
-        plan.add(make_takeoff(altitude=takeoof_alt))
+        plan.add(make_takeoff(altitude=takeoff_alt))
         plan.add(make_path(wps=wps, wp_margin=wp_margin))
 
         plan.add(make_land(final_wp=land_wp))

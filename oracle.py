@@ -1,11 +1,12 @@
-from typing import Dict, List
+# type: ignore
 
+from typing import Dict, List
 import numpy as np
 from pymavlink import mavutil
 from pymavlink.dialects.v20 import common as mavlink2
 
 from config import GCS_BASE_PORT, ORC_BASE_PORT
-from helpers.change_coordinates import global2local, local2global
+from helpers.change_coordinates import global2local, local2global, Position
 from plan.actions import get_local_position
 from vehicle_logic import Neighbors, VehicleLogic
 
@@ -19,23 +20,22 @@ offsets = [  # east, north, up, heading
 ]
 homes = np.array([offset[:3] for offset in offsets])
 
+
 ##################################
-
-
 class Oracle:
     """
     Oracle class for veh-veh communication and general simulation controls
     """
 
     def __init__(
-        self, sysids: List[int], name: str = "Oracle ⚪", base_port=ORC_BASE_PORT
+        self, sysids: List[int], name: str = "Oracle ⚪", base_port: int = ORC_BASE_PORT
     ) -> None:
-        self.pos: Dict[int, np.ndarray] = {}
-        self.conns: Dict[int, mavutil.mavlink_connection] = {}
+        self.pos: Dict[int, Position] = {}
+        self.conns: Dict[int, mavutil.mavfile] = {}
         for sysid in sysids:
             port = base_port + 10 * (sysid - 1)
-            conn = mavutil.mavlink_connection(f"udp:127.0.0.1:{port}")
-            conn.wait_heartbeat()
+            conn: mavutil.mavfile = mavutil.mavlink_connection(f"udp:127.0.0.1:{port}")  # type: ignore
+            conn.wait_heartbeat()  # type: ignore
             self.conns[sysid] = conn
             print(f"🔗 UAV logic {sysid} is connected to {name}")
 
@@ -46,12 +46,12 @@ class Oracle:
         del self.conns[sysid]
 
     def gather_broadcasts(self):
-        for sysid in self.conns.keys():
+        for sysid in self.conns:
             pos = self.get_global_pos(sysid)
             if pos is not None:
                 self.pos[sysid] = pos
 
-    def get_global_pos(self, sysid):
+    def get_global_pos(self, sysid: int):
         pos = get_local_position(self.conns[sysid])
         if pos is not None:
             pos = local2global(pos, homes[sysid - 1])

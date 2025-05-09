@@ -1,3 +1,26 @@
 {
-    "python.analysis.autoImportCompletions": true
+    // Existing completions (from previous step)...
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.useLibraryCodeForTypes": true,
+    "python.analysis.completeFunctionParens": true,
+    "python.languageServer": "Pylance",
+    "editor.parameterHints.enabled": true,
+    "editor.signatureHelp.enabled": true,
+    "editor.quickSuggestions": {
+        "other": true,
+        "comments": false,
+        "strings": false
+    },
+    "editor.suggestOnTriggerCharacters": true,
+    "editor.hover.enabled": true,
+    "python.analysis.typeCheckingMode": "strict", // ✅ Enables strict mode
+    // ✅ Enable warnings for missing parameter and return type annotations
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportMissingTypeStubs": "none", // optional: hide stub warnings
+        "reportMissingParameterType": "warning", // function/method param annotations
+        "reportMissingReturnType": "warning", // function/method return annotations
+        "reportMissingTypeArgument": "warning", // e.g., List[...] missing inner type
+        "reportUnknownParameterType": "warning", // inferred but unclear types
+        "reportUnknownVariableType": "warning"
+    }
 }

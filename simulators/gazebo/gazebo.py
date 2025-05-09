@@ -13,23 +13,28 @@ Main Features:
 
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 import os
 from pathlib import Path
 import re
 import shutil
 import subprocess
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 import xml.etree.ElementTree as ET
+import plotly.graph_objects as go
+
 
 import numpy as np
+from numpy.typing import NDArray
 
 from config import ARDUPILOT_GAZEBO_MODELS, Color
-from helpers.change_coordinates import heading_to_yaw
+from helpers.change_coordinates import Offset, heading_to_yaw
 from plan import Plan
 from simulators.sim import Simulator, VisualizerName
 
-COLOR_MAP = {
+COLOR_MAP: Dict[Color, str] = {
     Color.BLUE: "0.0 0.0 1.0 1",
     Color.GREEN: "0.306 0.604 0.024 1",
     Color.RED: "0.8 0.0 0.0 1",
@@ -39,7 +44,26 @@ COLOR_MAP = {
 
 
 @dataclass
-class GazeboConfig:
+class WaypointMarker:
+    """
+    Defines a visual waypoint marker with position, color, size, and transparency
+    in Gazebo.
+    """
+
+    x: float
+    y: float
+    z: float
+    color: Color = Color.GREEN
+    radius: float = 0.2
+    alpha: float = 0.05
+
+
+TrajectoryMarker = List[WaypointMarker]
+Model = Tuple[str, Color]
+
+
+@dataclass
+class ConfigGazebo:
     """
     Configuration object for initializing the Gazebo simulator.
 
@@ -47,26 +71,35 @@ class GazeboConfig:
         world_path (str): Path to the base Gazebo world file.
         models (List[str]): List of base model names to use for each UAV.
         colors (List[str]): List of color names for each UAV.
-        markers (np.ndarray): Dictionary-like structure with marker positions and properties.
+        markers (np.ndarray): Dictionary-like structure with marker positions
+        and properties.
     """
 
     world_path: str
-    models: List[str]
-    colors: List[str]
-    markers: np.ndarray
+    models: List[Model]
+    markers: List[TrajectoryMarker]
 
+    @staticmethod
+    def create_trajectory_from_array(
+        array: NDArray[np.float64],
+        color: Color = Color.GREEN,
+        radius: float = 0.2,
+        alpha: float = 0.05,
+    ) -> TrajectoryMarker:
+        traj: List[WaypointMarker] = []
+        for row in array:
+            traj.append(
+                WaypointMarker(
+                    x=float(row[0]),
+                    y=float(row[1]),
+                    z=float(row[2]),
+                    color=color,
+                    radius=radius,
+                    alpha=alpha,
+                )
+            )
 
-@dataclass
-class Waypoint:
-    """Defines a visual waypoint marker with position, color, size, and transparency in Gazebo."""
-
-    name: str
-    x: float
-    y: float
-    z: float
-    color: str = Color.GREEN
-    radius: float = 0.2
-    alpha: float = 0.05
+        return traj
 
 
 @dataclass
@@ -88,23 +121,19 @@ class Gazebo(Simulator):
     It configures drone models, world markers, and coordinates with ArduPilot logic.
     """
 
-    def __init__(self, offsets: List[Tuple], plans: List[Plan], config: GazeboConfig):
+    def __init__(self, offsets: List[Offset], plans: List[Plan], config: ConfigGazebo):
         super().__init__(name=VisualizerName.GAZEBO, offsets=offsets, plans=plans)
-        self.add_info("models", config.models)
-        self.add_info("colors", config.colors)
-        self.add_info("markers", config.markers)
-        self.add_info("world_path", self._update_world(config.world_path))
+        self.config: ConfigGazebo = config
 
     def _add_vehicle_cmd_fn(self, i: int) -> str:
-        return f" -f gazebo-{self.info['models'][i]}"
+        return f" -f gazebo-{self.config.models[i][0]}"
 
     def _launch_visualizer(self) -> None:
-        base_models = [
-            f"{self.info['models'][i]}_{self.info['colors'][i]}"
-            for i in range(self.n_uavs)
-        ]
+        models = self.config.models
+        base_models = [f"{models[i][0]}_{models[i][1]}" for i in range(self.n_uavs)]
         self._generate_drone_models_from_bases(base_models, base_port_in=9002, step=10)
-        sim_cmd = ["gazebo", self.info["world_path"]]
+        updated_world = self._update_world(self.config.world_path)
+        sim_cmd = ["gazebo", updated_world]
         # pylint: disable=consider-using-with
         subprocess.Popen(
             sim_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=False
@@ -155,18 +184,14 @@ class Gazebo(Simulator):
             with open(sdf_path, "w", encoding="utf-8") as f:
                 f.write(sdf)
 
-    def _generate_drone_element(self, instance_name: str, pose: Pose) -> ET.Element:
-        model = ET.Element("model", name=instance_name)
-        ET.SubElement(model, "pose").text = f"{pose}"
-        include = ET.SubElement(model, "include")
-        ET.SubElement(include, "uri").text = f"model://{instance_name}"
-        return model
-
     def _update_world(self, world_path: str) -> str:
         updated_world_path = os.path.expanduser(world_path[:-6] + "_updated.world")
         tree = ET.parse(world_path)
         root = tree.getroot()
         world_elem = root.find("world")
+
+        if world_elem is None:
+            raise ValueError("Could not find 'world' element in the XML.")
 
         self._remove_old_models(world_elem)
         self._add_marker_elements(world_elem)
@@ -175,28 +200,28 @@ class Gazebo(Simulator):
         tree.write(updated_world_path)
         return updated_world_path
 
-    def _remove_old_models(self, world_elem) -> None:
+    def _remove_old_models(self, world_elem: ET.Element) -> None:
         for model in world_elem.findall("model"):
             model_name = model.attrib.get("name", "")
             if model_name in {"green_waypoint", "red_waypoint", "drone", "iris_demo"}:
                 world_elem.remove(model)
 
-    def _add_marker_elements(self, world_elem) -> None:
-        for marker_name, marker_data in self.info["markers"].items():
-            positions = marker_data.pop("pos")
-            for j, (x, y, z) in enumerate(positions):
-                waypoint = Waypoint(f"{marker_name}_{j}", x, y, z, **marker_data)
-                marker_elem = self._generate_waypoint_element(waypoint)
+    def _add_marker_elements(self, world_elem: ET.Element) -> None:
+        for i, traj in enumerate(self.config.markers):
+            for j, waypoint in enumerate(traj):
+                marker_elem = self._generate_waypoint_element(waypoint, i, j)
                 world_elem.append(marker_elem)
 
-    def _add_drone_elements(self, world_elem) -> None:
+    def _add_drone_elements(self, world_elem: ET.Element) -> None:
         for i, (x, y, z, heading) in enumerate(self.offsets):
             pose = Pose(x, y, z, 0, 0, heading_to_yaw(heading))
             drone_elem = self._generate_drone_element(f"drone{i + 1}", pose)
             world_elem.append(drone_elem)
 
-    def _generate_waypoint_element(self, w: Waypoint) -> ET.Element:
-        model = ET.Element("model", name=w.name)
+    def _generate_waypoint_element(
+        self, w: WaypointMarker, traj_id: int, way_id: int
+    ) -> ET.Element:
+        model = ET.Element("model", name=f"waypoint_{traj_id}.{way_id}")
         ET.SubElement(model, "pose").text = f"{w.x} {w.y} {w.z} 0 0 0"
         link = ET.SubElement(model, "link", name="link")
 
@@ -247,3 +272,76 @@ class Gazebo(Simulator):
         ET.SubElement(model, "allow_auto_disable").text = "1"
 
         return model
+
+    def _generate_drone_element(self, instance_name: str, pose: Pose) -> ET.Element:
+        model = ET.Element("model", name=instance_name)
+        ET.SubElement(model, "pose").text = f"{pose}"
+        include = ET.SubElement(model, "include")
+        ET.SubElement(include, "uri").text = f"model://{instance_name}"
+        return model
+
+    @staticmethod
+    def plot_3d_interactive(
+        markers: List[TrajectoryMarker],
+        title: str = "title",
+        frames: Tuple[float, float, float] = (0.2, 0.2, 0.2),
+        ground: float | None = 0,
+    ):
+        # Create a list to store all waypoints
+        data: List[go.Scatter3d] = []
+        all_x: List[float] = []
+        all_y: List[float] = []
+        all_z: List[float] = []
+        for i, traj in enumerate(markers):
+            xs: List[float] = []
+            ys: List[float] = []
+            zs: List[float] = []
+            colors: List[Color] = []
+            for w in traj:
+                xs.append(w.x)
+                ys.append(w.y)
+                zs.append(w.z)
+                colors.append(w.color)
+            # Add a scatter plot for each marker set
+            trace = go.Scatter3d(
+                x=xs,
+                y=ys,
+                z=zs,
+                mode="markers",
+                marker=dict(size=6, color=colors),
+                name=f"trajectory {i}",
+            )
+            data.append(trace)
+            all_x += xs
+            all_y += ys
+            all_z += zs
+
+        # Compute axis limits with scaling
+        plot_limits = [
+            (min(all_x), max(all_x)),
+            (min(all_y), max(all_y)),
+            (min(all_z), max(all_z)),
+        ]
+        ranges = [
+            [m - frames[i] * (M - m), M + frames[i] * (M - m)]
+            for i, (m, M) in enumerate(plot_limits)
+        ]
+        if ground is not None:
+            ranges[2][0] = ground
+        # Create figure with all markers
+        fig = go.Figure(data=data)
+        fig.update_layout(  # type: ignore
+            title=dict(text=title, x=0.5, xanchor="center"),  # Centers the title
+            scene=dict(
+                xaxis_title="x",
+                yaxis_title="y",
+                zaxis_title="z",
+                xaxis=dict(range=ranges[0]),
+                yaxis=dict(range=ranges[1]),
+                zaxis=dict(range=ranges[2]),
+            ),
+            width=800,  # Adjust figure size
+            height=600,
+        )
+        fig.update_layout(showlegend=True)  # type: ignore
+        fig.show()  # type: ignore # Display the interactive plot

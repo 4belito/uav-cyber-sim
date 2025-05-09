@@ -6,14 +6,22 @@ QGroundControl and configures it to connect to multiple ArduPilot UAV instances 
 It modifies the QGroundControl.ini file to set up connection links for each UAV.
 """
 
+from dataclasses import dataclass
 import os
 import subprocess
-from typing import List, Tuple
+from typing import List
 
 from config import QGC_INI_PATH, QGC_PATH
-from helpers.change_coordinates import find_spawns
+from helpers.change_coordinates import Offset, find_spawns
 from plan import Plan
 from simulators.sim import Simulator, VisualizerName
+
+
+@dataclass
+class ConfigQGroundControl:
+    def __init__(self, offsets: List[Offset], origin: Offset):
+        self.origin = origin
+        self.spawns = find_spawns(origin, offsets)
 
 
 class QGC(Simulator):
@@ -30,13 +38,12 @@ class QGC(Simulator):
         origin (Tuple): The geographic origin used to compute the UAV spawn positions.
     """
 
-    def __init__(self, offsets: List[Tuple], plans: List[Plan], origin: Tuple):
+    def __init__(self, offsets: List[Offset], plans: List[Plan], origin: Offset):
         super().__init__(name=VisualizerName.QGROUND, offsets=offsets, plans=plans)
-        self.add_info("origin", origin)
-        self.add_info("spawns", find_spawns(origin, offsets))
+        self.confg: ConfigQGroundControl = ConfigQGroundControl(offsets, origin)
 
-    def _add_vehicle_cmd_fn(self, i):
-        spawn_str = ",".join(map(str, self.info["spawns"][i]))
+    def _add_vehicle_cmd_fn(self, i: int):
+        spawn_str = ",".join(map(str, self.confg.spawns[i]))
         return f" --custom-location={spawn_str}"
 
     def _launch_visualizer(self):
@@ -87,7 +94,7 @@ class QGC(Simulator):
                 count = 0
 
         # Prepare new link entries
-        new_lines = []
+        new_lines: List[str] = []
         for i in range(n):
             idx = count + i
             port = start_port + step * i
@@ -114,7 +121,7 @@ class QGC(Simulator):
             lines = f.readlines()
 
         inside_links = False
-        new_lines = []
+        new_lines: List[str] = []
 
         for line in lines:
             if line.strip() == "[LinkConfigurations]":

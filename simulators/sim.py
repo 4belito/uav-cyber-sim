@@ -5,14 +5,17 @@ Simulation script that launches the full setup:
 3. Optionally a simulator (None, QGroundControl, or Gazebo)
 """
 
+from __future__ import annotations
+
 from enum import Enum
+from pathlib import Path
 import platform
-import subprocess
-from typing import Dict, List, Optional, Tuple
+from subprocess import Popen
+from typing import Any, List
 
 from config import ARDUPILOT_VEHICLE_PATH, LOGS_PATH, PARAMS_PATH
+from helpers.change_coordinates import Offset
 from plan import Plan
-from vehicle_logic import VehicleLogic
 
 
 class VisualizerName(str, Enum):
@@ -21,9 +24,6 @@ class VisualizerName(str, Enum):
     NONE = "none"
     QGROUND = "qgroundcontrol"
     GAZEBO = "gazebo"
-
-
-Offset = Tuple[float, float, float, float]
 
 
 class Simulator:
@@ -39,17 +39,17 @@ class Simulator:
     def __init__(
         self,
         name: VisualizerName = VisualizerName.NONE,
-        offsets: Optional[List[Offset]] = None,
-        plans: Optional[List[Plan]] = None,
+        offsets: List[Offset] | None = None,
+        plans: List[Plan] | None = None,
     ):
         self.name = name
-        self.info: Dict[str, object] = {}
+        self.config: Any | None = None
         self.offsets: List[Offset] = offsets or [(0, 0, 0, 0)]
         self.n_uavs: int = len(self.offsets)
-        self.ardu_path: str = ARDUPILOT_VEHICLE_PATH
+        self.ardu_path: Path = ARDUPILOT_VEHICLE_PATH
         self.plans: List[Plan] = plans or [Plan.basic()]
 
-    def launch(self) -> List[VehicleLogic]:
+    def launch(self) -> None:
         """Launches vehicle instances and the optional simulator."""
         self.launch_vehicles()
         self._launch_visualizer()
@@ -70,21 +70,17 @@ class Simulator:
             p = self.create_process(logic_cmd, after="exit", visible=True)
             print(f"🚀 Vehicle {sysid} logic launched (PID {p.pid})")
 
-    def _add_vehicle_cmd_fn(self, i: int) -> str:
-        """Hook to be overridden by subclasses for additional command-line args."""
-        raise NotImplementedError("This method should be implemented in a subclass")
+    def _add_vehicle_cmd_fn(self, _i: int) -> str:
+        """Optional hook to additional command-line args."""
+        return ""
 
     def _launch_visualizer(self) -> None:
         """Optional hook to launch a visual simulator or GUI application."""
-        print("ℹ️  Running without a simulator.")
-
-    def add_info(self, key: str, value: object) -> None:
-        """Store arbitrary metadata about the simulation run."""
-        self.info[key] = value
+        print("ℹ️  Running without visualization.")
 
     def create_process(
         self, cmd: str, after: str = "exit", visible: bool = True
-    ) -> subprocess.Popen:
+    ) -> Popen[bytes]:
         """
         Launch a subprocess, optionally in a visible terminal.
 
@@ -98,11 +94,9 @@ class Simulator:
         """
         if visible:
             if platform.system() == "Linux":
-                return subprocess.Popen(
-                    ["gnome-terminal", "--", "bash", "-c", f"{cmd}; {after}"]
-                )
+                return Popen(["gnome-terminal", "--", "bash", "-c", f"{cmd}; {after}"])
             raise OSError("Unsupported OS for visible terminal mode.")
-        return subprocess.Popen(cmd.split())
+        return Popen(cmd.split())
 
     def __repr__(self) -> str:
-        return f"name='{self.name}'\noffsets={self.offsets}\ninfo={self.info}"
+        return f"name='{self.name}'\noffsets={self.offsets}\nconfig={self.config}"
