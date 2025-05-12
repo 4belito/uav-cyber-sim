@@ -30,7 +30,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from config import ARDUPILOT_GAZEBO_MODELS, Color
-from helpers.change_coordinates import Offset, heading_to_yaw
+from helpers.change_coordinates import Offset, Position, heading_to_yaw
 from plan import Plan
 from simulators.sim import Simulator, VisualizerName
 
@@ -50,9 +50,7 @@ class WaypointMarker:
     in Gazebo.
     """
 
-    x: float
-    y: float
-    z: float
+    pos: Position
     color: Color = Color.GREEN
     radius: float = 0.2
     alpha: float = 0.05
@@ -65,14 +63,7 @@ Model = Tuple[str, Color]
 @dataclass
 class ConfigGazebo:
     """
-    Configuration object for initializing the Gazebo simulator.
-
-    Attributes:
-        world_path (str): Path to the base Gazebo world file.
-        models (List[str]): List of base model names to use for each UAV.
-        colors (List[str]): List of color names for each UAV.
-        markers (np.ndarray): Dictionary-like structure with marker positions
-        and properties.
+    Creates a trajectory from an (N, 3) array of waypoints as WaypointMarker objects.
     """
 
     world_path: str
@@ -86,13 +77,15 @@ class ConfigGazebo:
         radius: float = 0.2,
         alpha: float = 0.05,
     ) -> TrajectoryMarker:
+        """
+        Creates a trajectory from an (N, 3) array of waypoints as
+        WaypointMarker objects.
+        """
         traj: List[WaypointMarker] = []
         for row in array:
             traj.append(
                 WaypointMarker(
-                    x=float(row[0]),
-                    y=float(row[1]),
-                    z=float(row[2]),
+                    pos=tuple(row),
                     color=color,
                     radius=radius,
                     alpha=alpha,
@@ -104,6 +97,10 @@ class ConfigGazebo:
 
 @dataclass
 class Pose:
+    """
+    Represents a 3D pose with position (x, y, z) and orientation (roll, pitch, yaw).
+    """
+
     x: float
     y: float
     z: float
@@ -134,8 +131,7 @@ class Gazebo(Simulator):
         self._generate_drone_models_from_bases(base_models, base_port_in=9002, step=10)
         updated_world = self._update_world(self.config.world_path)
         sim_cmd = ["gazebo", updated_world]
-        # pylint: disable=consider-using-with
-        subprocess.Popen(
+        subprocess.Popen(  # pylint: disable=consider-using-with
             sim_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=False
         )
 
@@ -222,7 +218,8 @@ class Gazebo(Simulator):
         self, w: WaypointMarker, traj_id: int, way_id: int
     ) -> ET.Element:
         model = ET.Element("model", name=f"waypoint_{traj_id}.{way_id}")
-        ET.SubElement(model, "pose").text = f"{w.x} {w.y} {w.z} 0 0 0"
+        x, y, z = w.pos
+        ET.SubElement(model, "pose").text = f"{x} {y} {z} 0 0 0"
         link = ET.SubElement(model, "link", name="link")
 
         inertial = ET.SubElement(link, "inertial")
@@ -286,23 +283,37 @@ class Gazebo(Simulator):
         title: str = "title",
         frames: Tuple[float, float, float] = (0.2, 0.2, 0.2),
         ground: float | None = 0,
-    ):
-        # Create a list to store all waypoints
+    ) -> None:
+        data, all_x, all_y, all_z = Gazebo._extract_plot_data(markers)
+        ranges = Gazebo._compute_ranges(all_x, all_y, all_z, frames, ground)
+        fig: go.Figure = go.Figure(data)
+        fig.update_layout(  # type: ignore[reportUnknownMemberType]
+            title=dict(text=title, x=0.5, xanchor="center"),
+            scene=dict(
+                xaxis=dict(title="x", range=ranges[0]),
+                yaxis=dict(title="y", range=ranges[1]),
+                zaxis=dict(title="z", range=ranges[2]),
+            ),
+            width=800,
+            height=600,
+            showlegend=True,
+        )
+        fig.show()  # type: ignore
+
+    @staticmethod
+    def _extract_plot_data(
+        markers: List[TrajectoryMarker],
+    ) -> Tuple[List[go.Scatter3d], List[float], List[float], List[float]]:
         data: List[go.Scatter3d] = []
         all_x: List[float] = []
         all_y: List[float] = []
         all_z: List[float] = []
+
         for i, traj in enumerate(markers):
-            xs: List[float] = []
-            ys: List[float] = []
-            zs: List[float] = []
-            colors: List[Color] = []
-            for w in traj:
-                xs.append(w.x)
-                ys.append(w.y)
-                zs.append(w.z)
-                colors.append(w.color)
-            # Add a scatter plot for each marker set
+            if not traj:
+                continue
+            pos_color = ((w.pos[0], w.pos[1], w.pos[2], w.color) for w in traj)
+            xs, ys, zs, colors = map(list, zip(*pos_color))
             trace = go.Scatter3d(
                 x=xs,
                 y=ys,
@@ -316,32 +327,24 @@ class Gazebo(Simulator):
             all_y += ys
             all_z += zs
 
-        # Compute axis limits with scaling
-        plot_limits = [
-            (min(all_x), max(all_x)),
-            (min(all_y), max(all_y)),
-            (min(all_z), max(all_z)),
-        ]
-        ranges = [
-            [m - frames[i] * (M - m), M + frames[i] * (M - m)]
-            for i, (m, M) in enumerate(plot_limits)
-        ]
+        return data, all_x, all_y, all_z
+
+    @staticmethod
+    def _compute_ranges(
+        all_x: List[float],
+        all_y: List[float],
+        all_z: List[float],
+        frames: Tuple[float, float, float],
+        ground: float | None,
+    ) -> List[List[float]]:
+        def scale(values: List[float], f: float) -> List[float]:
+            vmin, vmax = min(values), max(values)
+            margin = f * (vmax - vmin)
+            return [vmin - margin, vmax + margin]
+
+        x_range = scale(all_x, frames[0])
+        y_range = scale(all_y, frames[1])
+        z_range = scale(all_z, frames[2])
         if ground is not None:
-            ranges[2][0] = ground
-        # Create figure with all markers
-        fig = go.Figure(data=data)
-        fig.update_layout(  # type: ignore
-            title=dict(text=title, x=0.5, xanchor="center"),  # Centers the title
-            scene=dict(
-                xaxis_title="x",
-                yaxis_title="y",
-                zaxis_title="z",
-                xaxis=dict(range=ranges[0]),
-                yaxis=dict(range=ranges[1]),
-                zaxis=dict(range=ranges[2]),
-            ),
-            width=800,  # Adjust figure size
-            height=600,
-        )
-        fig.update_layout(showlegend=True)  # type: ignore
-        fig.show()  # type: ignore # Display the interactive plot
+            z_range[0] = ground
+        return [x_range, y_range, z_range]

@@ -88,7 +88,7 @@ class Oracle:
     #     print(msg)
     #     return msg and msg.get_type() == "STATUSTEXT" and msg.text == "DONE"
 
-    def is_plan_done(self, sysid):
+    def is_plan_done(self, sysid: int) -> bool:
         """
         Listen for a STATUSTEXT("DONE") message and respond with COMMAND_ACK.
         """

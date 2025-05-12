@@ -2,6 +2,7 @@ import math
 from typing import List, Tuple
 
 import numpy as np
+from numpy.typing import NDArray
 from pymavlink import mavextra
 
 Offset = Tuple[float, float, float, float]
@@ -16,8 +17,8 @@ def GLOBAL_switch_LOCAL_NED(x: float, y: float, z: float) -> tuple:
     return (x, -y, -z)
 
 
-def local2global(positions: Position, homes: Position):
-    return np.asarray(positions) + np.asarray(homes)
+def local2global(positions: NDArray[np.float64], home: Position):
+    return positions + np.asarray(home)
 
 
 def local2global_broadcast(positions: Position, homes: Position):

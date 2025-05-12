@@ -248,7 +248,7 @@ class Action(MissionElement):
         # change the action state to no statrted
         super().reset()
 
-    def bind(self, connection: mavutil.mavlink_connection, verbose: int = 1) -> None:
+    def bind(self, connection: mavutil.mavfile, verbose: int = 1) -> None:
         for step in self.steps:
             step.bind(connection, verbose)
         super().bind(connection, verbose)

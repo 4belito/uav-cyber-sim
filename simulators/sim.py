@@ -28,7 +28,8 @@ class VisualizerName(str, Enum):
 
 class Simulator:
     """
-    Base simulator class to manage UAV vehicle processes and optional external simulators.
+    Base simulator class to manage UAV vehicle processes and optional external
+    simulators.
 
     Args:
         name (VisualizerName): Type of simulator to use.

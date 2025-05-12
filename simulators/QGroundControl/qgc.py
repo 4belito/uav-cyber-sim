@@ -19,6 +19,10 @@ from simulators.sim import Simulator, VisualizerName
 
 @dataclass
 class ConfigQGroundControl:
+    """
+    Handles QGroundControl configuration based on UAV offsets and origin.
+    """
+
     def __init__(self, offsets: List[Offset], origin: Offset):
         self.origin = origin
         self.spawns = find_spawns(origin, offsets)
