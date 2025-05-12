@@ -1,3 +1,8 @@
+"""
+Utility functions for coordinate transformations between local NED and global GPS
+frames.
+"""
+
 import math
 from typing import List, Tuple
 
@@ -13,24 +18,29 @@ def heading_to_yaw(heading_deg: float) -> float:
     return -math.radians(heading_deg)
 
 
-def GLOBAL_switch_LOCAL_NED(x: float, y: float, z: float) -> tuple:
+def global_switch_local_ned(pos: Position) -> Position:
+    x, y, z = pos
     return (x, -y, -z)
 
 
-def local2global(positions: NDArray[np.float64], home: Position):
+def local2global(positions: NDArray[np.float64], home: Position) -> NDArray[np.float64]:
     return positions + np.asarray(home)
 
 
-def local2global_broadcast(positions: Position, homes: Position):
-    return np.asarray(positions)[None, :, :] + np.asarray(homes)[:, None, :]
+def local2global_batch(
+    positions: NDArray[np.float64], homes: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    return positions[None, :, :] + homes[:, None, :]
 
 
-def global2local(positions: Position, homes: Position):
-    return np.asarray(positions) - np.asarray(homes)
+def global2local(positions: NDArray[np.float64], home: Position) -> NDArray[np.float64]:
+    return positions - np.asarray(home)
 
 
-def global2local_broadcast(positions: Position, homes: Position):
-    return np.asarray(positions)[None, :, :] - np.asarray(homes)[:, None, :]
+def global2local_batch(
+    positions: NDArray[np.float64], homes: NDArray[np.float64]
+) -> NDArray[np.float64]:
+    return positions[None, :, :] - homes[:, None, :]
 
 
 ## Taken from sim_vehicle.py

@@ -1,14 +1,13 @@
 import numpy as np
+from numpy.typing import NDArray
 
 
-def manhattan_distance(x: np.ndarray, y: np.ndarray) -> np.ndarray:
+def manhattan_distance(
+    x: NDArray[np.float64], y: NDArray[np.float64]
+) -> float | NDArray[np.float64]:
     """
-    Compute Manhattan distance between:
-    - Two vectors (returns a float)
-    - A set of vectors (returns an array of floats)
+    Compute the Manhattan distance between:
+    - Two vectors → returns a float
+    - Two arrays → returns an array of floats
     """
-
-    distances = np.sum(np.abs(x - y), axis=-1)
-
-    # Ensure float output for single distance
-    return distances.item() if distances.shape == () else distances
+    return np.sum(np.abs(x - y), axis=-1).squeeze()

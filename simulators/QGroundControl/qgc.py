@@ -27,6 +27,9 @@ class ConfigQGroundControl:
         self.origin = origin
         self.spawns = find_spawns(origin, offsets)
 
+    def __repr__(self):
+        return f"Origin={self.origin}, Spawns={self.spawns}"
+
 
 class QGC(Simulator):
     """
@@ -36,18 +39,14 @@ class QGC(Simulator):
     for monitoring and interacting with multiple UAVs. It automatically updates the
     QGroundControl.ini file to add or remove TCP link configurations.
 
-    Args:
-        offsets (List[Tuple]): Spawn offsets for each UAV (x, y, z, heading).
-        plans (List[Plan]): Mission plans for each UAV.
-        origin (Tuple): The geographic origin used to compute the UAV spawn positions.
     """
 
     def __init__(self, offsets: List[Offset], plans: List[Plan], origin: Offset):
         super().__init__(name=VisualizerName.QGROUND, offsets=offsets, plans=plans)
-        self.confg: ConfigQGroundControl = ConfigQGroundControl(offsets, origin)
+        self.config: ConfigQGroundControl = ConfigQGroundControl(offsets, origin)
 
     def _add_vehicle_cmd_fn(self, i: int):
-        spawn_str = ",".join(map(str, self.confg.spawns[i]))
+        spawn_str = ",".join(map(str, self.config.spawns[i]))
         return f" --custom-location={spawn_str}"
 
     def _launch_visualizer(self):

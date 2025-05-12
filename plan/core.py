@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import Callable, List, Optional, Union
+from enum import Enum
+from typing import Callable, List, Optional, Self, cast
 
-import numpy as np
-from pymavlink import mavutil
+from helpers.change_coordinates import Position
+from plan.mav_helpres import MAVConnection
 
 DEBUG = False
 
@@ -23,7 +24,7 @@ state_symbols = {
 }
 
 
-class ActionNames:
+class ActionNames(str, Enum):
     PREARM = "PREARM"
     ARM = "ARM"
     TAKEOFF = "TAKEOFF"
@@ -34,9 +35,14 @@ class ActionNames:
 
 
 class StepFailed(Exception):
-    """Raised when a step fails due to known issues (like battery too low, GPS not ready, etc)."""
+    """
+    Raised when a step fails due to known issues (like battery too low, GPS not
+    ready, etc).
+    """
 
-    pass
+
+class NoConnectionError(StepFailed):
+    """Raised when a mission element tries to act without a MAVLink connection."""
 
 
 class MissionElement:
@@ -50,12 +56,12 @@ class MissionElement:
         self.state = State.NOT_STARTED
 
         ## Building properties
-        self.prev = None
-        self.next = None
+        self.prev: Self | None = None
+        self.next: Self | None = None
 
         ## live property(after building)
-        self.conn: mavutil.mavlink_connection = None
-        self.verbose = None
+        self.conn: MAVConnection = cast(MAVConnection, None)
+        self.verbose: int = 1
 
     def act(self):
         pass
@@ -67,7 +73,7 @@ class MissionElement:
         symbol = state_symbols.get(self.state, "❔")
         return f"{symbol} <{self.__class__.__name__} '{self.emoji} {self.name}'>"
 
-    def bind(self, connection: mavutil.mavlink_connection, verbose: int = 1) -> None:
+    def bind(self, connection: MAVConnection, verbose: int = 1) -> None:
         self.conn = connection  # Set later from the parent Action
         self.verbose = verbose
         if self.verbose > 2:
@@ -76,37 +82,32 @@ class MissionElement:
             )
 
 
+def _noop_exec(_: MAVConnection) -> None:
+    pass
+
+
 class Step(MissionElement):
     def __init__(
         self,
         name: str,
         onair: bool,
-        check_fn: Callable[[mavutil.mavlink_connection, bool], bool],
-        exec_fn: Optional[Callable[[mavutil.mavlink_connection, bool], None]] = None,
-        target_pos: np.ndarray = np.zeros(3),
+        check_fn: Callable[[MAVConnection, int], tuple[bool, Optional[Position]]],
+        exec_fn: Optional[Callable[[MAVConnection], None]] = None,
+        target_pos: Position = (0, 0, 0),
         emoji: str = "🔹",
-        is_improv=False,
+        is_improv: bool = False,
     ) -> None:
-        self.exec_fn = exec_fn or (lambda conn: None)
-        self.check_fn = check_fn
-        self.curr_pos = None
+        self.exec_fn: Callable[[MAVConnection], None] = exec_fn or _noop_exec
+        self.check_fn: Callable[
+            [MAVConnection, int], tuple[bool, Optional[Position]]
+        ] = check_fn
+        self.curr_pos: Optional[Position] = None
         self.onair = onair
         self.target_pos = target_pos
         super().__init__(name=name, emoji=emoji, is_improv=is_improv)
 
     def execute(self) -> None:
         class_name = self.__class__.__name__
-        # try:
-        #     self.exec_fn(self.conn)
-        #     print(
-        #         f"Vehicle {self.conn.target_system}: ▶️ {class_name} Started: {self.name}"
-        #     )
-        #     self.state = State.IN_PROGRESS
-        # except Exception as e:
-        #     print(
-        #         f"Vehicle {self.conn.target_system}: ❌ {class_name} '{self.name}' execution failed: {e}"
-        #     )
-        #     self.state = State.FAILED
         self.exec_fn(self.conn)
         if self.verbose:
             print(
@@ -116,20 +117,6 @@ class Step(MissionElement):
 
     def check(self) -> None:
         class_name = self.__class__.__name__
-        # try:
-        #     answer, curr_pos = self.check_fn(self.conn)
-        #     if curr_pos is not None:
-        #         self.curr_pos = curr_pos
-        #     if answer:
-        #         print(
-        #             f"Vehicle {self.conn.target_system}: ✅ {class_name} Done: {self.name}"
-        #         )
-        #         self.state = State.DONE
-        # except StepFailed as e:
-        #     print(
-        #         f"Vehicle {self.conn.target_system}: ❌ {class_name} '{self.name}' check failed: {e}"
-        #     )
-        #     self.state = State.FAILED
         answer, curr_pos = self.check_fn(self.conn, self.verbose)
         if curr_pos is not None:
             self.curr_pos = curr_pos
@@ -160,19 +147,19 @@ class Action(MissionElement):
         self,
         name: ActionNames,
         emoji: str = "🔘",
-        onair: bool = None,
-        curr_pos: np.ndarray = None,
-        target_pos: np.ndarray = None,
+        onair: bool | None = None,
+        curr_pos: Position | None = None,
+        target_pos: Position | None = None,
         is_improv: bool = False,
     ) -> None:
-        self.steps: List[Union[Step, Action]] = []
-        self.current: Optional[Union[Step, Action]] = None
-        self.onair: bool = onair
-        self.curr_pos: np.ndarray = curr_pos
-        self.target_pos: np.ndarray = target_pos
+        self.steps: List[Step] = []
+        self.current: Step | None = None
+        self.onair = onair
+        self.curr_pos = curr_pos
+        self.target_pos = target_pos
         super().__init__(name=name, emoji=emoji, is_improv=is_improv)  # ✅ no-op
 
-    def add(self, step: Union[Step, Action]) -> None:
+    def add(self, step: Step) -> None:
         """
         Adds a Step or Action to this Action/Plan.
         Maintains chaining via `next` and updates current element.
@@ -184,8 +171,7 @@ class Action(MissionElement):
         if not self.current:
             self.current = step
             self.onair = step.onair
-        if step.target_pos is not None:
-            self.target_pos = step.target_pos
+        self.target_pos = step.target_pos
 
     def act(self):
         class_name = self.__class__.__name__
@@ -235,10 +221,6 @@ class Action(MissionElement):
         if step.curr_pos is not None:
             self.curr_pos = step.curr_pos
 
-    def run_all(self):
-        while self.state != State.DONE and self.state != State.FAILED:
-            self.run()
-
     def reset(self) -> None:
         # Change the stated of the steps to no started
         for step in self.steps:
@@ -248,7 +230,7 @@ class Action(MissionElement):
         # change the action state to no statrted
         super().reset()
 
-    def bind(self, connection: mavutil.mavfile, verbose: int = 1) -> None:
+    def bind(self, connection: MAVConnection, verbose: int = 1) -> None:
         for step in self.steps:
             step.bind(connection, verbose)
         super().bind(connection, verbose)
@@ -264,7 +246,7 @@ class Action(MissionElement):
             output.append(indented)
         return "\n".join(output)
 
-    def add_next(self, new_step: Union[Step, Action]) -> None:
+    def add_next(self, new_step: Step) -> None:
         """
         Inserts a new step/action immediately after the current step.
         Maintains chaining and updates the 'next' pointers accordingly.
@@ -286,7 +268,7 @@ class Action(MissionElement):
         current_index = self.steps.index(self.current)
         self.steps.insert(current_index + 1, new_step)
 
-    def add_prev(self, new_step: Union[Step, Action]) -> None:
+    def add_prev(self, new_step: Step) -> None:
         """
         Inserts a new step/action immediately before the current step.
         Maintains chaining and updates the 'next' pointers accordingly.
@@ -307,12 +289,12 @@ class Action(MissionElement):
         current_index = self.steps.index(self.current)
         self.steps.insert(current_index, new_step)
 
-    def add_over(self, new_step: Union[Step, Action]) -> None:
+    def add_over(self, new_step: Step) -> None:
         self.add_next(new_step)
-        self.current.state = State.DONE
+        self.current.state = State.DONE  # type: ignore[union-attr]
         self.current = new_step
 
-    def add_now(self, new_step: Union[Step, Action]) -> None:
+    def add_now(self, new_step: Step) -> None:
         self.add_prev(new_step)
-        self.current.reset()
+        self.current.reset()  # type: ignore[union-attr]
         self.current = new_step

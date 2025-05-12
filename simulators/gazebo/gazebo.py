@@ -23,11 +23,10 @@ import shutil
 import subprocess
 from typing import Dict, List, Tuple
 import xml.etree.ElementTree as ET
-import plotly.graph_objects as go
-
 
 import numpy as np
 from numpy.typing import NDArray
+import plotly.graph_objects as go
 
 from config import ARDUPILOT_GAZEBO_MODELS, Color
 from helpers.change_coordinates import Offset, Position, heading_to_yaw
@@ -55,6 +54,12 @@ class WaypointMarker:
     radius: float = 0.2
     alpha: float = 0.05
 
+    def __repr__(self) -> str:
+        return (
+            f"WaypointMarker(pos={self.pos}, color='{self.color}', "
+            f"radius={self.radius}, alpha={self.alpha})"
+        )
+
 
 TrajectoryMarker = List[WaypointMarker]
 Model = Tuple[str, Color]
@@ -70,6 +75,9 @@ class ConfigGazebo:
     models: List[Model]
     markers: List[TrajectoryMarker]
 
+    def __str__(self):
+        return f"world_path={self.world_path}, models={self.models}, markers={self.markers}"
+
     @staticmethod
     def create_trajectory_from_array(
         array: NDArray[np.float64],
@@ -83,9 +91,10 @@ class ConfigGazebo:
         """
         traj: List[WaypointMarker] = []
         for row in array:
+            x, y, z = row
             traj.append(
                 WaypointMarker(
-                    pos=tuple(row),
+                    pos=(float(x), float(y), float(z)),
                     color=color,
                     radius=radius,
                     alpha=alpha,
@@ -222,7 +231,20 @@ class Gazebo(Simulator):
         ET.SubElement(model, "pose").text = f"{x} {y} {z} 0 0 0"
         link = ET.SubElement(model, "link", name="link")
 
+        self._add_inertial(link)
+        self._add_link_flags(link)
+        ET.SubElement(link, "pose").text = "0 0 0 0 -0 0"
+
+        visual = ET.SubElement(link, "visual", name="visual")
+        self._add_visual(visual, w)
+
+        ET.SubElement(model, "static").text = "0"
+        ET.SubElement(model, "allow_auto_disable").text = "1"
+        return model
+
+    def _add_inertial(self, link: ET.Element) -> None:
         inertial = ET.SubElement(link, "inertial")
+        inertia = ET.SubElement(inertial, "inertia")
         for tag, value in {
             "mass": "1",
             "ixx": "0.1",
@@ -232,17 +254,15 @@ class Gazebo(Simulator):
             "iyz": "0",
             "izz": "0.1",
         }.items():
-            if tag == "mass":
-                ET.SubElement(inertial, tag).text = value
-            else:
-                ET.SubElement(ET.SubElement(inertial, "inertia"), tag).text = value
+            target = inertial if tag == "mass" else inertia
+            ET.SubElement(target, tag).text = value
         ET.SubElement(inertial, "pose").text = "0 0 0 0 -0 0"
 
+    def _add_link_flags(self, link: ET.Element) -> None:
         for tag in ["self_collide", "enable_wind", "kinematic", "gravity"]:
             ET.SubElement(link, tag).text = "0"
-        ET.SubElement(link, "pose").text = "0 0 0 0 -0 0"
 
-        visual = ET.SubElement(link, "visual", name="visual")
+    def _add_visual(self, visual: ET.Element, w: WaypointMarker) -> None:
         geometry = ET.SubElement(visual, "geometry")
         sphere = ET.SubElement(geometry, "sphere")
         ET.SubElement(sphere, "radius").text = str(w.radius)
@@ -264,11 +284,6 @@ class Gazebo(Simulator):
         ET.SubElement(visual, "pose").text = "0 0 0 0 -0 0"
         ET.SubElement(visual, "transparency").text = str(w.alpha)
         ET.SubElement(visual, "cast_shadows").text = "1"
-
-        ET.SubElement(model, "static").text = "0"
-        ET.SubElement(model, "allow_auto_disable").text = "1"
-
-        return model
 
     def _generate_drone_element(self, instance_name: str, pose: Pose) -> ET.Element:
         model = ET.Element("model", name=instance_name)

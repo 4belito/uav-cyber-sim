@@ -6,7 +6,7 @@ import numpy as np
 from numpy.typing import NDArray
 from pymavlink import mavutil
 
-from helpers.change_coordinates import GLOBAL_switch_LOCAL_NED
+from helpers.change_coordinates import Position, global_switch_local_ned
 from plan.core import Action, ActionNames, Step
 
 TYPE_MASK = int(0b110111111000)
@@ -32,16 +32,16 @@ def get_local_position(conn: mavutil.mavfile):
     # This does not work. I'am not sure why
     # msg = conn.recv_match(type="LOCAL_POSITION_NED")
     if msg:
-        return np.array(GLOBAL_switch_LOCAL_NED(msg.x, msg.y, msg.z))
+        return np.array(global_switch_local_ned((msg.x, msg.y, msg.z)))
     else:
         return None
 
 
 def exec_go_local(
     conn: mavutil.mavfile,
-    wp: np.ndarray = np.array([1, 1, 10]),
+    wp: Position,
 ):
-    wp = GLOBAL_switch_LOCAL_NED(*wp)
+    wp = global_switch_local_ned(wp)
     go_msg = mavutil.mavlink.MAVLink_set_position_target_local_ned_message(
         10,
         conn.target_system,

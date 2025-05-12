@@ -1,13 +1,32 @@
+"""
+Waypoint filtering and navigation logic for selecting movement steps based on spatial
+constraints.
+
+This module includes utilities to:
+- Determine geometric relationships between waypoints (orthants, corridors, proximity)
+- Filter and adjust waypoint candidates
+- Build stepwise paths from a start to target position using discrete axis-aligned
+movements
+"""
+
+from typing import List
+
 import numpy as np
+from numpy.typing import NDArray
 
 from helpers.math import manhattan_distance
 
 
 def in_same_orthant(
-    current: np.ndarray, target: np.ndarray, waypoints: np.ndarray, dims=None, eps=1
-) -> np.ndarray:
+    current: NDArray[np.float64],
+    target: NDArray[np.float64],
+    waypoints: NDArray[np.float64],
+    dims: None | List[int] = None,
+    eps: float = 1.0,
+) -> NDArray[np.bool_]:
     """
-    Vectorized function to check if waypoints are in the same quadrant as the target w.r.t. the current position.
+    Returns a mask for waypoints in the same orthant as the target w.r.t. the current
+    position.
     """
     if dims is None:
         dims = [0, 1]
@@ -28,10 +47,14 @@ def in_same_orthant(
 
 
 def in_same_corridor(
-    current: np.ndarray, waypoints: np.ndarray, eps=1, dims=None
-) -> np.ndarray:
+    current: NDArray[np.float64],
+    waypoints: NDArray[np.float64],
+    eps: float = 1.0,
+    dims: None | List[int] = None,
+) -> NDArray[np.bool_]:
     """
-    Vectorized function to check if waypoints are in the same corridor as the current position.
+    Returns a mask for waypoints that match the current position along at
+    least two axes (within eps).
     """
     if dims is None:
         dims = [0, 1, 2]
@@ -39,9 +62,15 @@ def in_same_corridor(
     return np.sum(delta < eps, axis=1) >= 2
 
 
-def delete(current: np.ndarray, waypoints: np.ndarray, eps=1, dims=None) -> np.ndarray:
+def is_close_to(
+    current: NDArray[np.float64],
+    waypoints: NDArray[np.float64],
+    eps: float = 1.0,
+    dims: None | List[int] = None,
+) -> NDArray[np.bool_]:
     """
-    Vectorized function to check if waypoints are in the same corridor as the current position.
+    Returns a boolean mask for waypoints close to the current point along given
+    dimensions.
     """
     if dims is None:
         dims = [0, 1]
@@ -49,9 +78,12 @@ def delete(current: np.ndarray, waypoints: np.ndarray, eps=1, dims=None) -> np.n
     return np.any(delta < eps, axis=1)
 
 
-def remove_wp(arr: np.ndarray, row: np.ndarray, eps: float = 1):
+def remove_wp(
+    arr: NDArray[np.float64], row: NDArray[np.float64], eps: float = 1.0
+) -> NDArray[np.float64]:
     """
-    Removes rows from a 2D NumPy array that are within a distance <= eps from a given row.
+    Removes rows from a 2D array that are within eps (Euclidean distance) of a given
+    row.
     """
     # Compute Euclidean distance from each row to the target row
     distances = np.linalg.norm(arr - row, axis=1)
@@ -63,11 +95,12 @@ def remove_wp(arr: np.ndarray, row: np.ndarray, eps: float = 1):
 
 
 def adjust_one_significant_axis_toward_corridor(
-    current: np.ndarray, waypoints: np.ndarray, eps: float = 1.0
-) -> np.ndarray:
+    current: NDArray[np.float64], waypoints: NDArray[np.float64], eps: float = 1.0
+) -> NDArray[np.float64]:
     """
-    Adjusts the closest significant axis (above `eps` difference) to bring the drone closer to a valid corridor,
-    modifying only one coordinate.
+    Adjusts one significant axis (difference > eps) to bring the drone closer to a valid
+    corridor.
+    Only one coordinate is modified.
     """
     diffs = np.abs(waypoints - current)  # shape (N, 3)
     dists = np.sum(diffs, axis=1)  # total Manhattan distance to each waypoint
@@ -89,24 +122,47 @@ def adjust_one_significant_axis_toward_corridor(
     return np.array(current)
 
 
-def get_valid_waypoints(current, target, waypoints, eps=1, same_orthant=False):
-    # Filter points that share x or y with the target AND are in the correct quadrant
+def get_valid_waypoints(
+    current: NDArray[np.float64],
+    target: NDArray[np.float64],
+    waypoints: NDArray[np.float64],
+    eps: float = 1.0,
+    same_orthant: bool = False,
+) -> NDArray[np.float64]:
+    """
+    Filter points that share x or y with the target AND are in the correct
+    quadrant
+    """
     waypoints = remove_wp(waypoints, current, eps=eps)
     if same_orthant:
-        same_quadrant = in_same_orthant(current, target, waypoints, eps=eps)
-        waypoints = waypoints[same_quadrant]
+        same_quadrant_mask = in_same_orthant(current, target, waypoints, eps=eps)
+        waypoints = waypoints[same_quadrant_mask]
     mask = in_same_corridor(current, waypoints, eps=eps)
     return waypoints[mask]
 
 
-def find_best_waypoint(current, target, valid_waypoints):
+def find_best_waypoint(
+    current: NDArray[np.float64],
+    target: NDArray[np.float64],
+    valid_waypoints: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """
+    Returns the waypoint closest to both current and target positions using Manhattan distance.
+    """
+
     dist_to_curr = manhattan_distance(valid_waypoints, current)
     dist_to_target = manhattan_distance(valid_waypoints, target)
     best_i_valid = np.argmin(dist_to_curr + dist_to_target)
     return valid_waypoints[best_i_valid]
 
 
-def next_position(current, target, waypoints, eps, same_orthant=False):
+def next_position(
+    current: NDArray[np.float64],
+    target: NDArray[np.float64],
+    waypoints: NDArray[np.float64],
+    eps: float = 1.0,
+    same_orthant: bool = False,
+) -> NDArray[np.float64]:
     valid_waypoints = get_valid_waypoints(
         current, target, waypoints, eps, same_orthant=same_orthant
     )
@@ -117,7 +173,12 @@ def next_position(current, target, waypoints, eps, same_orthant=False):
     return next_pos
 
 
-def find_path(start, target, waypoints, eps=1):
+def find_path(
+    start: NDArray[np.float64],
+    target: NDArray[np.float64],
+    waypoints: NDArray[np.float64],
+    eps: float = 1.0,
+):
     path = [start]
     current = start
     while not np.array_equal(current, target):

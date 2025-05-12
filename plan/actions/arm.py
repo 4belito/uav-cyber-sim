@@ -1,19 +1,13 @@
 from functools import partial
 
 from pymavlink import mavutil
+from pymavlink.dialects.v20.common import MAVLink_heartbeat_message
 
-from plan.core import Action, ActionNames, Step, StepFailed
-
-
-class MAVCommand:
-    ARM = mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM
-    TAKEOFF = mavutil.mavlink.MAV_CMD_NAV_TAKEOFF
-    LAND = mavutil.mavlink.MAV_CMD_NAV_LAND
-    REQUEST_MESSAGE = mavutil.mavlink.MAV_CMD_REQUEST_MESSAGE
-    LOITER_UNLIMITED = mavutil.mavlink.MAV_CMD_NAV_LOITER_UNLIM
+from plan.core import Action, ActionNames, Step
+from plan.mav_helpres import MAVCommand, MAVConnection
 
 
-def exec_arm(conn: mavutil.mavlink_connection) -> None:
+def exec_arm(conn: MAVConnection) -> None:
     """
     Send ARM command to the UAV.
     """
@@ -32,7 +26,7 @@ def exec_arm(conn: mavutil.mavlink_connection) -> None:
     )
 
 
-def check_arm(conn: mavutil.mavlink_connection, _verbose: int) -> tuple[bool, None]:
+def check_arm(conn: MAVConnection, _verbose: int) -> tuple[bool, None]:
     """Check if the UAV is armed using a HEARTBEAT message.
 
     Returns:
@@ -41,6 +35,12 @@ def check_arm(conn: mavutil.mavlink_connection, _verbose: int) -> tuple[bool, No
     msg = conn.recv_match(type="HEARTBEAT")
     armed = msg and (msg.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED)
     return armed, None
+    # if isinstance(msg, MAVLink_heartbeat_message):
+    #     armed = (msg.base_mode & MAVCommand.ARMED_FLAG) != 0
+    # else:
+    #     armed = False  # Could not confirm state
+
+    # return armed, None
 
 
 def make_arm():

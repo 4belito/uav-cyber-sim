@@ -1,12 +1,13 @@
 # type: ignore
 
 from typing import Dict, List
+
 import numpy as np
 from pymavlink import mavutil
 from pymavlink.dialects.v20 import common as mavlink2
 
 from config import GCS_BASE_PORT, ORC_BASE_PORT
-from helpers.change_coordinates import global2local, local2global, Position
+from helpers.change_coordinates import Position, global2local, local2global
 from plan.actions import get_local_position
 from vehicle_logic import Neighbors, VehicleLogic
 
@@ -34,7 +35,7 @@ class Oracle:
         self.conns: Dict[int, mavutil.mavfile] = {}
         for sysid in sysids:
             port = base_port + 10 * (sysid - 1)
-            conn: mavutil.mavfile = mavutil.mavlink_connection(f"udp:127.0.0.1:{port}")  # type: ignore
+            conn = mavutil.mavlink_connection(f"udp:127.0.0.1:{port}")  # type: ignore
             conn.wait_heartbeat()  # type: ignore
             self.conns[sysid] = conn
             print(f"🔗 UAV logic {sysid} is connected to {name}")
@@ -82,11 +83,6 @@ class Oracle:
             distances=neigh_dists,  # avoid np.stack if 1D
             positions=neigh_poss,
         )
-
-    # def is_plan_done(self, sysid):
-    #     msg = self.conns[sysid].recv_match(blocking=True)
-    #     print(msg)
-    #     return msg and msg.get_type() == "STATUSTEXT" and msg.text == "DONE"
 
     def is_plan_done(self, sysid: int) -> bool:
         """

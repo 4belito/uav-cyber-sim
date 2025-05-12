@@ -25,6 +25,9 @@ class VisualizerName(str, Enum):
     QGROUND = "qgroundcontrol"
     GAZEBO = "gazebo"
 
+    def __str__(self):
+        return str(self.value)
+
 
 class Simulator:
     """
@@ -82,17 +85,7 @@ class Simulator:
     def create_process(
         self, cmd: str, after: str = "exit", visible: bool = True
     ) -> Popen[bytes]:
-        """
-        Launch a subprocess, optionally in a visible terminal.
-
-        Args:
-            cmd (str): The shell command to execute.
-            after (str): Command to run after `cmd` (e.g., "exit" keeps terminal open).
-            visible (bool): Whether to launch in a visible terminal (Linux only).
-
-        Returns:
-            subprocess.Popen: The created process handle.
-        """
+        """Launch a subprocess, optionally in a visible terminal."""
         if visible:
             if platform.system() == "Linux":
                 return Popen(["gnome-terminal", "--", "bash", "-c", f"{cmd}; {after}"])
@@ -100,4 +93,4 @@ class Simulator:
         return Popen(cmd.split())
 
     def __repr__(self) -> str:
-        return f"name='{self.name}'\noffsets={self.offsets}\nconfig={self.config}"
+        return f"name: '{self.name}'\noffsets: {self.offsets}\nconfig: {self.config}"
