@@ -4,7 +4,7 @@ import numpy as np
 from pymavlink import mavutil
 from pymavlink.dialects.v20 import common as mavlink2
 
-from config import GCS_BASE_PORT, ORC_BASE_PORT
+from config import BasePort
 from helpers.change_coordinates import Position, global2local, local2global_pos
 from helpers.mavlink import MAVConnection
 from plan.actions import get_local_position
@@ -28,7 +28,7 @@ class Oracle:
     """
 
     def __init__(
-        self, sysids: List[int], name: str = "Oracle ⚪", base_port: int = ORC_BASE_PORT
+        self, sysids: List[int], name: str = "Oracle ⚪", base_port: int = BasePort.ORC
     ) -> None:
         self.pos: Dict[int, Position] = {}
         self.conns: Dict[int, MAVConnection] = {}
@@ -102,7 +102,7 @@ class Oracle:
 class GCS(Oracle):
     def __init__(self, sysids: List[int], name: str = "blue"):
         self.name = name
-        super().__init__(sysids, name=f"GCS {name}", base_port=GCS_BASE_PORT)
+        super().__init__(sysids, name=f"GCS {name}", base_port=BasePort.GCS)
         self.paths = {sysid: [] for sysid in sysids}
 
     def save_pos(self):

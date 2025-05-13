@@ -3,7 +3,6 @@ from typing import List
 import numpy as np
 from pymavlink import mavutil
 
-from config import GCS_BASE_PORT, ORC_BASE_PORT, VEH_BASE_PORT
 from helpers.navegation_logic import (
     adjust_one_significant_axis_toward_corridor,
     find_best_waypoint,

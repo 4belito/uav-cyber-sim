@@ -11,7 +11,7 @@ import os
 import subprocess
 from typing import List
 
-from config import QGC_INI_PATH, QGC_PATH
+from config import QGC_INI_PATH, QGC_PATH, BasePort
 from helpers.change_coordinates import Offset, find_spawns
 from plan import Plan
 from simulators.sim import Simulator, VisualizerName
@@ -50,7 +50,7 @@ class QGC(Simulator):
         return f" --custom-location={spawn_str}"
 
     def _launch_visualizer(self):
-        self._delete_all_qgc_links()
+        self._delete_all_qgc_links()  # Connect via TCP
         self._add_qgc_links(n=self.n_uavs)
         sim_cmd = [os.path.expanduser(QGC_PATH)]
         # pylint: disable=consider-using-with
@@ -61,7 +61,7 @@ class QGC(Simulator):
             shell=False,  # Ensure safety when passing arguments
         )
 
-    def _add_qgc_links(self, n: int = 1, start_port: int = 5763, step: int = 10):
+    def _add_qgc_links(self, n: int = 1, step: int = 10):
         with open(QGC_INI_PATH, "r", encoding="utf-8") as file:
             lines = file.readlines()
 
@@ -100,7 +100,7 @@ class QGC(Simulator):
         new_lines: List[str] = []
         for i in range(n):
             idx = count + i
-            port = start_port + step * i
+            port = BasePort.QGC_TCP + step * i
             new_lines.extend(
                 [
                     f"Link{idx}\\auto=true\n",

@@ -8,7 +8,7 @@ from pymavlink import mavutil
 from pymavlink.dialects.v20 import common as mavlink2
 
 # First Party imports
-from config import GCS_BASE_PORT, ORC_BASE_PORT, VEH_BASE_PORT
+from config import BasePort
 from plan.planner import State
 from vehicle_logic import VehicleLogic
 
@@ -61,9 +61,9 @@ def create_connection(base_port: int, idx: int, is_in: bool = True):
 def start_proxy(system_id):
     """Start bidirectional proxy for a given UAV system_id"""
     i = system_id - 1
-    ap_conn = create_connection(base_port=VEH_BASE_PORT, idx=i, is_in=True)
-    cs_conn = create_connection(base_port=GCS_BASE_PORT, idx=i, is_in=False)
-    oc_conn = create_connection(base_port=ORC_BASE_PORT, idx=i, is_in=False)
+    ap_conn = create_connection(base_port=BasePort.ARP, idx=i, is_in=True)
+    cs_conn = create_connection(base_port=BasePort.GCS, idx=i, is_in=False)
+    oc_conn = create_connection(base_port=BasePort.ORC, idx=i, is_in=False)
 
     print(f"\n🔁 Starting Vehicle {system_id}")
     logic = VehicleLogic(ap_conn)

@@ -4,7 +4,7 @@ Configuration module for UAV-CYBER-SIM.
 Defines system paths, base communication ports, and a color enum for UAV visualization.
 """
 
-from enum import Enum
+from enum import StrEnum, IntEnum
 from pathlib import Path
 
 # --- System Paths ---
@@ -21,14 +21,31 @@ PARAMS_PATH = Path("params/custom_params.parm").resolve()
 # Ensure logs directory exists (can be cleaned later)
 LOGS_PATH.mkdir(parents=True, exist_ok=True)
 
+
 # --- Base Communication Ports ---
-VEH_BASE_PORT = 1551
-GCS_BASE_PORT = 1552
-ORC_BASE_PORT = 1553
+class BasePort(IntEnum):
+    """
+    Base ports for QGrounfControl(QGC), ArduPilot (ARP), Ground control Station (GCS),
+    and Oracle.
+
+    - QGC and ARP ports increment by +10 per UAV instance.
+    - GCS ports increment by +10 per GCS instance.
+    - Oracle uses a fixed port.
+
+    All components except QGC connect to the UAVLogic.
+    QGC connects directly to ArduPilot (SITL).
+    Gazebo connects to ArduPilot via UDP 9002 (to ArduPilot) and 9003 (from ArduPilot).
+    """
+
+    QGC_TCP = 5763  # QGroundControl(TCP-no default option-uncomment in GCS module)
+    QGC_UDP = 14550  # QGroundControl(UDP-default option-comment in GCS module)
+    ARP = 14551  # Ardupilot Vehicle(UDP)
+    GCS = 14552  # Ground Control Station(UDP)
+    ORC = 14553  # Oracle(UDP)
 
 
 # --- UAV Visualization Colors ---
-class Color(str, Enum):
+class Color(StrEnum):
     """
     Enum for supported UAV marker colors in visualizations.
     """
