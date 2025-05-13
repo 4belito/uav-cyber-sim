@@ -5695,5 +5695,5 @@
       <allow_auto_disable>1</allow_auto_disable>
       <pose>5.66453 13.7135 11.8894 -3e-06 -1e-05 -1.9e-05</pose>
     </model>
-  <model name="drone1"><pose>14.8169 19.156799 0 0 0 -0.0</pose><include><uri>model://drone1</uri></include></model><model name="drone2"><pose>14.8169 -7.962251 0 0 0 -0.0</pose><include><uri>model://drone2</uri></include></model><model name="drone3"><pose>24.47636 -25.651995 0 0 0 -0.0</pose><include><uri>model://drone3</uri></include></model><model name="drone4"><pose>-7.6335 -22.570171 0 0 0 -0.0</pose><include><uri>model://drone4</uri></include></model><model name="drone5"><pose>5.66453 13.7135 12 0 0 -0.0</pose><include><uri>model://drone5</uri></include></model></world>
+  <model name="drone1"><pose>14.8169 19.156799 0 0 0 -0.0</pose><include><uri>model://drone1</uri></include></model><model name="drone2"><pose>0.741478 10.962251 0 0 0 -0.0</pose><include><uri>model://drone2</uri></include></model><model name="drone3"><pose>24.47636 -25.651995 0 0 0 -0.0</pose><include><uri>model://drone3</uri></include></model><model name="drone4"><pose>-7.6335 -22.570171 0 0 0 -0.0</pose><include><uri>model://drone4</uri></include></model><model name="drone5"><pose>5.66453 13.7135 12 0 0 -0.0</pose><include><uri>model://drone5</uri></include></model></world>
 </sdf>
