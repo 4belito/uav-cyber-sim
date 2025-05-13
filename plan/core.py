@@ -9,7 +9,7 @@ from enum import StrEnum
 from typing import Callable, List, Optional, Self, cast
 
 from helpers.change_coordinates import Position
-from plan.mav_helpres import MAVConnection
+from helpers.mavlink import MAVConnection
 
 
 class State(StrEnum):

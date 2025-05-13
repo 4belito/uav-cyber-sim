@@ -22,5 +22,5 @@
         "reportMissingTypeArgument": "warning", // e.g., List[...] missing inner type
         "reportUnknownParameterType": "warning", // inferred but unclear types
         "reportUnknownVariableType": "warning"
-    }
+    },
 }

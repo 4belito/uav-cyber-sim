@@ -7,7 +7,7 @@ from pymavlink import mavutil
 from helpers.change_coordinates import Position
 from plan.actions.navegation import get_local_position
 from plan.core import Action, ActionNames, Step
-from plan.mav_helpres import MAVConnection
+from helpers.mavlink import MAVConnection
 
 LAND = mavutil.mavlink.MAV_CMD_NAV_LAND
 REQ_MSG = mavutil.mavlink.MAV_CMD_REQUEST_MESSAGE

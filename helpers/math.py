@@ -1,3 +1,7 @@
+"""
+Distance utilities for computing Manhattan distances between vectors or arrays.
+"""
+
 import numpy as np
 from numpy.typing import NDArray
 

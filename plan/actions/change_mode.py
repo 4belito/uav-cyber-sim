@@ -8,7 +8,7 @@ steps based on HEARTBEAT messages and supported flight modes.
 from functools import partial
 
 from plan.core import Action, ActionNames, Step
-from plan.mav_helpres import FlightMode, MAVConnection
+from helpers.mavlink import FlightMode, MAVConnection
 
 
 def make_set_mode(mode_name: str, onair: bool = False) -> Action:

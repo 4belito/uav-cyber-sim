@@ -147,7 +147,8 @@ def find_best_waypoint(
     valid_waypoints: NDArray[np.float64],
 ) -> NDArray[np.float64]:
     """
-    Returns the waypoint closest to both current and target positions using Manhattan distance.
+    Returns the waypoint closest to both current and target positions using
+    Manhattan distance.
     """
 
     dist_to_curr = manhattan_distance(valid_waypoints, current)
@@ -163,6 +164,7 @@ def next_position(
     eps: float = 1.0,
     same_orthant: bool = False,
 ) -> NDArray[np.float64]:
+    """Get the next best position along the path from current to target."""
     valid_waypoints = get_valid_waypoints(
         current, target, waypoints, eps, same_orthant=same_orthant
     )
@@ -179,6 +181,7 @@ def find_path(
     waypoints: NDArray[np.float64],
     eps: float = 1.0,
 ):
+    """Build a path from start to target using discrete valid steps."""
     path = [start]
     current = start
     while not np.array_equal(current, target):

@@ -76,7 +76,10 @@ class ConfigGazebo:
     markers: List[TrajectoryMarker]
 
     def __str__(self):
-        return f"world_path={self.world_path}, models={self.models}, markers={self.markers}"
+        return (
+            f"world_path={self.world_path}, models={self.models}, "
+            f"markers={self.markers}"
+        )
 
     @staticmethod
     def create_trajectory_from_array(

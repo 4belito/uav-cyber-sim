@@ -17,7 +17,7 @@ these checks in sequence.
 from functools import partial
 
 from plan.core import Action, ActionNames, Step, StepFailed
-from plan.mav_helpres import EKFFlags, MAVCommand, MAVConnection, RequiredSensors
+from helpers.mavlink import EKFFlags, MAVCommand, MAVConnection, RequiredSensors
 
 
 def make_pre_arm():

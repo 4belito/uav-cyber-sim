@@ -15,7 +15,7 @@ from pymavlink import mavutil
 
 from helpers.change_coordinates import Position, global_switch_local_ned
 from plan.core import Action, ActionNames, Step
-from plan.mav_helpres import MAVCommand, MAVConnection
+from helpers.mavlink import MAVCommand, MAVConnection
 
 
 def get_local_position(conn: MAVConnection):

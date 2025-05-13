@@ -1,5 +1,3 @@
-# type: ignore
-
 from typing import Dict, List
 
 import numpy as np
@@ -7,7 +5,8 @@ from pymavlink import mavutil
 from pymavlink.dialects.v20 import common as mavlink2
 
 from config import GCS_BASE_PORT, ORC_BASE_PORT
-from helpers.change_coordinates import Position, global2local, local2global
+from helpers.change_coordinates import Position, global2local, local2global_pos
+from helpers.mavlink import MAVConnection
 from plan.actions import get_local_position
 from vehicle_logic import Neighbors, VehicleLogic
 
@@ -32,11 +31,11 @@ class Oracle:
         self, sysids: List[int], name: str = "Oracle ⚪", base_port: int = ORC_BASE_PORT
     ) -> None:
         self.pos: Dict[int, Position] = {}
-        self.conns: Dict[int, mavutil.mavfile] = {}
+        self.conns: Dict[int, MAVConnection] = {}
         for sysid in sysids:
             port = base_port + 10 * (sysid - 1)
-            conn = mavutil.mavlink_connection(f"udp:127.0.0.1:{port}")  # type: ignore
-            conn.wait_heartbeat()  # type: ignore
+            conn: MAVConnection = mavutil.mavlink_connection(f"udp:127.0.0.1:{port}")  # type: ignore
+            conn.wait_heartbeat()
             self.conns[sysid] = conn
             print(f"🔗 UAV logic {sysid} is connected to {name}")
 
@@ -55,7 +54,7 @@ class Oracle:
     def get_global_pos(self, sysid: int):
         pos = get_local_position(self.conns[sysid])
         if pos is not None:
-            pos = local2global(pos, homes[sysid - 1])
+            pos = local2global_pos(pos, homes[sysid - 1])
         return pos
 
     def update_neighbors(self, veh: VehicleLogic):
@@ -67,7 +66,9 @@ class Oracle:
             if other is veh:
                 continue
 
-            dist = np.linalg.norm(other_pos - self.pos[veh])
+            dist = np.linalg.norm(
+                np.array([x - y for x, y in zip(other_pos, self.pos[veh.sysid])])
+            )
             if dist < veh.radar_radius:
                 neigh_vehs.append(other)
                 neigh_poss.append(other_pos)  # this is a reference to the array
