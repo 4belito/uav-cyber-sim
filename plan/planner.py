@@ -1,6 +1,12 @@
+"""
+Defines the Plan class for sequencing UAV actions into structured missions.
+Supports static and dynamic waypoint modes and includes predefined plans.
+"""
+
 from __future__ import annotations
 
-from typing import Optional
+from enum import StrEnum
+from typing import cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -14,29 +20,38 @@ from plan.actions import (
     make_set_mode,
     make_takeoff,
 )
+from plan.core import Step
 
 from .core import Action
 
 
-class State:
+class State(StrEnum):
+    """Represents the execution status of a mission element."""
+
     NOT_STARTED = "NOT_STARTED"
     IN_PROGRESS = "IN_PROGRESS"
     DONE = "DONE"
     FAILED = "FAILED"
 
 
-class PlanMode:
+class PlanMode(StrEnum):
+    """Defines whether a plan uses static or dynamic waypoints."""
+
     DYNAMIC = "DYNAMIC"
     STATIC = "STATIC"
 
 
 class Plan(Action):
+    """A high-level mission plan composed of sequential UAV actions."""
+
+    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-positional-arguments
     def __init__(
         self,
         name: str,
         emoji: str = "📋",
         mode: PlanMode = PlanMode.STATIC,
-        dynamic_wps: Optional[np.ndarray] = None,
+        dynamic_wps: NDArray[np.float64] | None = None,
         wp_margin: float = 0.5,
     ) -> None:
         self.mode = mode
@@ -55,10 +70,17 @@ class Plan(Action):
             self.dynamic_wps = dynamic_wps
         else:
             raise ValueError(f"Unsupported plan mode: {mode}")
-        super().__init__(name, emoji=emoji, curr_pos=np.zeros(3))
+        super().__init__(name, emoji=emoji, curr_pos=(0, 0, 0))
+
+    def add_action(self, action: Action) -> None:
+        """Adds an Action to the Plan."""
+        super().add_step(cast(Step, action))
 
     @staticmethod
-    def create_square_path(side_len: float = 10, alt: float = 5, clockwise=True):
+    def create_square_path(
+        side_len: float = 10, alt: float = 5, clockwise: bool = True
+    ):
+        """Generates square-shaped waypoints for a trajectory."""
         if clockwise:
             wps = np.array(
                 [
@@ -90,6 +112,7 @@ class Plan(Action):
         wp_margin: float = 0.5,
         navegation_speed: float = 5,
     ):
+        """Creates a square-shaped trajectory with takeoff and landing."""
         wps = cls.create_square_path(side_len, alt)
         return cls.basic(
             wps=wps,
@@ -99,46 +122,53 @@ class Plan(Action):
         )
 
     @classmethod
+    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-positional-arguments
     def basic(
         cls,
-        wps: Optional[NDArray[np.float64]] = np.array([[0, 0, 5]]),
+        wps: NDArray[np.float64] = np.array([[0, 0, 5]]),
         wp_margin: float = 0.5,
         navegation_speed: float = 5,
         name: str = "basic",
         mode: PlanMode = PlanMode.STATIC,
-        dynamic_wps: Optional[NDArray[np.float64]] = None,
-        takeoff_alt=1,
+        dynamic_wps: NDArray[np.float64] | None = None,
+        takeoff_alt: float = 1.0,
     ) -> Plan:
+        """Creates a basic plan with configurable waypoints and options."""
         land_wp = wps[-1].copy()
         land_wp[2] = 0
         plan = cls(name=name, mode=mode, dynamic_wps=dynamic_wps, wp_margin=wp_margin)
-        plan.add(make_pre_arm())
-        plan.add(make_set_mode("GUIDED"))
+        plan.add_action(make_pre_arm())
+        plan.add_action(make_set_mode("GUIDED"))
         if navegation_speed != 5:
-            plan.add(make_change_nav_speed(speed=navegation_speed))
-        plan.add(make_arm())
-        plan.add(make_takeoff(altitude=takeoff_alt))
-        plan.add(make_path(wps=wps, wp_margin=wp_margin))
+            plan.add_action(make_change_nav_speed(speed=navegation_speed))
+        plan.add_action(make_arm())
+        plan.add_action(make_takeoff(altitude=takeoff_alt))
+        plan.add_action(make_path(wps=wps, wp_margin=wp_margin))
 
-        plan.add(make_land(final_wp=land_wp))
+        plan.add_action(make_land(final_wp=land_wp))
         return plan
 
     ## Improve this for no repeating code
+
     @classmethod
+    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-positional-arguments
     def hover(
         cls,
-        wps: np.ndarray = None,
+        wps: NDArray[np.float64] | None = None,
         wp_margin: float = 0.5,
         navegation_speed: float = 5,
-        name="hover",
-        takeoff_alt=5,
+        name: str = "hover",
+        takeoff_alt: float = 5.0,
     ):
+        """Creates a plan to take off, reach a point, and hover."""
         plan = cls(name)
-        plan.add(make_pre_arm())
-        plan.add(make_set_mode("GUIDED"))
+        plan.add_action(make_pre_arm())
+        plan.add_action(make_set_mode("GUIDED"))
         if navegation_speed != 5:
-            plan.add(make_change_nav_speed(speed=navegation_speed))
-        plan.add(make_arm())
-        plan.add(make_takeoff(altitude=takeoff_alt))
-        plan.add(make_path(wps=wps, wp_margin=wp_margin))
+            plan.add_action(make_change_nav_speed(speed=navegation_speed))
+        plan.add_action(make_arm())
+        plan.add_action(make_takeoff(altitude=takeoff_alt))
+        plan.add_action(make_path(wps=wps, wp_margin=wp_margin))
         return plan

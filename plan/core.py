@@ -1,15 +1,20 @@
+"""
+Mission execution module defining core classes for steps and actions used in UAV plans.
+Supports chained execution, state tracking, and verbose status reporting.
+"""
+
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 from typing import Callable, List, Optional, Self, cast
 
 from helpers.change_coordinates import Position
 from plan.mav_helpres import MAVConnection
 
-DEBUG = False
 
+class State(StrEnum):
+    """Defines possible execution states for mission steps and actions."""
 
-class State:
     NOT_STARTED = "NOT_STARTED"
     IN_PROGRESS = "IN_PROGRESS"
     DONE = "DONE"
@@ -24,7 +29,9 @@ state_symbols = {
 }
 
 
-class ActionNames(str, Enum):
+class ActionNames(StrEnum):
+    """Enumerates standard UAV action types used in mission plans."""
+
     PREARM = "PREARM"
     ARM = "ARM"
     TAKEOFF = "TAKEOFF"
@@ -35,21 +42,21 @@ class ActionNames(str, Enum):
 
 
 class StepFailed(Exception):
-    """
-    Raised when a step fails due to known issues (like battery too low, GPS not
-    ready, etc).
-    """
+    """Exception raised when a mission step fails due to a known issue."""
 
 
-class NoConnectionError(StepFailed):
-    """Raised when a mission element tries to act without a MAVLink connection."""
-
-
+# pylint: disable=too-many-instance-attributes
 class MissionElement:
+    """
+    Base class for mission components like steps and actions.
+    Handles state, chaining, and verbosity.
+    """
+
     def __init__(
         self, name: str = "action name", emoji: str = "📝", is_improv: bool = False
     ) -> None:
         # General Properties(Step and Action shared)
+        self.class_name = self.__class__.__name__
         self.name = name
         self.emoji = emoji
         self.is_improv = is_improv
@@ -62,23 +69,30 @@ class MissionElement:
         ## live property(after building)
         self.conn: MAVConnection = cast(MAVConnection, None)
         self.verbose: int = 1
+        self.sysid: int = cast(int, None)
 
     def act(self):
-        pass
+        """Base method for mission logic; override in subclasses."""
 
     def reset(self):
+        """Resets element to NOT_STARTED state."""
         self.state = State.NOT_STARTED
 
     def __repr__(self) -> str:
         symbol = state_symbols.get(self.state, "❔")
-        return f"{symbol} <{self.__class__.__name__} '{self.emoji} {self.name}'>"
+        return f"{symbol} <{self.class_name} '{self.emoji} {self.name}'>"
 
     def bind(self, connection: MAVConnection, verbose: int = 1) -> None:
+        """
+        Binds the mission element to a MAVLink connection and sets verbosity
+        level.
+        """
         self.conn = connection  # Set later from the parent Action
         self.verbose = verbose
         if self.verbose > 2:
             print(
-                f"Vehicle {self.conn.target_system}: {self.__class__.__name__} '{self.name}' is now connected ✅🔗"
+                f"Vehicle {self.sysid}: {self.class_name} '{self.name}' is "
+                f"now connected ✅🔗"
             )
 
 
@@ -87,6 +101,10 @@ def _noop_exec(_: MAVConnection) -> None:
 
 
 class Step(MissionElement):
+    """Executable mission step with a check and optional execution function."""
+
+    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-positional-arguments
     def __init__(
         self,
         name: str,
@@ -107,25 +125,21 @@ class Step(MissionElement):
         super().__init__(name=name, emoji=emoji, is_improv=is_improv)
 
     def execute(self) -> None:
-        class_name = self.__class__.__name__
+        """Executes the step and marks it as IN_PROGRESS."""
         self.exec_fn(self.conn)
         if self.verbose:
-            print(
-                f"Vehicle {self.conn.target_system}: ▶️ {class_name} Started: {self.name}"
-            )
+            print(f"Vehicle {self.sysid}: ▶️ {self.class_name} Started: {self.name}")
         self.state = State.IN_PROGRESS
 
     def check(self) -> None:
-        class_name = self.__class__.__name__
+        """Checks step completion and updates state and position."""
         answer, curr_pos = self.check_fn(self.conn, self.verbose)
         if curr_pos is not None:
             self.curr_pos = curr_pos
         if answer:
             self.state = State.DONE
             if self.verbose:
-                print(
-                    f"Vehicle {self.conn.target_system}: ✅ {class_name} Done: {self.name}"
-                )
+                print(f"Vehicle {self.sysid}: ✅ {self.class_name} Done: {self.name}")
 
     def act(self):
         if self.state == State.NOT_STARTED:
@@ -143,9 +157,16 @@ class Step(MissionElement):
 
 
 class Action(MissionElement):
+    """
+    Encapsulates a sequence of steps and manages their coordinated
+    execution as a mission action.
+    """
+
+    # pylint: disable=too-many-arguments
+    # pylint: disable=too-many-positional-arguments
     def __init__(
         self,
-        name: ActionNames,
+        name: str,
         emoji: str = "🔘",
         onair: bool | None = None,
         curr_pos: Position | None = None,
@@ -159,7 +180,7 @@ class Action(MissionElement):
         self.target_pos = target_pos
         super().__init__(name=name, emoji=emoji, is_improv=is_improv)  # ✅ no-op
 
-    def add(self, step: Step) -> None:
+    def add_step(self, step: Step) -> None:
         """
         Adds a Step or Action to this Action/Plan.
         Maintains chaining via `next` and updates current element.
@@ -174,49 +195,58 @@ class Action(MissionElement):
         self.target_pos = step.target_pos
 
     def act(self):
-        class_name = self.__class__.__name__
         if self.state == State.NOT_STARTED:
-            self.state = State.IN_PROGRESS
-            if self.verbose:
-                print(
-                    f"Vehicle {self.conn.target_system}: ▶️ {class_name} Started: {self.emoji} {self.name}"
-                )
-        if self.state == State.IN_PROGRESS:
-            step = self.current
-            if step is None:
-                self.state = State.DONE
-                if self.verbose:
-                    print(
-                        f"Vehicle {self.conn.target_system}: ✅ {class_name} Done: {self.emoji} {self.name}"
-                    )
-            else:
-                if step.state == State.DONE:
-                    if step.next is None:
-                        self.state = State.DONE
-                        if self.verbose:
-                            print(
-                                f"Vehicle {self.conn.target_system}: ✅ {class_name} Done: {self.emoji} {self.name}"
-                            )
-                    else:
-                        self.current = step.next
-                elif step.state == State.FAILED:
-                    self.state = State.FAILED
-                    print(
-                        f"⚠️ Vehicle {self.conn.target_system}: {class_name}: {self.emoji} {self.name} Already failed!. Cannot perform this again!"
-                    )
-                else:
-                    step.act()
-                    self.update_pos(step)
+            self._start_action()
+        elif self.state == State.IN_PROGRESS:
+            self._progress_action()
         elif self.state == State.DONE:
-            print(
-                f"⚠️ Vehicle {self.conn.target_system}: {class_name}: {self.emoji} {self.name} Already done!. Cannot perform this again!"
-            )
+            self._log_already_done()
         elif self.state == State.FAILED:
+            self._log_already_failed()
+
+    def _start_action(self):
+        self.state = State.IN_PROGRESS
+        if self.verbose:
             print(
-                f"⚠️ Vehicle {self.conn.target_system}: {class_name}: {self.emoji}  {self.name} Already failed!. Cannot perform this again!"
+                f"Vehicle {self.sysid}: ▶️ {self.class_name} "
+                f"Started: {self.emoji} {self.name}"
             )
 
+    def _progress_action(self):
+        step = self.current
+        if step is None or (step.state == State.DONE and step.next is None):
+            self.state = State.DONE
+            if self.verbose:
+                print(
+                    f"Vehicle {self.sysid}: ✅ {self.class_name} "
+                    f"Done: {self.emoji} {self.name}"
+                )
+        elif step.state == State.DONE:
+            self.current = step.next
+        elif step.state == State.FAILED:
+            self.state = State.FAILED
+            print(
+                f"⚠️ Vehicle {self.sysid}: {self.class_name}: {self.emoji} {self.name} "
+                f"Already failed!. Cannot perform this again!"
+            )
+        else:
+            step.act()
+            self.update_pos(step)
+
+    def _log_already_done(self):
+        print(
+            f"⚠️ Vehicle {self.sysid}: {self.class_name}: {self.emoji} {self.name} "
+            f"Already done!. Cannot perform this again!"
+        )
+
+    def _log_already_failed(self):
+        print(
+            f"⚠️ Vehicle {self.sysid}: {self.class_name}: {self.emoji} {self.name} "
+            f"Already failed!. Cannot perform this again!"
+        )
+
     def update_pos(self, step: Step):
+        """Updates current position and onair status based on a Step."""
         self.onair = step.onair
         if step.curr_pos is not None:
             self.curr_pos = step.curr_pos
@@ -236,7 +266,8 @@ class Action(MissionElement):
         super().bind(connection, verbose)
         if verbose > 2:
             print(
-                f"Vehicle {self.conn.target_system}: {self.__class__.__name__} '{self.name}' is now connected ✅🔗"
+                f"Vehicle {self.sysid}: {self.class_name} '{self.name}' is now "
+                f"connected ✅🔗"
             )
 
     def __repr__(self) -> str:
@@ -254,7 +285,7 @@ class Action(MissionElement):
         """
         if self.current is None:
             # If no current step exists, treat it like a normal add
-            self.add(new_step)
+            self.add_step(new_step)
             return
 
         next_step = self.current.next  # save next step
@@ -276,7 +307,7 @@ class Action(MissionElement):
         """
         if self.current is None:
             # If no current step exists, treat it like a normal add
-            self.add(new_step)
+            self.add_step(new_step)
             return
 
         prev_step = self.current.prev  # save prev_step
@@ -290,11 +321,13 @@ class Action(MissionElement):
         self.steps.insert(current_index, new_step)
 
     def add_over(self, new_step: Step) -> None:
+        """Insert a step after current and mark current step as done."""
         self.add_next(new_step)
         self.current.state = State.DONE  # type: ignore[union-attr]
         self.current = new_step
 
     def add_now(self, new_step: Step) -> None:
+        """Insert a step before current and reset it for immediate execution."""
         self.add_prev(new_step)
         self.current.reset()  # type: ignore[union-attr]
         self.current = new_step

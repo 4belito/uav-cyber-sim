@@ -1,51 +1,65 @@
-# actions/pre_arm.py
+"""
+Pre-arm safety checks for UAV operation.
+
+This module defines individual checks and a combined pre-arm `Action` to ensure
+the UAV is in a safe and ready state before arming. It verifies the following:
+
+- The UAV is disarmed
+- EKF system is properly initialized
+- GPS fix is sufficient (3D or better)
+- Battery level is acceptable
+- Required sensors are healthy
+
+The main entry point is `make_pre_arm()`, which returns an `Action` composed of
+these checks in sequence.
+"""
 
 from functools import partial
 
-from pymavlink import mavutil
+from plan.core import Action, ActionNames, Step, StepFailed
+from plan.mav_helpres import EKFFlags, MAVCommand, MAVConnection, RequiredSensors
 
-from plan.core import Action  # assuming these are in your core module
-from plan.core import ActionNames, Step, StepFailed
 
-# Required EKF and sensor flags
-EKF_FLAGS = {
-    "ATTITUDE": mavutil.mavlink.EKF_ATTITUDE,
-    "VELOCITY_HORIZ": mavutil.mavlink.EKF_VELOCITY_HORIZ,
-    "POS_HORIZ_ABS": mavutil.mavlink.EKF_POS_HORIZ_ABS,
-    "POS_VERT_ABS": mavutil.mavlink.EKF_POS_VERT_ABS,
-}
+def make_pre_arm():
+    """Builds a pre-arm Action that validates safety and system readiness checks."""
+    pre_arm = Action(name=ActionNames.PREARM, emoji="🔧")
+    pre_arm.add_step(Step("Check disarmed", check_fn=check_disarmed, onair=False))
+    pre_arm.add_step(
+        Step(
+            "Check EKF",
+            check_fn=partial(check_ekf_status),
+            onair=False,
+        )
+    )
+    pre_arm.add_step(Step("Check GPS", check_fn=check_gps_status, onair=False))
+    pre_arm.add_step(Step("Check system", check_fn=check_sys_status, onair=False))
+    return pre_arm
 
-REQUIRED_SENSORS = {
-    "3D_GYRO": mavutil.mavlink.MAV_SYS_STATUS_SENSOR_3D_GYRO,
-    "3D_ACCEL": mavutil.mavlink.MAV_SYS_STATUS_SENSOR_3D_ACCEL,
-    "3D_MAG": mavutil.mavlink.MAV_SYS_STATUS_SENSOR_3D_MAG,
-    "ABS_PRESSURE": mavutil.mavlink.MAV_SYS_STATUS_SENSOR_ABSOLUTE_PRESSURE,
-    "GPS": mavutil.mavlink.MAV_SYS_STATUS_SENSOR_GPS,
-}
 
 # === CHECK FUNCTIONS ===
-
-
-def check_disarmed(conn: mavutil.mavlink_connection, _verbose: int):
+def check_disarmed(conn: MAVConnection, _verbose: int):
+    """Fails if the UAV is currently armed."""
     msg = conn.recv_match(type="HEARTBEAT")
     if not msg:
         return False, None
-    if msg.base_mode & mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED:
+    if msg.base_mode & MAVCommand.ARMED_FLAG:
         raise StepFailed("UAV is already armed")
     return True, None
 
 
-def check_ekf_status(conn: mavutil.mavlink_connection, _verbose: int):
+def check_ekf_status(conn: MAVConnection, _verbose: int):
+    """Checks whether all required EKF flags are set."""
     msg = conn.recv_match(type="EKF_STATUS_REPORT")
     if not msg:
         return False, None
-    missing = [name for name, bit in EKF_FLAGS.items() if not msg.flags & bit]
+    missing = [flag.name for flag in EKFFlags if not msg.flags & flag]
     if missing:
         return False, None
     return True, None
 
 
-def check_gps_status(conn: mavutil.mavlink_connection, _verbose: int):
+def check_gps_status(conn: MAVConnection, _verbose: int):
+    """Fails if GPS fix is not 3D (fix_type < 3)."""
     msg = conn.recv_match(type="GPS_RAW_INT")
     if not msg:
         return False, None
@@ -54,32 +68,20 @@ def check_gps_status(conn: mavutil.mavlink_connection, _verbose: int):
     return True, None
 
 
-def check_sys_status(conn: mavutil.mavlink_connection, _verbose: int):
+def check_sys_status(conn: MAVConnection, _verbose: int):
+    """Fails if battery is low or any required sensors are unhealthy."""
     msg = conn.recv_match(type="SYS_STATUS")
     if not msg:
         return False, None
     if msg.battery_remaining < 20:
         raise StepFailed(f"Battery too low ({msg.battery_remaining}%)")
+
     missing = [
-        name
-        for name, bit in REQUIRED_SENSORS.items()
-        if not msg.onboard_control_sensors_health & bit
+        sensor.name
+        for sensor in RequiredSensors
+        if not msg.onboard_control_sensors_health & sensor
     ]
+
     if missing:
         raise StepFailed(f"Missing or unhealthy sensors: {', '.join(missing)}")
     return True, None
-
-
-def make_pre_arm():
-    pre_arm = Action(name=ActionNames.PREARM, emoji="🔧")
-    pre_arm.add(Step("Check disarmed", check_fn=check_disarmed, onair=False))
-    pre_arm.add(
-        Step(
-            "Check EKF",
-            check_fn=partial(check_ekf_status),
-            onair=False,
-        )
-    )
-    pre_arm.add(Step("Check GPS", check_fn=check_gps_status, onair=False))
-    pre_arm.add(Step("Check system", check_fn=check_sys_status, onair=False))
-    return pre_arm

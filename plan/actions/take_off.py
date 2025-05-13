@@ -1,25 +1,41 @@
+"""
+Defines a TAKEOFF action using MAVLink commands.
+
+Includes:
+- exec_takeoff: sends a takeoff command to the UAV.
+- check_takeoff: verifies if the UAV is currently taking off.
+- make_takeoff: creates a takeoff Action with one execution step.
+"""
+
 from functools import partial
 
-import numpy as np
-from pymavlink import mavutil
-
-# from plan.actions.navegation import check_reach_wp
-from plan.actions.navegation import get_local_position
-
-# Custom Modules
 from plan.core import Action, ActionNames, Step
-
-EXT_STATE = mavutil.mavlink.MAVLINK_MSG_ID_EXTENDED_SYS_STATE
-REQ_MSG = mavutil.mavlink.MAV_CMD_REQUEST_MESSAGE
-TAKEOFF = mavutil.mavlink.MAV_LANDED_STATE_TAKEOFF
+from plan.mav_helpres import MAVCommand, MAVConnection
 
 
-def exec_takeoff(conn: mavutil.mavlink_connection, altitude: float = 1.0):
-    """Send a MAVLink command to take off to a specified altitude."""
+def make_takeoff(altitude: float = 1.0) -> Action:
+    """Create a TAKEOFF action with execution and check steps."""
+    takeoff_action = Action(name=ActionNames.TAKEOFF, emoji="🛫")
+    target_pos = (0, 0, altitude)
+    # check_fn = partial(check_takeoff, wp=target_pos, wp_margin=wp_margin)
+    exec_fn = partial(exec_takeoff, altitude=altitude)
+    step = Step(
+        "takeoff",
+        check_fn=check_takeoff,
+        exec_fn=exec_fn,
+        onair=True,
+        target_pos=target_pos,
+    )
+    takeoff_action.add_step(step)
+    return takeoff_action
+
+
+def exec_takeoff(conn: MAVConnection, altitude: float = 1.0):
+    """Send TAKEOFF command to reach target altitude."""
     conn.mav.command_long_send(
         conn.target_system,
         conn.target_component,
-        mavutil.mavlink.MAV_CMD_NAV_TAKEOFF,
+        MAVCommand.TAKEOFF,
         0,
         0,
         0,
@@ -31,15 +47,14 @@ def exec_takeoff(conn: mavutil.mavlink_connection, altitude: float = 1.0):
     )
 
 
-def check_takeoff(conn: mavutil.mavlink_connection, _verbose: int):
-    # Request EXTENDED_SYS_STATE message
+def check_takeoff(conn: MAVConnection, _verbose: int):
+    """Check if UAV is in TAKEOFF state."""
     conn.mav.command_long_send(
         conn.target_system,
         conn.target_component,
-        REQ_MSG,
+        MAVCommand.REQ_MSG,
         0,
-        EXT_STATE,
-        0,
+        MAVCommand.EXT_STATE,
         0,
         0,
         0,
@@ -48,25 +63,4 @@ def check_takeoff(conn: mavutil.mavlink_connection, _verbose: int):
         0,
     )
     msg = conn.recv_match(type="EXTENDED_SYS_STATE", blocking=True, timeout=0.01)
-    return (msg and msg.landed_state == TAKEOFF), None
-
-
-def make_takeoff(altitude: float = 1.0) -> Action:
-    """
-    Creates a takeoff action that consists of a single step:
-    - Executing the takeoff command
-    - Checking if the UAV reaches the desired altitude
-    """
-    takeoff_action = Action(name=ActionNames.TAKEOFF, emoji="🛫")
-    target_pos = np.array([0, 0, altitude])
-    # check_fn = partial(check_takeoff, wp=target_pos, wp_margin=wp_margin)
-    exec_fn = partial(exec_takeoff, altitude=altitude)
-    step = Step(
-        "takeoff",
-        check_fn=check_takeoff,
-        exec_fn=exec_fn,
-        onair=True,
-        target_pos=target_pos,
-    )
-    takeoff_action.add(step)
-    return takeoff_action
+    return bool(msg and msg.landed_state == MAVCommand.TAKEOFF_STATE), None
