@@ -57,7 +57,7 @@ class Oracle:
             pos = local2global_pos(pos, homes[sysid - 1])
         return pos
 
-    def update_neighbors(self, veh: VehicleLogic):
+    def update_neighbors(self, sysid: int):
         # update this tu use mavconnecions and probably custom mavlin messages
         neigh_vehs = []
         neigh_poss = []

@@ -11,7 +11,7 @@ import os
 import subprocess
 from typing import List
 
-from config import QGC_INI_PATH, QGC_PATH, BasePort
+from config import QGC_INI_PATH, QGC_PATH, use_qgc_tcp, BasePort
 from helpers.change_coordinates import Offset, find_spawns
 from plan import Plan
 from simulators.sim import Simulator, VisualizerName
@@ -50,8 +50,10 @@ class QGC(Simulator):
         return f" --custom-location={spawn_str}"
 
     def _launch_visualizer(self):
-        self._delete_all_qgc_links()  # Connect via TCP
-        self._add_qgc_links(n=self.n_uavs)
+        self._delete_all_links()  # delete TCP
+        if use_qgc_tcp:
+            # self._disable_autoconnect_udp()
+            self._add_tcp_links(n=self.n_uavs)
         sim_cmd = [os.path.expanduser(QGC_PATH)]
         # pylint: disable=consider-using-with
         subprocess.Popen(
@@ -61,7 +63,77 @@ class QGC(Simulator):
             shell=False,  # Ensure safety when passing arguments
         )
 
-    def _add_qgc_links(self, n: int = 1, step: int = 10):
+    def _delete_all_links(self):
+        with open(QGC_INI_PATH, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        inside_links = False
+        new_lines: List[str] = []
+
+        for line in lines:
+            if line.strip() == "[LinkConfigurations]":
+                inside_links = True
+                new_lines.append(line)
+                new_lines.append("count=0\n")  # reset count
+                continue
+
+            if inside_links:
+                if line.startswith("Link") or line.startswith("count="):
+                    continue  # skip all LinkX and count lines
+                elif line.startswith("["):  # next section begins
+                    inside_links = False
+
+            new_lines.append(line)
+
+        with open(QGC_INI_PATH, "w", encoding="utf-8") as f:
+            f.writelines(new_lines)
+
+    def _disable_autoconnect_udp(self):
+        """
+        Disables QGroundControl's automatic UDP connection (usually on port 14550)
+        by updating the [AutoConnect] section in the QGroundControl.ini file.
+        """
+        with open(QGC_INI_PATH, "r", encoding="utf-8") as file:
+            lines = file.readlines()
+
+        new_lines: List[str] = []
+        in_autoconnect = False
+        autoconnect_found = False
+        udp_written = False
+
+        for line in lines:
+            stripped = line.strip()
+
+            if stripped == "[AutoConnect]":
+                in_autoconnect = True
+                autoconnect_found = True
+                new_lines.append(line)
+                continue
+
+            if in_autoconnect:
+                if stripped.startswith("UDPLink="):
+                    new_lines.append("UDPLink=false\n")
+                    udp_written = True
+                    continue
+                elif stripped.startswith("[") and stripped != "[AutoConnect]":
+                    in_autoconnect = False
+
+            new_lines.append(line)
+
+        if autoconnect_found and not udp_written:
+            # We're inside AutoConnect but no UDPLink was present
+            idx = next(
+                i for i, line in enumerate(new_lines) if line.strip() == "[AutoConnect]"
+            )
+            new_lines.insert(idx + 1, "UDPLink=false\n")
+        elif not autoconnect_found:
+            # Append new section
+            new_lines.append("\n[AutoConnect]\nUDPLink=false\n")
+
+        with open(QGC_INI_PATH, "w", encoding="utf-8") as file:
+            file.writelines(new_lines)
+
+    def _add_tcp_links(self, n: int = 1, step: int = 10):
         with open(QGC_INI_PATH, "r", encoding="utf-8") as file:
             lines = file.readlines()
 
@@ -100,7 +172,7 @@ class QGC(Simulator):
         new_lines: List[str] = []
         for i in range(n):
             idx = count + i
-            port = BasePort.QGC_TCP + step * i
+            port = BasePort.QGC + step * i
             new_lines.extend(
                 [
                     f"Link{idx}\\auto=true\n",
@@ -118,28 +190,3 @@ class QGC(Simulator):
 
         with open(QGC_INI_PATH, "w", encoding="utf-8") as file:
             file.writelines(lines)
-
-    def _delete_all_qgc_links(self):
-        with open(QGC_INI_PATH, "r", encoding="utf-8") as f:
-            lines = f.readlines()
-
-        inside_links = False
-        new_lines: List[str] = []
-
-        for line in lines:
-            if line.strip() == "[LinkConfigurations]":
-                inside_links = True
-                new_lines.append(line)
-                new_lines.append("count=0\n")  # reset count
-                continue
-
-            if inside_links:
-                if line.startswith("Link") or line.startswith("count="):
-                    continue  # skip all LinkX and count lines
-                elif line.startswith("["):  # next section begins
-                    inside_links = False
-
-            new_lines.append(line)
-
-        with open(QGC_INI_PATH, "w", encoding="utf-8") as f:
-            f.writelines(new_lines)

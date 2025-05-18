@@ -20,6 +20,9 @@ PARAMS_PATH = Path("params/custom_params.parm").resolve()
 
 # Ensure logs directory exists (can be cleaned later)
 LOGS_PATH.mkdir(parents=True, exist_ok=True)
+QGC_UDP = 14550  # QGroundControl(UDP-default option-connect to the proxy)
+QGC_TCP = 5762  # QGroundControl(TCP-no default option-connect directly to Ardupilot-like Gazebo)
+use_qgc_tcp = True
 
 
 # --- Base Communication Ports ---
@@ -37,11 +40,11 @@ class BasePort(IntEnum):
     Gazebo connects to ArduPilot via UDP 9002 (to ArduPilot) and 9003 (from ArduPilot).
     """
 
-    QGC_TCP = 5763  # QGroundControl(TCP-no default option-uncomment in GCS module)
-    QGC_UDP = 14550  # QGroundControl(UDP-default option-comment in GCS module)
-    ARP = 14551  # Ardupilot Vehicle(UDP)
-    GCS = 14552  # Ground Control Station(UDP)
-    ORC = 14553  # Oracle(UDP)
+    # variable QGC_UDP is not actually used because QGround contorol connects automatically to UDP 14550
+    QGC = QGC_TCP if use_qgc_tcp else QGC_UDP
+    ARP = 5760  # Ardupilot Vehicle(TCP)
+    GCS = 14551  # Ground Control Station(UDP)
+    ORC = 14552  # Oracle(UDP)
 
 
 # --- UAV Visualization Colors ---

@@ -145,7 +145,14 @@ class Step(MissionElement):
         if self.state == State.NOT_STARTED:
             self.execute()
         elif self.state == State.IN_PROGRESS:
-            self.check()
+            try:
+                self.check()
+            except StepFailed as e:
+                print(
+                    f"Vehicle {self.conn.target_system}: ❌ {self.class_name} "
+                    f"{self.name} check failed: {e}"
+                )
+                self.state = State.NOT_STARTED
         elif self.state == State.DONE:
             print("⚠️ Already done!. Cannot perform this step again!")
         elif self.state == State.FAILED:

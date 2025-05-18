@@ -29,6 +29,10 @@ class MAVCommand(IntEnum):
     LOCAL_COORD = mavutil.mavlink.MAV_FRAME_LOCAL_NED
     LOCAL_POSITION_NED_ID = mavutil.mavlink.MAVLINK_MSG_ID_LOCAL_POSITION_NED
     TAKEOFF_STATE = mavutil.mavlink.MAV_LANDED_STATE_TAKEOFF
+    SYS_STATUS = mavutil.mavlink.MAVLINK_MSG_ID_SYS_STATUS
+    SET_MESSAGE_INTERVAL = mavutil.mavlink.MAV_CMD_SET_MESSAGE_INTERVAL
+    GPS_RAW = mavutil.mavlink.MAVLINK_MSG_ID_GPS_RAW_INT
+    EKF_STATUS_REPORT = mavutil.mavlink.MAVLINK_MSG_ID_EKF_STATUS_REPORT
 
 
 class RequiredSensors(IntEnum):
@@ -46,8 +50,9 @@ class EKFFlags(IntEnum):
 
     ATTITUDE = mavutil.mavlink.EKF_ATTITUDE
     VELOCITY_HORIZ = mavutil.mavlink.EKF_VELOCITY_HORIZ
-    POS_HORIZ_ABS = mavutil.mavlink.EKF_POS_HORIZ_ABS
     POS_VERT_ABS = mavutil.mavlink.EKF_POS_VERT_ABS
+    # comment this in deboug mode for saving a fcouple of seconds during arming
+    POS_HORIZ_ABS = mavutil.mavlink.EKF_POS_HORIZ_ABS
 
 
 class FlightMode(IntEnum):
@@ -226,3 +231,37 @@ class MAVConnection(Protocol):
 
     def wait_heartbeat(self) -> None:
         """Wait for a heartbeat message from the connected vehicle."""
+
+
+def ask_msg(conn: MAVConnection, msg_id: int) -> None:
+    """Request periodic sending of a MAVLink message (1 Hz)."""
+    conn.mav.command_long_send(
+        conn.target_system,
+        conn.target_component,
+        MAVCommand.SET_MESSAGE_INTERVAL,
+        0,
+        msg_id,
+        1_000_000,  # microseconds
+        0,
+        0,
+        0,
+        0,
+        0,
+    )
+
+
+def stop_msg(conn: MAVConnection, msg_id: int) -> None:
+    """Stop sending a specific MAVLink message."""
+    conn.mav.command_long_send(
+        conn.target_system,
+        conn.target_component,
+        MAVCommand.SET_MESSAGE_INTERVAL,
+        0,
+        msg_id,
+        0,  # Stop
+        0,
+        0,
+        0,
+        0,
+        0,
+    )

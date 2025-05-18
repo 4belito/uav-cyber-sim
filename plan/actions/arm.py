@@ -8,7 +8,7 @@ into mission plans.
 
 from functools import partial
 
-from plan.core import Action, ActionNames, Step
+from plan.core import Action, ActionNames, Step, StepFailed
 from helpers.mavlink import MAVCommand, MAVConnection
 
 
@@ -35,7 +35,7 @@ def exec_arm(conn: MAVConnection) -> None:
         conn.target_component,
         MAVCommand.ARM_DISARM,
         0,
-        1,
+        1,  # Param 1: 1 = arm, 0 = disarm
         0,
         0,
         0,
@@ -48,5 +48,10 @@ def exec_arm(conn: MAVConnection) -> None:
 def check_arm(conn: MAVConnection, _verbose: int) -> tuple[bool, None]:
     """Check if the UAV is armed using a HEARTBEAT message."""
     msg = conn.recv_match(type="HEARTBEAT")
-    armed = bool(msg and (msg.base_mode & MAVCommand.ARMED_FLAG))
-    return armed, None
+    if msg:
+        if msg.base_mode & MAVCommand.ARMED_FLAG:
+            return True, None
+        raise StepFailed(f"flag {msg.base_mode}")
+
+    # armed = bool(msg and (msg.base_mode & MAVCommand.ARMED_FLAG))
+    return False, None

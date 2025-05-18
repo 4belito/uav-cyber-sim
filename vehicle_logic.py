@@ -67,9 +67,6 @@ class VehicleLogic:
         self.safety_radius: float = safety_radius
         self.radar_radius: float = radar_radius
 
-        if verbose:
-            print(f"Vehicle {self.sysid} launched 🚀")
-
     def act(self):
         if self.neighbors.vehs:
             i = np.argmin(self.neighbors.dist)

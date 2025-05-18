@@ -1,0 +1,52 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug ArduCopter SITL",
+            "type": "python",
+            "request": "launch",
+            "program": "/home/abeldg/ardupilot/Tools/autotest/sim_vehicle.py",
+            "args": [
+                "-v",
+                "ArduCopter",
+                "-I0",
+                "--sysid",
+                "1",
+                "--no-rebuild",
+                "--use-dir=/home/abeldg/uav-cyber-sim/logs",
+                "--add-param-file",
+                "/home/abeldg/uav-cyber-sim/params/custom_params.parm",
+                //"--no-mavproxy"
+            ],
+            "cwd": "/home/abeldg/ardupilot", // this is the key fix
+            "console": "integratedTerminal",
+            "justMyCode": false
+        }
+    ]
+}
+// {
+//     "version": "0.2.0",
+//     "configurations": [
+//         {
+//             "name": "Debug MAVProxy",
+//             "type": "python",
+//             "request": "launch",
+//             "program": "/home/abeldg/.local/lib/python3.8/site-packages/MAVProxy/mavproxy.py",
+//             "args": [
+//                 "--retries",
+//                 "5",
+//                 "--out",
+//                 "127.0.0.1:14550",
+//                 "--master",
+//                 "tcp:127.0.0.1:5760",
+//                 "--sitl",
+//                 "127.0.0.1:5501"
+//             ],
+//             "console": "integratedTerminal",
+//             "cwd": "/home/abeldg", // <- or change this if you prefer
+//             "env": {
+//                 "PYTHONPATH": "/home/abeldg/.local/lib/python3.8/site-packages"
+//             }
+//         }
+//     ]
+// }
