@@ -14,25 +14,12 @@ from numpy.typing import NDArray
 from pymavlink import mavutil
 
 from helpers.change_coordinates import Position, global_switch_local_ned
+from helpers.mavlink import MAVCommand, MAVConnection, ask_msg, stop_msg
 from plan.core import Action, ActionNames, Step
-from helpers.mavlink import MAVCommand, MAVConnection
 
 
 def get_local_position(conn: MAVConnection):
     """Requests and returns the UAV's current local NED position."""
-    conn.mav.command_long_send(
-        conn.target_system,
-        conn.target_component,
-        MAVCommand.REQUEST_MESSAGE,
-        0,  # Confirmation
-        MAVCommand.LOCAL_POSITION_NED_ID,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-    )
     ## Check this to make blocking optional parameter
     msg = conn.recv_match(type="LOCAL_POSITION_NED", blocking=True, timeout=0.001)
     # This does not work. I'am not sure why
@@ -45,10 +32,7 @@ def get_local_position(conn: MAVConnection):
 TYPE_MASK = int(0b110111111000)
 
 
-def exec_go_local(
-    conn: MAVConnection,
-    wp: Position,
-):
+def exec_go_local(conn: MAVConnection, wp: Position, ask_pos_interval: int = 100_000):
     """Sends a MAVLink command to move the UAV to a local waypoint."""
     wp = global_switch_local_ned(wp)
     go_msg = mavutil.mavlink.MAVLink_set_position_target_local_ned_message(
@@ -68,6 +52,7 @@ def exec_go_local(
         0,
     )
     conn.mav.send(go_msg)
+    ask_msg(conn, MAVCommand.LOCAL_POSITION_NED_ID, interval=ask_pos_interval)
 
 
 def check_reach_wp(
@@ -85,7 +70,8 @@ def check_reach_wp(
         answer = dist < wp_margin
     else:
         answer = False
-
+    if answer:
+        stop_msg(conn, MAVCommand.LOCAL_POSITION_NED_ID)
     return answer, pos
 
 

@@ -11,7 +11,8 @@ import os
 import subprocess
 from typing import List
 
-from config import QGC_INI_PATH, QGC_PATH, use_qgc_tcp, BasePort
+from config import QGC_INI_PATH, QGC_PATH, BasePort
+from params.simulation import CONNECT_GCS_TO_ARP
 from helpers.change_coordinates import Offset, find_spawns
 from plan import Plan
 from simulators.sim import Simulator, VisualizerName
@@ -51,7 +52,7 @@ class QGC(Simulator):
 
     def _launch_visualizer(self):
         self._delete_all_links()  # delete TCP
-        if use_qgc_tcp:
+        if CONNECT_GCS_TO_ARP:
             # self._disable_autoconnect_udp()
             self._add_tcp_links(n=self.n_uavs)
         sim_cmd = [os.path.expanduser(QGC_PATH)]

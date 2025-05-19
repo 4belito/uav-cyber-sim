@@ -11,8 +11,8 @@ Includes:
 from functools import partial
 from typing import Tuple
 
-from plan.core import Action, ActionNames, Step
 from helpers.mavlink import MAVConnection, ParamName, ParamType
+from plan.core import Action, ActionNames, Step
 
 
 def make_change_nav_speed(speed: float) -> Action:

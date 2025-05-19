@@ -11,9 +11,10 @@ from enum import Enum
 from pathlib import Path
 import platform
 from subprocess import Popen
+import time
 from typing import Any, List
 
-from config import ARDUPILOT_VEHICLE_PATH, LOGS_PATH, PARAMS_PATH
+from config import ARDUPILOT_VEHICLE_PATH, LOGS_PATH, VEH_PARAMS_PATH
 from helpers.change_coordinates import Offset
 from plan import Plan
 
@@ -27,9 +28,6 @@ class VisualizerName(str, Enum):
 
     def __str__(self):
         return str(self.value)
-
-
-import time
 
 
 class Simulator:
@@ -66,9 +64,9 @@ class Simulator:
         for i in range(self.n_uavs):
             sysid = i + 1
             veh_cmd = (
-                f"python3 {self.ardu_path} -v ArduCopter -I{i} --sysid {sysid} "
-                f"--no-rebuild --use-dir={LOGS_PATH} --add-param-file {PARAMS_PATH} "
-                f"--no-mavproxy "
+                f"python3 {self.ardu_path} -v ArduCopter -I{i} --sysid {sysid}"
+                f" --no-rebuild --use-dir={LOGS_PATH} --add-param-file {VEH_PARAMS_PATH}"
+                f" --no-mavproxy"
             )
             veh_cmd += self._add_vehicle_cmd_fn(i)
             p = self.create_process(veh_cmd, after="exit", visible=True)

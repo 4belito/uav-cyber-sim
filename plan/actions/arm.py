@@ -8,8 +8,8 @@ into mission plans.
 
 from functools import partial
 
-from plan.core import Action, ActionNames, Step, StepFailed
 from helpers.mavlink import MAVCommand, MAVConnection
+from plan.core import Action, ActionNames, Step, StepFailed
 
 
 def make_arm():

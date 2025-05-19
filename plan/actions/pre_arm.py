@@ -15,7 +15,7 @@ these checks in sequence.
 """
 
 from functools import partial
-from plan.core import Action, ActionNames, Step, StepFailed
+
 from helpers.mavlink import (
     EKFFlags,
     MAVCommand,
@@ -24,6 +24,7 @@ from helpers.mavlink import (
     ask_msg,
     stop_msg,
 )
+from plan.core import Action, ActionNames, Step, StepFailed
 
 
 def make_pre_arm():
@@ -73,7 +74,7 @@ def check_ekf_status(conn: MAVConnection, verbose: int):
     missing = [flag.name for flag in EKFFlags if not msg.flags & flag]
     if missing:
         if verbose == 2:
-            print(f"❌ EKF check failed! Still waiting for: {', '.join(missing)}")
+            print(f"⌛ Waiting for EKF to be ready... Pending: {', '.join(missing)}")
         return False, None
     stop_msg(conn, msg_id=MAVCommand.EKF_STATUS_REPORT)
     return True, None

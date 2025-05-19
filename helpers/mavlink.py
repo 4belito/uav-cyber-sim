@@ -19,7 +19,6 @@ class MAVCommand(IntEnum):
     ARM = mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM
     TAKEOFF = mavutil.mavlink.MAV_CMD_NAV_TAKEOFF
     LAND = mavutil.mavlink.MAV_CMD_NAV_LAND
-    REQUEST_MESSAGE = mavutil.mavlink.MAV_CMD_REQUEST_MESSAGE
     LOITER_UNLIMITED = mavutil.mavlink.MAV_CMD_NAV_LOITER_UNLIM
     ARMED_FLAG = mavutil.mavlink.MAV_MODE_FLAG_SAFETY_ARMED
     ARM_DISARM = mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM
@@ -33,6 +32,9 @@ class MAVCommand(IntEnum):
     SET_MESSAGE_INTERVAL = mavutil.mavlink.MAV_CMD_SET_MESSAGE_INTERVAL
     GPS_RAW = mavutil.mavlink.MAVLINK_MSG_ID_GPS_RAW_INT
     EKF_STATUS_REPORT = mavutil.mavlink.MAVLINK_MSG_ID_EKF_STATUS_REPORT
+
+    TYPE_GCS = mavutil.mavlink.MAV_TYPE_GCS
+    AUTOPILOT_INVALID = mavutil.mavlink.MAV_AUTOPILOT_INVALID
 
 
 class RequiredSensors(IntEnum):
@@ -162,6 +164,18 @@ class SysStatusMessage(Protocol):
     onboard_control_sensors_health: int
 
 
+class MAVLinkMessage(Protocol):
+    """Generic MAVLink message interface with serialization helpers."""
+
+    def get_type(self) -> str:
+        """Return the type name of the MAVLink message."""
+        raise NotImplementedError("This method must be implemented by subclasses.")
+
+    def get_msgbuf(self) -> bytes:
+        """Return the raw MAVLink message as a bytes buffer."""
+        raise NotImplementedError("This method must be implemented by subclasses.")
+
+
 class MAVConnection(Protocol):
     """
     Protocol defining a typed MAVLink connection with support for recv_match
@@ -226,14 +240,23 @@ class MAVConnection(Protocol):
         blocking: Optional[bool] = ...,
     ) -> Optional[SysStatusMessage]: ...
 
-    def set_mode(self, mode: int) -> None:
-        """Sets the UAV flight mode using the given mode ID."""
+    def recv_msg(self) -> Optional[MAVLinkMessage]:
+        """Receive the next MAVLink message (non-blocking)."""
+
+    def write(self, data: bytes) -> None:
+        """Send raw MAVLink-encoded bytes through the connection."""
 
     def wait_heartbeat(self) -> None:
-        """Wait for a heartbeat message from the connected vehicle."""
+        """Block until a heartbeat is received."""
+
+    def set_mode(self, mode: int) -> None:
+        """Set the UAV flight mode."""
+
+    def close(self) -> None:
+        """Close the MAVLink connection."""
 
 
-def ask_msg(conn: MAVConnection, msg_id: int) -> None:
+def ask_msg(conn: MAVConnection, msg_id: int, interval: int = 1_000_000) -> None:
     """Request periodic sending of a MAVLink message (1 Hz)."""
     conn.mav.command_long_send(
         conn.target_system,
@@ -241,7 +264,7 @@ def ask_msg(conn: MAVConnection, msg_id: int) -> None:
         MAVCommand.SET_MESSAGE_INTERVAL,
         0,
         msg_id,
-        1_000_000,  # microseconds
+        interval,  # microseconds
         0,
         0,
         0,
@@ -258,7 +281,7 @@ def stop_msg(conn: MAVConnection, msg_id: int) -> None:
         MAVCommand.SET_MESSAGE_INTERVAL,
         0,
         msg_id,
-        0,  # Stop
+        -1,  # Stop
         0,
         0,
         0,

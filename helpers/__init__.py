@@ -1,3 +1,5 @@
+"""Init file for helpers package."""
+
 from .change_coordinates import global2local, local2global
 from .cleanup import clean, kill_processes
 

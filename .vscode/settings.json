@@ -23,4 +23,5 @@
         "reportUnknownParameterType": "warning", // inferred but unclear types
         "reportUnknownVariableType": "warning"
     },
+    "notebook.lineNumbers": "on",
 }

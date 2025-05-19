@@ -4,8 +4,10 @@ Configuration module for UAV-CYBER-SIM.
 Defines system paths, base communication ports, and a color enum for UAV visualization.
 """
 
-from enum import StrEnum, IntEnum
+from enum import IntEnum, StrEnum
 from pathlib import Path
+
+from params.simulation import CONNECT_GCS_TO_ARP
 
 # --- System Paths ---
 HOME = Path.home()
@@ -16,16 +18,18 @@ ARDUPILOT_GAZEBO_MODELS = HOME / "ardupilot_gazebo" / "models"
 
 # --- Local Paths ---
 LOGS_PATH = Path("ardupilot_logs").resolve()
-PARAMS_PATH = Path("params/custom_params.parm").resolve()
+VEH_PARAMS_PATH = Path("params/vehicle.parm").resolve()
+SIM_PARAMS_PATH = Path("params/simulation.py").resolve()
 
 # Ensure logs directory exists (can be cleaned later)
 LOGS_PATH.mkdir(parents=True, exist_ok=True)
-QGC_UDP = 14550  # QGroundControl(UDP-default option-connect to the proxy)
-QGC_TCP = 5762  # QGroundControl(TCP-no default option-connect directly to Ardupilot-like Gazebo)
-use_qgc_tcp = True
 
 
 # --- Base Communication Ports ---
+QGC_UDP = 14550  # QGroundControl(UDP-default option-connect to the proxy)
+QGC_TCP = 5762  # QGroundControl(TCP-no default-connect to Ardupilot-like Gazebo)
+
+
 class BasePort(IntEnum):
     """
     Base ports for QGrounfControl(QGC), ArduPilot (ARP), Ground control Station (GCS),
@@ -40,8 +44,9 @@ class BasePort(IntEnum):
     Gazebo connects to ArduPilot via UDP 9002 (to ArduPilot) and 9003 (from ArduPilot).
     """
 
-    # variable QGC_UDP is not actually used because QGround contorol connects automatically to UDP 14550
-    QGC = QGC_TCP if use_qgc_tcp else QGC_UDP
+    # variable QGC_UDP is not actually being used because QGround control connects
+    # automatically to UDP 14550
+    QGC = QGC_TCP if CONNECT_GCS_TO_ARP else QGC_UDP
     ARP = 5760  # Ardupilot Vehicle(TCP)
     GCS = 14551  # Ground Control Station(UDP)
     ORC = 14552  # Oracle(UDP)
