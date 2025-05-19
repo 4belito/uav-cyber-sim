@@ -41,6 +41,17 @@ def send_heartbeat(master):
         master.mav.heartbeat_send(MAV_GROUND, MAV_AUTOPILOT_NONE)
 
 
+def create_connection_udp_old(base_port: int, idx: int, is_input: bool = False):
+    """Create and in or out connection and wait for geting the hearbeat in"""
+    port = base_port + 10 * idx
+    if is_input:
+        conn = mavutil.mavlink_connection(f"udp:127.0.0.1:{port}")
+        conn.wait_heartbeat()
+    else:
+        conn = mavutil.mavlink_connection(f"udpout:127.0.0.1:{port}")
+    return conn
+
+
 def create_connection_udp(base_port: int, idx: int, is_input: bool = False):
     """Create and in or out connection and wait for geting the hearbeat in"""
     port = base_port + 10 * idx
@@ -59,13 +70,28 @@ def create_connection_tcp(base_port: int, idx: int, retries: int = 5):
         try:
             conn = mavutil.mavlink_connection(f"tcp:127.0.0.1:{port}")
             send_heartbeat(conn)
-            conn.wait_heartbeat(timeout=0.1)
+            conn.wait_heartbeat()
             print("✅ Heartbeat received")
             return conn
         except Exception as e:
             print(f"Retry {attempt+1}/{retries} failed: {e}")
             time.sleep(0.1)
     raise RuntimeError("Failed to connect to ArduPilot via TCP")
+
+
+def forward_messages(source, targets, label=""):
+    try:
+        buf = source.recv()
+        msgs = source.mav.parse_buffer(buf)
+        if not msgs:
+            return
+        for msg in msgs:
+            print(f"{label} {msg.get_type()}")
+            mbuf = msg.get_msgbuf()
+            for target in targets:
+                target.write(mbuf)
+    except Exception as e:
+        print(f"Forward error: {e}")
 
 
 def start_proxy(system_id: int):
@@ -75,7 +101,7 @@ def start_proxy(system_id: int):
     cs_conn = create_connection_udp(base_port=BasePort.GCS, idx=i)
     oc_conn = create_connection_udp(base_port=BasePort.ORC, idx=i)
     print(f"\n🔁 Starting Vehicle {system_id}")
-    logic = VehicleLogic(ap_conn)
+    logic = VehicleLogic(ap_conn, verbose=2)
     print("ok-VehicleLogic")
 
     try:
@@ -83,31 +109,43 @@ def start_proxy(system_id: int):
             if heartbeat_period.trigger():
                 send_heartbeat(ap_conn)
 
+            # # VEH → GCS + ORC
+            # forward_messages(ap_conn, [cs_conn, oc_conn], label=f"⬅️ VEH {system_id} →")
+
+            # # GCS → VEH
+            # forward_messages(cs_conn, [ap_conn], label=f"➡️ GCS → VEH {system_id}:")
+
+            # # ORC → VEH
+            # forward_messages(oc_conn, [ap_conn], label=f"➡️ ORC → VEH {system_id}:")
+
             # ← VEH
             msg = ap_conn.recv_msg()
 
             if msg:
                 msg_type = msg.get_type()
+                msg_buff = msg.get_msgbuf()
                 # GCS ←
                 print(f"⬅️ GCS ← VEH {system_id}: {msg_type}")
-                cs_conn.mav.send(msg)
+                cs_conn.write(msg_buff)
                 # ORC ←
                 print(f"⬅️ ORC ← VEH {system_id}: {msg_type}")
-                oc_conn.mav.send(msg)
+                oc_conn.write(msg_buff)
 
             # GCS →
             msg = cs_conn.recv_msg()
             if msg:
+                msg_buff = msg.get_msgbuf()
                 # → VEH
                 print(f"➡️ GCS → VEH {system_id}: {msg.get_type()}")
-                ap_conn.mav.send(msg)
+                ap_conn.write(msg_buff)
 
             # ORC →
             msg = oc_conn.recv_msg()
             if msg:
                 # → UAV
+                msg_buff = msg.get_msgbuf()
                 print(f"➡️ ORC → VEH {system_id}: {msg.get_type()}")
-                ap_conn.mav.send(msg)
+                ap_conn.write(msg_buff)
 
             if logic.plan.state == State.DONE:
                 send_done_until_ack(oc_conn, system_id)

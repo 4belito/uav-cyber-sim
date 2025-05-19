@@ -70,18 +70,15 @@ class Simulator:
                 f"--no-rebuild --use-dir={LOGS_PATH} --add-param-file {PARAMS_PATH} "
                 f"--no-mavproxy "
             )
-            # veh_cmd = (
-            #     f"python3 {self.ardu_path} -v ArduCopter -I{i} --sysid {sysid} "
-            #     f"--no-rebuild --use-dir={LOGS_PATH} --add-param-file {PARAMS_PATH}"
-            #     f"--no-add-14550-ports"
-            # )
             veh_cmd += self._add_vehicle_cmd_fn(i)
             p = self.create_process(veh_cmd, after="exit", visible=True)
             print(f"🚀 Vehicle {sysid} launched (PID {p.pid})")
 
             time.sleep(0.6)  # Give some time to ardupilot to start
             logic_cmd = f"python3 proxy.py --sysid {sysid}"
-            p = self.create_process(logic_cmd, after="exit", visible=True)
+            p = self.create_process(
+                logic_cmd, after="exec bash", visible=True
+            )  # "exec bash"
             print(f"🚀 Vehicle {sysid} logic launched (PID {p.pid})")
 
     def _add_vehicle_cmd_fn(self, _i: int) -> str:

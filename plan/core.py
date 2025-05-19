@@ -89,6 +89,7 @@ class MissionElement:
         """
         self.conn = connection  # Set later from the parent Action
         self.verbose = verbose
+        self.sysid = connection.target_system
         if self.verbose > 2:
             print(
                 f"Vehicle {self.sysid}: {self.class_name} '{self.name}' is "

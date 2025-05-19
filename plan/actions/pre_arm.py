@@ -67,9 +67,6 @@ def check_disarmed(conn: MAVConnection, _verbose: int):
 
 def check_ekf_status(conn: MAVConnection, verbose: int):
     """Checks whether all required EKF flags are set."""
-    if verbose == 2:
-        print("📡 Requesting EKF_STATUS_REPORT...")
-
     msg = conn.recv_match(type="EKF_STATUS_REPORT")
     if not msg:
         return False, None
