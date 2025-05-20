@@ -1,14 +1,18 @@
-# from typing import List
+"""
+Vehicle logic module for executing mission plans with mode switching.
+"""
 
-# import numpy as np
-# from pymavlink import mavutil
+from enum import StrEnum
+
 from helpers.change_coordinates import Position
 from helpers.mavlink import MAVConnection  # ,CustomCmd, MavCmd,  MAVLinkMessage
+from plan.planner import Action, Plan, Step  # , State
 
+# from typing import List
+# import numpy as np
+# from pymavlink import mavutil
 # from helpers.change_coordinates import GLOBAL_switch_LOCAL_NED
 # from plan.actions import make_go_to
-from plan.planner import Action, Plan  # , State
-
 # from helpers.navegation_logic import (
 #     adjust_one_significant_axis_toward_corridor,
 #     find_best_waypoint,
@@ -17,8 +21,9 @@ from plan.planner import Action, Plan  # , State
 # from plan import ActionNames, PlanMode
 
 
+class VehicleMode(StrEnum):
+    """Defines operational modes for the UAV."""
 
-class VehicleMode:
     MISSION = "MISSION"  # or "MISSION", "WAYPOINT_NAV"
     AVOIDANCE = "AVOIDANCE"  # or "COLLISION_AVOIDANCE"
 
@@ -26,6 +31,8 @@ class VehicleMode:
 # sis_id -> id and start at 0
 # sis_id may go out of the class
 class VehicleLogic:
+    """Handles the logic for executing a UAV's mission plan."""
+
     def __init__(
         self,
         connection: MAVConnection,
@@ -53,12 +60,46 @@ class VehicleLogic:
         self.radar_radius: float = radar_radius
 
     def act(self):
+        """Perform the next step in the mission plan."""
+
         # if self.neighbors.vehs:
         #     i = np.argmin(self.neighbors.dist)
         #     self.check_avoidance(obst_pos=self.neighbors.pos[i])
         # if self.plan.mode == PlanMode.DYNAMIC and self.mode != VehicleMode.AVOIDANCE:
         #     self.check_dynamic_action()
         self.plan.act()
+
+    def set_mode(self, new_mode: VehicleMode) -> None:
+        """Switch the vehicle to a new operational mode."""
+        if new_mode != self.mode:
+            print(f"Vehicle {self.sysid} switched to mode: 🔁 {new_mode}")
+            self.mode = new_mode
+
+    @property
+    def current_action(self) -> Action[Step] | None:
+        """Return the current action being executed."""
+        return self.plan.current
+
+    @property
+    def current_step(self) -> Step | None:
+        """Return the current step within the current action."""
+        if self.current_action is not None:
+            return self.current_action.current
+
+    @property
+    def pos(self) -> Position | None:
+        """Return the current estimated position of the UAV."""
+        return self.plan.curr_pos
+
+    def is_onair(self) -> bool | None:
+        """Return whether the UAV is currently airborne."""
+        return self.plan.onair
+
+    @property
+    def target_pos(self) -> Position | None:
+        """Return the current step's target position, if any."""
+        if self.current_step:
+            return self.current_step.target_pos
 
     ## Passive avoidance
     # def check_avoidance(self, obst_pos: np.ndarray):
@@ -142,31 +183,6 @@ class VehicleLogic:
     #     )
     #     goto_step.bind(self.conn)
     #     return goto_step
-
-    def set_mode(self, new_mode: VehicleMode):
-        if new_mode != self.mode:
-            print(f"Vehicle {self.sysid} switched to mode: 🔁 {new_mode}")
-            self.mode = new_mode
-
-    @property
-    def current_action(self) -> Action | None:
-        return self.plan.current
-
-    @property
-    def current_step(self):
-        if self.current_action is not None:
-            return self.current_action.current
-
-    @property
-    def pos(self):
-        return self.plan.curr_pos
-
-    def is_onair(self):
-        return self.plan.onair
-
-    @property
-    def target_pos(self):
-        return self.current_step.target_pos
 
     # def get_avoidance_pos(
     #     self,

@@ -6,6 +6,7 @@ Supports static and dynamic waypoint modes and includes predefined plans.
 from __future__ import annotations
 
 from enum import StrEnum
+
 import numpy as np
 from numpy.typing import NDArray
 

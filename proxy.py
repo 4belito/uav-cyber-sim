@@ -5,6 +5,8 @@ import argparse
 import time
 from typing import List
 
+### Hardcoded for now as part of a step-by-step development process
+import numpy as np
 from pymavlink import mavutil
 from pymavlink.dialects.v20 import common as mavlink2
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
@@ -13,16 +15,11 @@ from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 from config import BasePort
 from helpers.mavlink import CustomCmd, MavCmd, MAVConnection, MAVLinkMessage
 from params.simulation import HEARTBEAT_PERIOD
+from plan import Plan
 from plan.planner import State
 from vehicle_logic import VehicleLogic
 
 heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
-
-
-### Hardcoded for now as part of a step-by-step development process
-import numpy as np
-
-from plan import Plan
 
 offsets = [  # east, north, up, heading
     (5, 5, 0, 90),
