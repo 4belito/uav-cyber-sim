@@ -75,7 +75,7 @@ class Simulator:
             time.sleep(0.6)  # Give some time to ardupilot to start
             logic_cmd = f"python3 proxy.py --sysid {sysid}"
             p = self.create_process(
-                logic_cmd, after="exec bash", visible=True
+                logic_cmd, after="exit", visible=True
             )  # "exec bash"
             print(f"🚀 Vehicle {sysid} logic launched (PID {p.pid})")
 
