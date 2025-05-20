@@ -15,11 +15,11 @@ from helpers.mavlink import MAVConnection, ParamName, ParamType
 from plan.core import Action, ActionNames, Step
 
 
-def make_change_nav_speed(speed: float) -> Action:
+def make_change_nav_speed(speed: float) -> Action[Step]:
     """
     Returns an Action that changes the UAV's WPNAV_SPEED.
     """
-    action = Action(name=ActionNames.CHANGE_NAVSPEED, emoji="🎚️")
+    action = Action[Step](name=ActionNames.CHANGE_NAVSPEED, emoji="🎚️")
     exec_fn = partial(exec_set_nav_speed, speed=speed)
     check_fn = partial(check_set_nav_speed, speed=speed)
     step = Step(
@@ -28,7 +28,7 @@ def make_change_nav_speed(speed: float) -> Action:
         exec_fn=exec_fn,
         onair=False,
     )
-    action.add_step(step)
+    action.add(step)
     return action
 
 

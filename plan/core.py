@@ -6,7 +6,7 @@ Supports chained execution, state tracking, and verbose status reporting.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Callable, List, Optional, Self, cast
+from typing import Callable, Generic, List, Self, TypeVar, cast
 
 from helpers.change_coordinates import Position
 from helpers.mavlink import MAVConnection
@@ -68,6 +68,9 @@ class MissionElement:
 
         ## live property(after building)
         self.conn: MAVConnection = cast(MAVConnection, None)
+        self.onair: bool | None = None  # Default onair status
+        self.target_pos: Position | None = None  # Default target position
+        self.curr_pos: Position | None = None  # Default current position
         self.verbose: int = 1
         self.sysid: int = cast(int, None)
 
@@ -110,17 +113,15 @@ class Step(MissionElement):
         self,
         name: str,
         onair: bool,
-        check_fn: Callable[[MAVConnection, int], tuple[bool, Optional[Position]]],
-        exec_fn: Optional[Callable[[MAVConnection], None]] = None,
+        check_fn: Callable[[MAVConnection, int], tuple[bool, Position | None]],
+        exec_fn: Callable[[MAVConnection], None] | None = None,
         target_pos: Position = (0, 0, 0),
         emoji: str = "🔹",
         is_improv: bool = False,
     ) -> None:
-        self.exec_fn: Callable[[MAVConnection], None] = exec_fn or _noop_exec
-        self.check_fn: Callable[
-            [MAVConnection, int], tuple[bool, Optional[Position]]
-        ] = check_fn
-        self.curr_pos: Optional[Position] = None
+        self.exec_fn = exec_fn or _noop_exec
+        self.check_fn = check_fn
+        self.curr_pos: Position | None = None
         self.onair = onair
         self.target_pos = target_pos
         super().__init__(name=name, emoji=emoji, is_improv=is_improv)
@@ -164,7 +165,10 @@ class Step(MissionElement):
         self.curr_pos = None
 
 
-class Action(MissionElement):
+T = TypeVar("T", bound=MissionElement)
+
+
+class Action(MissionElement, Generic[T]):
     """
     Encapsulates a sequence of steps and manages their coordinated
     execution as a mission action.
@@ -181,14 +185,14 @@ class Action(MissionElement):
         target_pos: Position | None = None,
         is_improv: bool = False,
     ) -> None:
-        self.steps: List[Step] = []
-        self.current: Step | None = None
+        self.steps: List[T] = []
+        self.current: T | None = None
         self.onair = onair
         self.curr_pos = curr_pos
         self.target_pos = target_pos
         super().__init__(name=name, emoji=emoji, is_improv=is_improv)  # ✅ no-op
 
-    def add_step(self, step: Step) -> None:
+    def add(self, step: T) -> None:
         """
         Adds a Step or Action to this Action/Plan.
         Maintains chaining via `next` and updates current element.
@@ -253,7 +257,7 @@ class Action(MissionElement):
             f"Already failed!. Cannot perform this again!"
         )
 
-    def update_pos(self, step: Step):
+    def update_pos(self, step: T):
         """Updates current position and onair status based on a Step."""
         self.onair = step.onair
         if step.curr_pos is not None:
@@ -285,7 +289,7 @@ class Action(MissionElement):
             output.append(indented)
         return "\n".join(output)
 
-    def add_next(self, new_step: Step) -> None:
+    def add_next(self, new_step: T) -> None:
         """
         Inserts a new step/action immediately after the current step.
         Maintains chaining and updates the 'next' pointers accordingly.
@@ -293,7 +297,7 @@ class Action(MissionElement):
         """
         if self.current is None:
             # If no current step exists, treat it like a normal add
-            self.add_step(new_step)
+            self.add(new_step)
             return
 
         next_step = self.current.next  # save next step
@@ -307,7 +311,7 @@ class Action(MissionElement):
         current_index = self.steps.index(self.current)
         self.steps.insert(current_index + 1, new_step)
 
-    def add_prev(self, new_step: Step) -> None:
+    def add_prev(self, new_step: T) -> None:
         """
         Inserts a new step/action immediately before the current step.
         Maintains chaining and updates the 'next' pointers accordingly.
@@ -315,7 +319,7 @@ class Action(MissionElement):
         """
         if self.current is None:
             # If no current step exists, treat it like a normal add
-            self.add_step(new_step)
+            self.add(new_step)
             return
 
         prev_step = self.current.prev  # save prev_step
@@ -328,13 +332,13 @@ class Action(MissionElement):
         current_index = self.steps.index(self.current)
         self.steps.insert(current_index, new_step)
 
-    def add_over(self, new_step: Step) -> None:
+    def add_over(self, new_step: T) -> None:
         """Insert a step after current and mark current step as done."""
         self.add_next(new_step)
         self.current.state = State.DONE  # type: ignore[union-attr]
         self.current = new_step
 
-    def add_now(self, new_step: Step) -> None:
+    def add_now(self, new_step: T) -> None:
         """Insert a step before current and reset it for immediate execution."""
         self.add_prev(new_step)
         self.current.reset()  # type: ignore[union-attr]

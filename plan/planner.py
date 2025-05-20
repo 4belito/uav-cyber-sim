@@ -6,8 +6,6 @@ Supports static and dynamic waypoint modes and includes predefined plans.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import cast
-
 import numpy as np
 from numpy.typing import NDArray
 
@@ -41,7 +39,7 @@ class PlanMode(StrEnum):
     STATIC = "STATIC"
 
 
-class Plan(Action):
+class Plan(Action[Action[Step]]):
     """A high-level mission plan composed of sequential UAV actions."""
 
     # pylint: disable=too-many-arguments
@@ -71,10 +69,6 @@ class Plan(Action):
         else:
             raise ValueError(f"Unsupported plan mode: {mode}")
         super().__init__(name, emoji=emoji, curr_pos=(0, 0, 0))
-
-    def add_action(self, action: Action) -> None:
-        """Adds an Action to the Plan."""
-        super().add_step(cast(Step, action))
 
     @staticmethod
     def create_square_path(
@@ -138,15 +132,15 @@ class Plan(Action):
         land_wp = wps[-1].copy()
         land_wp[2] = 0
         plan = cls(name=name, mode=mode, dynamic_wps=dynamic_wps, wp_margin=wp_margin)
-        plan.add_action(make_pre_arm())
-        plan.add_action(make_set_mode("GUIDED"))
+        plan.add(make_pre_arm())
+        plan.add(make_set_mode("GUIDED"))
         if navegation_speed != 5:
-            plan.add_action(make_change_nav_speed(speed=navegation_speed))
-        plan.add_action(make_arm())
-        plan.add_action(make_takeoff(altitude=takeoff_alt))
-        plan.add_action(make_path(wps=wps, wp_margin=wp_margin))
+            plan.add(make_change_nav_speed(speed=navegation_speed))
+        plan.add(make_arm())
+        plan.add(make_takeoff(altitude=takeoff_alt))
+        plan.add(make_path(wps=wps, wp_margin=wp_margin))
 
-        plan.add_action(make_land(final_wp=land_wp))
+        plan.add(make_land(final_wp=land_wp))
         return plan
 
     ## Improve this for no repeating code
@@ -164,11 +158,11 @@ class Plan(Action):
     ):
         """Creates a plan to take off, reach a point, and hover."""
         plan = cls(name)
-        plan.add_action(make_pre_arm())
-        plan.add_action(make_set_mode("GUIDED"))
+        plan.add(make_pre_arm())
+        plan.add(make_set_mode("GUIDED"))
         if navegation_speed != 5:
-            plan.add_action(make_change_nav_speed(speed=navegation_speed))
-        plan.add_action(make_arm())
-        plan.add_action(make_takeoff(altitude=takeoff_alt))
-        plan.add_action(make_path(wps=wps, wp_margin=wp_margin))
+            plan.add(make_change_nav_speed(speed=navegation_speed))
+        plan.add(make_arm())
+        plan.add(make_takeoff(altitude=takeoff_alt))
+        plan.add(make_path(wps=wps, wp_margin=wp_margin))
         return plan

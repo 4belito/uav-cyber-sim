@@ -14,8 +14,22 @@ from numpy.typing import NDArray
 from pymavlink import mavutil
 
 from helpers.change_coordinates import Position, global_switch_local_ned
-from helpers.mavlink import MAVCommand, MAVConnection, ask_msg, stop_msg
+from helpers.mavlink import MavCmd, MAVConnection, ask_msg, stop_msg
 from plan.core import Action, ActionNames, Step
+
+
+## Make the action
+def make_path(
+    wps: NDArray[np.float64] | None = None, wp_margin: float = 0.5
+) -> Action[Step]:
+    """Creates a FLY action composed of multiple go-to waypoint steps."""
+    go_local_action = Action[Step](name=ActionNames.FLY, emoji="🛩️")
+    if wps is None:
+        return go_local_action  # Return empty action if no waypoints
+    for wp in wps:
+        go_local_action.add(make_go_to(wp, wp_margin))
+
+    return go_local_action
 
 
 def get_local_position(conn: MAVConnection):
@@ -39,7 +53,7 @@ def exec_go_local(conn: MAVConnection, wp: Position, ask_pos_interval: int = 100
         10,
         conn.target_system,
         conn.target_component,
-        MAVCommand.LOCAL_COORD,
+        MavCmd.LOCAL_COORD,
         TYPE_MASK,
         *wp,
         0,
@@ -52,7 +66,7 @@ def exec_go_local(conn: MAVConnection, wp: Position, ask_pos_interval: int = 100
         0,
     )
     conn.mav.send(go_msg)
-    ask_msg(conn, MAVCommand.LOCAL_POSITION_NED_ID, interval=ask_pos_interval)
+    ask_msg(conn, MavCmd.LOCAL_POSITION_NED_ID, interval=ask_pos_interval)
 
 
 def check_reach_wp(
@@ -71,20 +85,8 @@ def check_reach_wp(
     else:
         answer = False
     if answer:
-        stop_msg(conn, MAVCommand.LOCAL_POSITION_NED_ID)
+        stop_msg(conn, MavCmd.LOCAL_POSITION_NED_ID)
     return answer, pos
-
-
-## Make the action
-def make_path(wps: NDArray[np.float64] | None = None, wp_margin: float = 0.5):
-    """Creates a FLY action composed of multiple go-to waypoint steps."""
-    go_local_action = Action(name=ActionNames.FLY, emoji="🛩️")
-    if wps is None:
-        return go_local_action  # Return empty action if no waypoints
-    for wp in wps:
-        go_local_action.add_step(make_go_to(wp, wp_margin))
-
-    return go_local_action
 
 
 def make_go_to(
@@ -93,7 +95,7 @@ def make_go_to(
     cause_text: str = "",
     target_pos: Position | None = None,
     is_improv: bool = False,
-):
+) -> Step:
     """Builds a Step that moves the UAV to a specific waypoint."""
     if target_pos is None:
         target_pos = wp

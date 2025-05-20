@@ -9,13 +9,13 @@ Includes:
 
 from functools import partial
 
-from helpers.mavlink import MAVCommand, MAVConnection, ask_msg, stop_msg
+from helpers.mavlink import MavCmd, MAVConnection, ask_msg, stop_msg
 from plan.core import Action, ActionNames, Step
 
 
-def make_takeoff(altitude: float = 1.0) -> Action:
+def make_takeoff(altitude: float = 1.0) -> Action[Step]:
     """Create a TAKEOFF action with execution and check steps."""
-    takeoff_action = Action(name=ActionNames.TAKEOFF, emoji="🛫")
+    takeoff_action = Action[Step](name=ActionNames.TAKEOFF, emoji="🛫")
     target_pos = (0, 0, altitude)
     # check_fn = partial(check_takeoff, wp=target_pos, wp_margin=wp_margin)
     exec_fn = partial(exec_takeoff, altitude=altitude)
@@ -26,7 +26,7 @@ def make_takeoff(altitude: float = 1.0) -> Action:
         onair=True,
         target_pos=target_pos,
     )
-    takeoff_action.add_step(step)
+    takeoff_action.add(step)
     return takeoff_action
 
 
@@ -35,7 +35,7 @@ def exec_takeoff(conn: MAVConnection, altitude: float = 1.0):
     conn.mav.command_long_send(
         conn.target_system,
         conn.target_component,
-        MAVCommand.TAKEOFF,
+        MavCmd.TAKEOFF,
         0,
         0,
         0,
@@ -45,13 +45,13 @@ def exec_takeoff(conn: MAVConnection, altitude: float = 1.0):
         0,
         altitude,
     )
-    ask_msg(conn, MAVCommand.EXT_STATE)
+    ask_msg(conn, MavCmd.EXT_STATE)
 
 
 def check_takeoff(conn: MAVConnection, _verbose: int):
     """Check if UAV is in TAKEOFF state."""
     msg = conn.recv_match(type="EXTENDED_SYS_STATE", blocking=True, timeout=0.01)
-    take_off = bool(msg and msg.landed_state == MAVCommand.TAKEOFF_STATE)
+    take_off = bool(msg and msg.landed_state == MavCmd.TAKEOFF_STATE)
     if take_off:
-        stop_msg(conn, MAVCommand.EXT_STATE)
+        stop_msg(conn, MavCmd.EXT_STATE)
     return take_off, None

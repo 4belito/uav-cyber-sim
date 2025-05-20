@@ -18,7 +18,7 @@ from functools import partial
 
 from helpers.mavlink import (
     EKFFlags,
-    MAVCommand,
+    MavCmd,
     MAVConnection,
     RequiredSensors,
     ask_msg,
@@ -27,31 +27,31 @@ from helpers.mavlink import (
 from plan.core import Action, ActionNames, Step, StepFailed
 
 
-def make_pre_arm():
+def make_pre_arm() -> Action[Step]:
     """Builds a pre-arm Action that validates safety and system readiness checks."""
-    pre_arm = Action(name=ActionNames.PREARM, emoji="🔧")
+    pre_arm = Action[Step](name=ActionNames.PREARM, emoji="🔧")
     # Steps
     disarm = Step("Check disarmed", check_fn=check_disarmed, onair=False)
     ekf_status = Step(
         "Check EKF status",
         check_fn=partial(check_ekf_status),
-        exec_fn=partial(ask_msg, msg_id=MAVCommand.EKF_STATUS_REPORT),
+        exec_fn=partial(ask_msg, msg_id=MavCmd.EKF_STATUS_REPORT),
         onair=False,
     )
     gps = Step(
         "Check GPS",
         check_fn=check_gps_status,
-        exec_fn=partial(ask_msg, msg_id=MAVCommand.GPS_RAW),
+        exec_fn=partial(ask_msg, msg_id=MavCmd.GPS_RAW),
         onair=False,
     )
     system = Step(
         "Check system",
         check_fn=check_sys_status,
-        exec_fn=partial(ask_msg, msg_id=MAVCommand.SYS_STATUS),
+        exec_fn=partial(ask_msg, msg_id=MavCmd.SYS_STATUS),
         onair=False,
     )
     for step in [disarm, ekf_status, gps, system]:
-        pre_arm.add_step(step)
+        pre_arm.add(step)
     return pre_arm
 
 
@@ -61,7 +61,7 @@ def check_disarmed(conn: MAVConnection, _verbose: int):
     msg = conn.recv_match(type="HEARTBEAT")
     if not msg:
         return False, None
-    if msg.base_mode & MAVCommand.ARMED_FLAG:
+    if msg.base_mode & MavCmd.ARMED_FLAG:
         raise StepFailed("UAV is already armed")
     return True, None
 
@@ -76,7 +76,7 @@ def check_ekf_status(conn: MAVConnection, verbose: int):
         if verbose == 2:
             print(f"⌛ Waiting for EKF to be ready... Pending: {', '.join(missing)}")
         return False, None
-    stop_msg(conn, msg_id=MAVCommand.EKF_STATUS_REPORT)
+    stop_msg(conn, msg_id=MavCmd.EKF_STATUS_REPORT)
     return True, None
 
 
@@ -93,7 +93,7 @@ def check_gps_status(conn: MAVConnection, verbose: int):
             )
             return False, None
         # raise StepFailed(f"GPS fix too weak (fix_type = {msg.fix_type})")
-    stop_msg(conn, msg_id=MAVCommand.GPS_RAW)
+    stop_msg(conn, msg_id=MavCmd.GPS_RAW)
     return True, None
 
 
@@ -113,5 +113,5 @@ def check_sys_status(conn: MAVConnection, _verbose: int):
 
     if missing:
         raise StepFailed(f"Missing or unhealthy sensors: {', '.join(missing)}")
-    stop_msg(conn, msg_id=MAVCommand.SYS_STATUS)
+    stop_msg(conn, msg_id=MavCmd.SYS_STATUS)
     return True, None

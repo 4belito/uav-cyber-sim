@@ -6,16 +6,39 @@ import time
 from typing import List
 
 from pymavlink import mavutil
-from pymavlink.mavutil import mavlink_connection as connect
 from pymavlink.dialects.v20 import common as mavlink2
+from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
 # First Party imports
 from config import BasePort
-from helpers.mavlink import MAVConnection, MAVCommand, MAVLinkMessage
+from helpers.mavlink import CustomCmd, MavCmd, MAVConnection, MAVLinkMessage
+from params.simulation import HEARTBEAT_PERIOD
 from plan.planner import State
 from vehicle_logic import VehicleLogic
 
-heartbeat_period = mavutil.periodic_event(1)
+heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
+
+
+### Hardcoded for now as part of a step-by-step development process
+import numpy as np
+
+from plan import Plan
+
+offsets = [  # east, north, up, heading
+    (5, 5, 0, 90),
+    (10, 0, 0, 45),
+    (-5, -10, 0, 225),
+    (-15, 0, 0, 0),
+    (0, -20, 0, 0),
+]
+homes = np.array([offset[:3] for offset in offsets])
+
+side_lens = (5, 7, 4, 1, 2)
+local_paths = [
+    Plan.create_square_path(side_len=side_len, alt=5) for side_len in side_lens
+]
+plans = [Plan.basic(wps=path, wp_margin=0.5) for path in local_paths]
+##################################
 
 
 def parse_arguments():
@@ -33,7 +56,7 @@ def parse_arguments():
 # taken from mavproxy
 def send_heartbeat(conn: MAVConnection):
     """Send a GCS heartbeat message to the UAV."""
-    conn.mav.heartbeat_send(MAVCommand.TYPE_GCS, MAVCommand.AUTOPILOT_INVALID, 0, 0, 0)
+    conn.mav.heartbeat_send(MavCmd.TYPE_GCS, MavCmd.AUTOPILOT_INVALID, 0, 0, 0)
 
 
 def create_connection_udp(base_port: int, idx: int, is_input: bool = False):
@@ -70,7 +93,8 @@ def route_message(
     sysid: int = 1,
 ) -> None:
     """
-    Receives a MAVLink message from the source and forwards it to the target connections.
+    Receives a MAVLink message from the source and forwards it to the target
+    connections.
     """
     msg = source.recv_msg()
     if msg:
@@ -100,7 +124,7 @@ def start_proxy(sysid: int, verbose: int = 1):
     cs_conn = create_connection_udp(base_port=BasePort.GCS, idx=i)
     oc_conn = create_connection_udp(base_port=BasePort.ORC, idx=i)
     print(f"\n🚀 Starting Vehicle {sysid}")
-    logic = VehicleLogic(ap_conn, verbose=verbose)
+    logic = VehicleLogic(ap_conn, home=homes[i], plan=plans[i], verbose=verbose)
     print("ok-VehicleLogic")
 
     try:
@@ -133,19 +157,17 @@ def start_proxy(sysid: int, verbose: int = 1):
             )
 
             if logic.plan.state == State.DONE:
-                send_done_until_ack(oc_conn, system_id)
+                send_done_until_ack(oc_conn, sysid)
                 break
             logic.act()
     finally:
         cs_conn.close()
         ap_conn.close()
         oc_conn.close()
-        print(f"❎ Vehicle {system_id} logic stopped.")
+        print(f"❎ Vehicle {sysid} logic stopped.")
 
 
-def send_done_until_ack(
-    conn: MAVConnection, idx: int, command_id: int = 3000, max_attempts: int = 100
-):
+def send_done_until_ack(conn: MAVConnection, idx: int, max_attempts: int = 100):
     """
     Send 'DONE' via STATUSTEXT repeatedly until receiving a COMMAND_ACK.
     Assumes `conn` is a dedicated MAVLink connection for one UAV.
@@ -159,7 +181,7 @@ def send_done_until_ack(
         start = time.time()
         while time.time() - start < 0.05:
             ack = conn.recv_match(type="COMMAND_ACK", blocking=False)
-            if ack and ack.command == command_id:
+            if ack and ack.command == CustomCmd.PLAN_DONE:
                 print("✅ ACK received. DONE message acknowledged.")
                 return
             time.sleep(0.001)

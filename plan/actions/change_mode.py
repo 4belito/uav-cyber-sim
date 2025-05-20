@@ -11,10 +11,12 @@ from helpers.mavlink import FlightMode, MAVConnection
 from plan.core import Action, ActionNames, Step
 
 
-def make_set_mode(mode_name: str, onair: bool = False) -> Action:
+def make_set_mode(mode_name: str, onair: bool = False) -> Action[Step]:
     """Creates an Action to switch the UAV flight mode."""
     mode_value = FlightMode.get_value(mode_name)
-    action = Action(f"{ActionNames.CHANGE_FLIGHTMODE}: {mode_name.upper()}", emoji="⚙️")
+    action = Action[Step](
+        f"{ActionNames.CHANGE_FLIGHTMODE}: {mode_name.upper()}", emoji="⚙️"
+    )
     exec_fn = partial(exec_set_mode, mode=mode_value)
     check_fn = partial(check_set_mode, mode=mode_value)
     step = Step(
@@ -23,7 +25,7 @@ def make_set_mode(mode_name: str, onair: bool = False) -> Action:
         exec_fn=exec_fn,
         onair=onair,
     )
-    action.add_step(step)
+    action.add(step)
     return action
 
 

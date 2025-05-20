@@ -12,8 +12,8 @@ import subprocess
 from typing import List
 
 from config import QGC_INI_PATH, QGC_PATH, BasePort
-from params.simulation import CONNECT_GCS_TO_ARP
 from helpers.change_coordinates import Offset, find_spawns
+from params.simulation import CONNECT_GCS_TO_ARP
 from plan import Plan
 from simulators.sim import Simulator, VisualizerName
 

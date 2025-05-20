@@ -13,7 +13,7 @@ from pymavlink import mavutil
 from pymavlink.dialects.v20 import common as mavlink
 
 
-class MAVCommand(IntEnum):
+class MavCmd(IntEnum):
     """Common MAVLink commands and related constants used in UAV control."""
 
     ARM = mavutil.mavlink.MAV_CMD_COMPONENT_ARM_DISARM
@@ -35,6 +35,12 @@ class MAVCommand(IntEnum):
 
     TYPE_GCS = mavutil.mavlink.MAV_TYPE_GCS
     AUTOPILOT_INVALID = mavutil.mavlink.MAV_AUTOPILOT_INVALID
+
+
+class CustomCmd(IntEnum):
+    """official MAV_CMD values generally range from 0 to ~2999"""
+
+    PLAN_DONE = 3000  # Custom command to mark end of plan
 
 
 class RequiredSensors(IntEnum):
@@ -164,6 +170,18 @@ class SysStatusMessage(Protocol):
     onboard_control_sensors_health: int
 
 
+class ACKMessage(Protocol):
+    """Protocol for the MAVLink SYS_STATUS message."""
+
+    command: int
+
+
+class TextMessage(Protocol):
+    """Protocol for the MAVLink SYS_STATUS message."""
+
+    text: str
+
+
 class MAVLinkMessage(Protocol):
     """Generic MAVLink message interface with serialization helpers."""
 
@@ -240,6 +258,22 @@ class MAVConnection(Protocol):
         blocking: Optional[bool] = ...,
     ) -> Optional[SysStatusMessage]: ...
 
+    @overload
+    def recv_match(
+        self,
+        type: Literal["COMMAND_ACK"],  # pylint: disable=redefined-builtin
+        timeout: Optional[float] = ...,
+        blocking: Optional[bool] = ...,
+    ) -> Optional[ACKMessage]: ...
+
+    @overload
+    def recv_match(
+        self,
+        type: Literal["STATUSTEXT"],  # pylint: disable=redefined-builtin
+        timeout: Optional[float] = ...,
+        blocking: Optional[bool] = ...,
+    ) -> Optional[TextMessage]: ...
+
     def recv_msg(self) -> Optional[MAVLinkMessage]:
         """Receive the next MAVLink message (non-blocking)."""
 
@@ -261,7 +295,7 @@ def ask_msg(conn: MAVConnection, msg_id: int, interval: int = 1_000_000) -> None
     conn.mav.command_long_send(
         conn.target_system,
         conn.target_component,
-        MAVCommand.SET_MESSAGE_INTERVAL,
+        MavCmd.SET_MESSAGE_INTERVAL,
         0,
         msg_id,
         interval,  # microseconds
@@ -278,7 +312,7 @@ def stop_msg(conn: MAVConnection, msg_id: int) -> None:
     conn.mav.command_long_send(
         conn.target_system,
         conn.target_component,
-        MAVCommand.SET_MESSAGE_INTERVAL,
+        MavCmd.SET_MESSAGE_INTERVAL,
         0,
         msg_id,
         -1,  # Stop

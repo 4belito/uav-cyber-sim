@@ -3,15 +3,15 @@ Defines a LAND action with execution and landing check using MAVLink commands.
 """
 
 from helpers.change_coordinates import Position
-from helpers.mavlink import MAVCommand, MAVConnection, ask_msg, stop_msg
+from helpers.mavlink import MavCmd, MAVConnection, ask_msg, stop_msg
 from plan.actions.navegation import get_local_position
 from plan.core import Action, ActionNames, Step
 
 
-def make_land(final_wp: Position):
+def make_land(final_wp: Position) -> Action[Step]:
     """Create a LAND Action with execution and check steps."""
-    example_action = Action(name=ActionNames.LAND, emoji="🛬")
-    example_action.add_step(
+    example_action = Action[Step](name=ActionNames.LAND, emoji="🛬")
+    example_action.add(
         Step(
             "land",
             check_fn=check_land,
@@ -32,7 +32,7 @@ def exec_land(
     conn.mav.command_long_send(
         conn.target_system,
         conn.target_component,
-        MAVCommand.LAND,
+        MavCmd.LAND,
         0,
         0,
         0,
@@ -42,8 +42,8 @@ def exec_land(
         0,
         0,
     )
-    ask_msg(conn, MAVCommand.EXT_STATE, interval=ask_land_interval)
-    ask_msg(conn, MAVCommand.LOCAL_POSITION_NED_ID, interval=ask_pos_interval)
+    ask_msg(conn, MavCmd.EXT_STATE, interval=ask_land_interval)
+    ask_msg(conn, MavCmd.LOCAL_POSITION_NED_ID, interval=ask_pos_interval)
 
 
 def check_land(conn: MAVConnection, verbose: int):
@@ -53,7 +53,7 @@ def check_land(conn: MAVConnection, verbose: int):
     current_pos = get_local_position(conn)
     if current_pos is not None and verbose > 1:
         print(f"Vehicle {conn.target_system}: 🛬 Altitute: {current_pos[2]:.2f} m")
-    on_ground = bool(msg and msg.landed_state == MAVCommand.ON_GROUND)
+    on_ground = bool(msg and msg.landed_state == MavCmd.ON_GROUND)
     if on_ground:
-        stop_msg(conn, MAVCommand.EXT_STATE)
+        stop_msg(conn, MavCmd.EXT_STATE)
     return on_ground, current_pos
