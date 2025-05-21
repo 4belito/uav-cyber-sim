@@ -11,7 +11,8 @@ from enum import Enum
 from pathlib import Path
 import platform
 from subprocess import Popen
-import time
+
+
 from typing import Any, List
 
 from config import ARDUPILOT_VEHICLE_PATH, LOGS_PATH, VEH_PARAMS_PATH
@@ -72,7 +73,6 @@ class Simulator:
             p = self.create_process(veh_cmd, after="exit", visible=True)
             print(f"🚀 Vehicle {sysid} launched (PID {p.pid})")
 
-            time.sleep(0.6)  # Give some time to ardupilot to start
             logic_cmd = f"python3 proxy.py --sysid {sysid}"
             p = self.create_process(
                 logic_cmd, after="exit", visible=True

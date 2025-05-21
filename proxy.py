@@ -6,7 +6,7 @@ import time
 from typing import List
 
 ### Hardcoded for now as part of a step-by-step development process
-import numpy as np
+
 from pymavlink import mavutil
 from pymavlink.dialects.v20 import common as mavlink2
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
@@ -21,21 +21,65 @@ from vehicle_logic import VehicleLogic
 
 heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
 
-offsets = [  # east, north, up, heading
-    (5, 5, 0, 90),
-    (10, 0, 0, 45),
-    (-5, -10, 0, 225),
-    (-15, 0, 0, 0),
-    (0, -20, 0, 0),
+
+########## 5 UAVs ####################
+import numpy as np
+
+offsets = [
+    (-4.891311895481473, -1.3721148432366883, 0, 78),
+    (4.272452965244035, -2.0624885894963674, 0, 308),
+    (3.0267596011325804, 2.2013367285195207, 0, 21),
+    (-2.0396000412483604, 0.07477394309030139, 0, 322),
+    (-3.3237962685317655, 0.6696946809570994, 0, 289),
+    (1.5219370395388898, -1.1094923308348625, 0, 149),
+    (0.03170515670252261, 1.4467355333174172, 0, 17),
+    (-3.167665911861357, -3.81136282344402, 0, 22),
+    (-2.444501492007306, 2.3741511359188525, 0, 349),
+    (0.48442199707763045, 4.043149308497993, 0, 38),
 ]
+n_vehicles = len(offsets)
+# offsets = [  # east, north, up, heading
+#     (5.0, 5.0, 0.0, 90.0),
+#     (10.0, 0.0, 0.0, 45.0),
+#     (-5.0, -10.0, 0.0, 225.0),
+#     (-15.0, 0.0, 0.0, 0.0),
+#     (0.0, -20.0, 0.0, 0.0),
+# ]
+
+local_paths = [Plan.create_square_path(side_len=8, alt=5) for _ in range(n_vehicles)]
+plans = [Plan.basic(wps=path, wp_margin=0.5) for path in local_paths]
+homes = [offset[:3] for offset in offsets]
+
 homes = np.array([offset[:3] for offset in offsets])
 
-side_lens = (5, 7, 4, 1, 2)
-local_paths = [
-    Plan.create_square_path(side_len=side_len, alt=5) for side_len in side_lens
-]
-plans = [Plan.basic(wps=path, wp_margin=0.5) for path in local_paths]
+# side_lens = (5, 7, 4, 1, 2)
+# local_paths = [
+#     Plan.create_square_path(side_len=side_len, alt=5) for side_len in side_lens
+# ]
+# plans = [Plan.basic(wps=path, wp_margin=0.5) for path in local_paths]
 ##################################
+
+
+########## Many UAVs ####################
+# import random
+# from helpers.change_coordinates import Offset
+
+# n_vehicles = 6
+# offsets: list[Offset] = [
+#     (
+#         random.uniform(-1000, 1000),  # east
+#         random.uniform(-1000, 1000),  # north
+#         0,  # up
+#         random.randint(0, 359),  # heading
+#     )
+#     for _ in range(n_vehicles)
+# ]
+
+
+# local_paths = [Plan.create_square_path(side_len=5, alt=5) for _ in range(n_vehicles)]
+# plans = [Plan.basic(wps=path, wp_margin=0.5) for path in local_paths]
+# homes = [offset[:3] for offset in offsets]
+##########################################
 
 
 def parse_arguments():
@@ -64,6 +108,7 @@ def create_connection_udp(base_port: int, idx: int, is_input: bool = False):
         conn.wait_heartbeat()
     else:
         conn: MAVConnection = connect(f"udpout:127.0.0.1:{port}")  # type: ignore
+        # send_heartbeat(conn)
     return conn
 
 
@@ -122,8 +167,6 @@ def start_proxy(sysid: int, verbose: int = 1):
     oc_conn = create_connection_udp(base_port=BasePort.ORC, idx=i)
     print(f"\n🚀 Starting Vehicle {sysid}")
     logic = VehicleLogic(ap_conn, home=homes[i], plan=plans[i], verbose=verbose)
-    print("ok-VehicleLogic")
-
     try:
         while True:
             if heartbeat_period.trigger():

@@ -5,7 +5,7 @@ global position tracking, and end-of-plan signaling during MAVLink-based simulat
 
 from typing import Dict, List
 
-import numpy as np
+
 from pymavlink.dialects.v20 import common as mavlink2
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
@@ -16,15 +16,20 @@ from plan.actions import get_local_position
 
 # from vehicle_logic import Neighbors, VehicleLogic
 
-### Hardcoded for now as part of a step-by-step development process
-offsets = [  # east, north, up, heading
-    (5, 5, 0, 90),
-    (10, 0, 0, 45),
-    (-5, -10, 0, 225),
-    (-15, 0, 0, 0),
-    (0, -20, 0, 0),
+
+offsets = [
+    (-4.891311895481473, -1.3721148432366883, 0, 78),
+    (4.272452965244035, -2.0624885894963674, 0, 308),
+    (3.0267596011325804, 2.2013367285195207, 0, 21),
+    (-2.0396000412483604, 0.07477394309030139, 0, 322),
+    (-3.3237962685317655, 0.6696946809570994, 0, 289),
+    (1.5219370395388898, -1.1094923308348625, 0, 149),
+    (0.03170515670252261, 1.4467355333174172, 0, 17),
+    (-3.167665911861357, -3.81136282344402, 0, 22),
+    (-2.444501492007306, 2.3741511359188525, 0, 349),
+    (0.48442199707763045, 4.043149308497993, 0, 38),
 ]
-homes = np.array([offset[:3] for offset in offsets])
+homes = [offset[:3] for offset in offsets]
 
 
 ##################################
