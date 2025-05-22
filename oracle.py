@@ -3,13 +3,9 @@ This module defines the Oracle and GCS classes, which handle UAV-to-UAV coordina
 global position tracking, and end-of-plan signaling during MAVLink-based simulations.
 """
 
-from typing import Dict, List
-
-
 from pymavlink.dialects.v20 import common as mavlink2
-from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
-from config import BasePort
+
 from helpers.change_coordinates import Position, local2global_pos  # ,global2local
 from helpers.mavlink import CustomCmd, MAVConnection
 from plan.actions import get_local_position
@@ -21,13 +17,6 @@ offsets = [
     (-4.891311895481473, -1.3721148432366883, 0, 78),
     (4.272452965244035, -2.0624885894963674, 0, 308),
     (3.0267596011325804, 2.2013367285195207, 0, 21),
-    (-2.0396000412483604, 0.07477394309030139, 0, 322),
-    (-3.3237962685317655, 0.6696946809570994, 0, 289),
-    (1.5219370395388898, -1.1094923308348625, 0, 149),
-    (0.03170515670252261, 1.4467355333174172, 0, 17),
-    (-3.167665911861357, -3.81136282344402, 0, 22),
-    (-2.444501492007306, 2.3741511359188525, 0, 349),
-    (0.48442199707763045, 4.043149308497993, 0, 38),
 ]
 homes = [offset[:3] for offset in offsets]
 
@@ -44,16 +33,19 @@ class Oracle:
     """
 
     def __init__(
-        self, sysids: List[int], name: str = "Oracle ⚪", base_port: int = BasePort.ORC
+        self,
+        conns: list[MAVConnection],
+        name: str = "Oracle ⚪",
     ) -> None:
-        self.pos: Dict[int, Position] = {}
-        self.conns: Dict[int, MAVConnection] = {}
-        for sysid in sysids:
-            port = base_port + 10 * (sysid - 1)
-            conn: MAVConnection = connect(f"udp:127.0.0.1:{port}")  # type: ignore
-            conn.wait_heartbeat()
-            self.conns[sysid] = conn
-            print(f"🔗 UAV logic {sysid} is connected to {name}")
+        self.pos: dict[int, Position] = {}
+        self.conns = {i + 1: conn for i, conn in enumerate(conns)}
+        self.name = name
+        # for sysid in sysids:
+        #     port = base_port + 10 * (sysid - 1)
+        #     conn: MAVConnection = connect(f"udp:127.0.0.1:{port}")  # type: ignore
+        #     conn.wait_heartbeat()
+        #     self.conns[sysid] = conn
+        #     print(f"🔗 UAV logic {sysid} is connected to {name}")
 
     def remove(self, sysid: int):
         """
@@ -127,10 +119,10 @@ class GCS(Oracle):
     Ground Control Station class extending Oracle with trajectory logging.
     """
 
-    def __init__(self, sysids: List[int], name: str = "blue"):
+    def __init__(self, conns: list[MAVConnection], name: str = "blue 🟦"):
         self.name = name
-        super().__init__(sysids, name=f"GCS {name}", base_port=BasePort.GCS)
-        self.paths: Dict[int, List[Position]] = {sysid: [] for sysid in sysids}
+        super().__init__(conns, name=f"GCS {name}")
+        self.paths: dict[int, list[Position]] = {sysid: [] for sysid in self.conns}
 
     def save_pos(self):
         """
@@ -138,3 +130,22 @@ class GCS(Oracle):
         """
         for sysid, pos in self.pos.items():
             self.paths[sysid].append(pos)
+
+    @staticmethod
+    def map_sysid_to_gcs(gcss: dict[str, list[int]]) -> dict[int, str]:
+        """
+        Builds a mapping from vehicle system ID to the name of its assigned GCS.
+
+        Raises:
+            ValueError: If a vehicle system ID is assigned to more than one GCS.
+        """
+        reverse: dict[int, str] = {}
+        for name, id_list in gcss.items():
+            for sysid in id_list:
+                if sysid in reverse:
+                    raise ValueError(
+                        f"The vehicle with system id {sysid} belongs to more than"
+                        f" one GCS: {reverse[sysid]} and {name}"
+                    )
+                reverse[sysid] = name
+        return reverse

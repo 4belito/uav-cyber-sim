@@ -146,6 +146,7 @@ class Gazebo(Simulator):
         subprocess.Popen(  # pylint: disable=consider-using-with
             sim_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=False
         )
+        print("🖥️ Gazebo launched for 3D simulation.")
 
     def _generate_drone_models_from_bases(
         self,
