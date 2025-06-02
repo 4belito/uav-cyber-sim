@@ -63,7 +63,9 @@ class QGC(Simulator):
             stderr=subprocess.DEVNULL,  # Suppress error output
             shell=False,  # Ensure safety when passing arguments
         )
-        print("🗺️ QGroundControl launched for 2D visualization.")
+        print(
+            "🗺️ QGroundControl launched for 2D visualization — simulation powered by ArduPilot SITL."
+        )
 
     def _delete_all_links(self):
         with open(QGC_INI_PATH, "r", encoding="utf-8") as f:

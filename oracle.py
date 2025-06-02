@@ -14,7 +14,7 @@ from plan.actions import get_local_position
 
 
 offsets = [
-    (-4.891311895481473, -1.3721148432366883, 0, 78),
+    (0.0, 0.0, 0, 0),
     (4.272452965244035, -2.0624885894963674, 0, 308),
     (3.0267596011325804, 2.2013367285195207, 0, 21),
 ]
@@ -40,12 +40,6 @@ class Oracle:
         self.pos: dict[int, Position] = {}
         self.conns = {i + 1: conn for i, conn in enumerate(conns)}
         self.name = name
-        # for sysid in sysids:
-        #     port = base_port + 10 * (sysid - 1)
-        #     conn: MAVConnection = connect(f"udp:127.0.0.1:{port}")  # type: ignore
-        #     conn.wait_heartbeat()
-        #     self.conns[sysid] = conn
-        #     print(f"🔗 UAV logic {sysid} is connected to {name}")
 
     def remove(self, sysid: int):
         """

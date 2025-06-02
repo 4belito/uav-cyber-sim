@@ -81,13 +81,16 @@ class Simulator:
             )
             veh_cmd += self._add_vehicle_cmd_fn(i)
             p = self.create_process(veh_cmd, after="exit", visible=True)
-            print(f"🚀 Vehicle {sysid} launched (PID {p.pid})")
+            print(f"🚀 ArduPilot SITL vehicle {sysid} launched (PID {p.pid})")
 
             logic_cmd = f"python3 proxy.py --sysid {sysid}"
             p = self.create_process(
                 logic_cmd, after="exit", visible=True
             )  # "exec bash"
-            print(f"🚀 Vehicle {sysid} logic launched (PID {p.pid})")
+            print(f"🚀 UAV logic for vehicle {sysid} launched (PID {p.pid})")
+            print(
+                f"🔗 UAV logic {sysid} is connected to Ardupilot SITL vehicle {sysid}"
+            )
 
             ## Connect to oracle
             port = BasePort.ORC + 10 * (sysid - 1)
