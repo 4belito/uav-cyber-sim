@@ -3,8 +3,7 @@ This module defines the Oracle and GCS classes, which handle UAV-to-UAV coordina
 global position tracking, and end-of-plan signaling during MAVLink-based simulations.
 """
 
-from pymavlink.dialects.v20 import common as mavlink2
-
+from pymavlink.dialects.v20 import common as mavlink2  # type: ignore
 
 from helpers.change_coordinates import Position, local2global_pos  # ,global2local
 from helpers.mavlink import CustomCmd, MAVConnection
@@ -12,15 +11,16 @@ from plan.actions import get_local_position
 
 # from vehicle_logic import Neighbors, VehicleLogic
 
-
+### Hardcoded for now as part of a step-by-step development process
+########## 5 UAVs ####################
 offsets = [
-    (0.0, 0.0, 0, 0),
-    (4.272452965244035, -2.0624885894963674, 0, 308),
-    (3.0267596011325804, 2.2013367285195207, 0, 21),
+    (0.0, 0.0, 0.0, 0.0),
+    (10.0, 0.0, 0.0, 45.0),
+    (-5.0, -10.0, 0.0, 225.0),
+    (-15.0, 0.0, 0.0, 0.0),
+    (0.0, -20.0, 0.0, 0.0),
 ]
 homes = [offset[:3] for offset in offsets]
-
-
 ##################################
 
 

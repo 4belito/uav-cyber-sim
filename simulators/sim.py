@@ -11,16 +11,15 @@ from enum import Enum
 from pathlib import Path
 import platform
 from subprocess import Popen
-
-
 from typing import Any
+
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
-from config import ARDUPILOT_VEHICLE_PATH, LOGS_PATH, VEH_PARAMS_PATH
+
+from config import ARDUPILOT_VEHICLE_PATH, LOGS_PATH, VEH_PARAMS_PATH, BasePort
 from helpers.change_coordinates import Offset
 from helpers.mavlink import MAVConnection
+from oracle import Oracle
 from plan import Plan
-from config import BasePort
-from oracle import Oracle, GCS
 
 
 class VisualizerName(str, Enum):
@@ -58,19 +57,17 @@ class Simulator:
         self.ardu_path: Path = ARDUPILOT_VEHICLE_PATH
         self.plans: list[Plan] = plans or [Plan.basic()]
 
-    def launch(self, gcs_sysids: dict[str, list[int]]) -> tuple[Oracle, list[GCS]]:
+    def launch(self, gcs_sysids: dict[str, list[int]]) -> Oracle:
         """Launches vehicle instances and the optional simulator."""
         self._launch_visualizer()
-        oracle, gcss = self.launch_vehicles(gcs_sysids)
-        return oracle, gcss
+        oracle = self.launch_vehicles(gcs_sysids)
+        return oracle
 
     def launch_vehicles(
         self, gcs_sysids: dict[str, list[int]], oracle_name: str = "Oracle ⚪"
-    ) -> tuple[Oracle, list[GCS]]:
+    ) -> Oracle:
         """Launches ArduPilot and logic processes for each UAV."""
         orc_conns: list[MAVConnection] = []
-        gcs_conns: dict[str, list[MAVConnection]] = {name: [] for name in gcs_sysids}
-        gcs_of = GCS.map_sysid_to_gcs(gcs_sysids)
         for i in range(self.n_uavs):
             sysid = i + 1
             veh_cmd = (
@@ -80,13 +77,21 @@ class Simulator:
                 f" --no-mavproxy"
             )
             veh_cmd += self._add_vehicle_cmd_fn(i)
-            p = self.create_process(veh_cmd, after="exit", visible=True)
+            p = self.create_process(
+                veh_cmd,
+                after="exec bash",
+                visible=True,
+                title=f"ArduPilot SITL Launcher: Vehicle {sysid}",
+            )  # "exit"
             print(f"🚀 ArduPilot SITL vehicle {sysid} launched (PID {p.pid})")
 
             logic_cmd = f"python3 proxy.py --sysid {sysid}"
             p = self.create_process(
-                logic_cmd, after="exit", visible=True
-            )  # "exec bash"
+                logic_cmd,
+                after="exec bash",
+                visible=True,
+                title=f"UAV logic: Vehicle {sysid}",
+            )  # "exit"
             print(f"🚀 UAV logic for vehicle {sysid} launched (PID {p.pid})")
             print(
                 f"🔗 UAV logic {sysid} is connected to Ardupilot SITL vehicle {sysid}"
@@ -99,18 +104,14 @@ class Simulator:
             print(f"🔗 UAV logic {sysid} is connected to {oracle_name}")
             orc_conns.append(conn)
 
-            # Connect to GCS
-            port = BasePort.GCS + 10 * (sysid - 1)
-            conn: MAVConnection = connect(f"udp:127.0.0.1:{port}")  # type: ignore
-            conn.wait_heartbeat()
-            gcs_name = gcs_of[sysid]
-            print(f"🔗 UAV logic {sysid} is connected to {gcs_name}")
-            gcs_conns[gcs_name].append(conn)
         oracle = Oracle(orc_conns, name=oracle_name)
-        gcss: list[GCS] = []
-        for name, conns in gcs_conns.items():
-            gcss.append(GCS(conns, name))
-        return oracle, gcss
+        for gcs_name, sysids in gcs_sysids.items():
+            gcs_cmd = f'python3 gcs.py --name "{gcs_name}" --sysid "{sysids}"'
+            p = self.create_process(
+                gcs_cmd, after="exec bash", visible=True, title=f"GCS: {gcs_name}"
+            )  # "exit"
+            print(f"🚀 GCS {gcs_name} launched (PID {p.pid})")
+        return oracle
 
     def _add_vehicle_cmd_fn(self, _i: int) -> str:
         """Optional hook to additional command-line args."""
@@ -121,12 +122,26 @@ class Simulator:
         print("🙈 Running without visualization.")
 
     def create_process(
-        self, cmd: str, after: str = "exit", visible: bool = True
+        self,
+        cmd: str,
+        after: str = "exit",
+        visible: bool = True,
+        title: str = "Terminal",
     ) -> Popen[bytes]:
         """Launch a subprocess, optionally in a visible terminal."""
         if visible:
             if platform.system() == "Linux":
-                return Popen(["gnome-terminal", "--", "bash", "-c", f"{cmd}; {after}"])
+                return Popen(
+                    [
+                        "gnome-terminal",
+                        "--title",
+                        title,
+                        "--",
+                        "bash",
+                        "-c",
+                        f"{cmd}; {after}",
+                    ]
+                )
             raise OSError("Unsupported OS for visible terminal mode.")
         return Popen(cmd.split())
 

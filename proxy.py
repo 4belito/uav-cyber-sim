@@ -5,10 +5,8 @@ import argparse
 import time
 from typing import List
 
-### Hardcoded for now as part of a step-by-step development process
-
-from pymavlink import mavutil
-from pymavlink.dialects.v20 import common as mavlink2
+from pymavlink import mavutil  # type: ignore
+from pymavlink.dialects.v20 import common as mavlink2  # type: ignore
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
 # First Party imports
@@ -19,60 +17,29 @@ from plan import Plan
 from plan.planner import State
 from vehicle_logic import VehicleLogic
 
+### Hardcoded for now as part of a step-by-step development process
+########## 5 UAVs ####################
+offsets = [  # east, north, up, heading
+    (0.0, 0.0, 0.0, 0.0),
+    (10.0, 0.0, 0.0, 45.0),
+    (-5.0, -10.0, 0.0, 225.0),
+    (-15.0, 0.0, 0.0, 0.0),
+    (0.0, -20.0, 0.0, 0.0),
+]
+n_vehicles = len(offsets)
+local_paths = [Plan.create_square_path(side_len=5, alt=5) for _ in range(n_vehicles)]
+plans = [Plan.basic(wps=path, wp_margin=0.5) for path in local_paths]
+homes = [offset[:3] for offset in offsets]
+########################################
+
+
 heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
 
 
-########## 5 UAVs ####################
-import numpy as np
-
-offsets = [
-    (0.0, 0.0, 0, 0),
-    (4.272452965244035, -2.0624885894963674, 0, 308),
-    (3.0267596011325804, 2.2013367285195207, 0, 21),
-]
-n_vehicles = len(offsets)
-# offsets = [  # east, north, up, heading
-#     (5.0, 5.0, 0.0, 90.0),
-#     (10.0, 0.0, 0.0, 45.0),
-#     (-5.0, -10.0, 0.0, 225.0),
-#     (-15.0, 0.0, 0.0, 0.0),
-#     (0.0, -20.0, 0.0, 0.0),
-# ]
-
-local_paths = [Plan.create_square_path(side_len=8, alt=5) for _ in range(n_vehicles)]
-plans = [Plan.basic(wps=path, wp_margin=0.5) for path in local_paths]
-homes = [offset[:3] for offset in offsets]
-
-homes = np.array([offset[:3] for offset in offsets])
-
-# side_lens = (5, 7, 4, 1, 2)
-# local_paths = [
-#     Plan.create_square_path(side_len=side_len, alt=5) for side_len in side_lens
-# ]
-# plans = [Plan.basic(wps=path, wp_margin=0.5) for path in local_paths]
-##################################
-
-
-########## Many UAVs ####################
-# import random
-# from helpers.change_coordinates import Offset
-
-# n_vehicles = 6
-# offsets: list[Offset] = [
-#     (
-#         random.uniform(-1000, 1000),  # east
-#         random.uniform(-1000, 1000),  # north
-#         0,  # up
-#         random.randint(0, 359),  # heading
-#     )
-#     for _ in range(n_vehicles)
-# ]
-
-
-# local_paths = [Plan.create_square_path(side_len=5, alt=5) for _ in range(n_vehicles)]
-# plans = [Plan.basic(wps=path, wp_margin=0.5) for path in local_paths]
-# homes = [offset[:3] for offset in offsets]
-##########################################
+def main():
+    system_id = parse_arguments()
+    print(f"System id: {system_id}")
+    start_proxy(system_id, verbose=2)
 
 
 def parse_arguments():
@@ -191,6 +158,7 @@ def start_proxy(sysid: int, verbose: int = 1):
 
             if logic.plan.state == State.DONE:
                 send_done_until_ack(oc_conn, sysid)
+                send_done_until_ack(cs_conn, sysid)
                 break
             logic.act()
     finally:
@@ -223,6 +191,4 @@ def send_done_until_ack(conn: MAVConnection, idx: int, max_attempts: int = 100):
 
 
 if __name__ == "__main__":
-    system_id = parse_arguments()
-    print(f"System id: {system_id}")
-    start_proxy(system_id, verbose=2)
+    main()

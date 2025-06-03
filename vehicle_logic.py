@@ -85,6 +85,8 @@ class VehicleLogic:
         """Return the current step within the current action."""
         if self.current_action is not None:
             return self.current_action.current
+        else:
+            return None
 
     @property
     def pos(self) -> Position | None:
@@ -100,6 +102,8 @@ class VehicleLogic:
         """Return the current step's target position, if any."""
         if self.current_step:
             return self.current_step.target_pos
+        else:
+            return None
 
     ## Passive avoidance
     # def check_avoidance(self, obst_pos: np.ndarray):

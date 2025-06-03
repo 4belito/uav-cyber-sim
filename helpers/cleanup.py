@@ -14,6 +14,7 @@ ALL_PROCESSES = [
     "gazebo",
     "mavproxy",
     "proxy.py",
+    "gcs.py",
 ]
 
 All = Literal["all"]
