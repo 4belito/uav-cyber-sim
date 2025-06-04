@@ -55,7 +55,7 @@ class QGC(Simulator):
         if CONNECT_GCS_TO_ARP:
             # self._disable_autoconnect_udp()
             self._add_tcp_links(n=self.n_uavs)
-        sim_cmd = [os.path.expanduser(QGC_PATH)]
+        sim_cmd = [os.path.expanduser(QGC_PATH), "--appimage-extract-and-run"]
         # pylint: disable=consider-using-with
         subprocess.Popen(
             sim_cmd,

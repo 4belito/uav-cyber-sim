@@ -20,7 +20,6 @@ import os
 from pathlib import Path
 import re
 import shutil
-import subprocess
 from typing import Dict, List, Tuple
 import xml.etree.ElementTree as ET
 
@@ -28,7 +27,7 @@ import numpy as np
 from numpy.typing import NDArray
 import plotly.graph_objects as go
 
-from config import ARDUPILOT_GAZEBO_MODELS, Color
+from config import ARDUPILOT_GAZEBO_MODELS, ENV_CMD_GAZ, Color
 from helpers.change_coordinates import Offset, Position, heading_to_yaw
 from plan import Plan
 from simulators.sim import Simulator, VisualizerName
@@ -142,9 +141,8 @@ class Gazebo(Simulator):
         base_models = [f"{models[i][0]}_{models[i][1]}" for i in range(self.n_uavs)]
         self._generate_drone_models_from_bases(base_models, base_port_in=9002, step=10)
         updated_world = self._update_world(self.config.world_path)
-        sim_cmd = ["gazebo", updated_world]
-        subprocess.Popen(  # pylint: disable=consider-using-with
-            sim_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, shell=False
+        self.create_process(
+            f"gazebo {updated_world}", visible=False, env_cmd=ENV_CMD_GAZ
         )
         print("🖥️ Gazebo launched for realistic simulation and 3D visualization.")
 

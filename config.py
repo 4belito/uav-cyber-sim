@@ -69,3 +69,9 @@ class Color(StrEnum):
 
     def __repr__(self) -> str:
         return self.value
+
+
+# --- Environment Setup Commands ---
+ENV_CMD_PYT = None
+ENV_CMD_ARP = None
+ENV_CMD_GAZ = None

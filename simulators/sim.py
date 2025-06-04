@@ -15,7 +15,14 @@ from typing import Any
 
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
-from config import ARDUPILOT_VEHICLE_PATH, LOGS_PATH, VEH_PARAMS_PATH, BasePort
+from config import (
+    ARDUPILOT_VEHICLE_PATH,
+    ENV_CMD_ARP,
+    ENV_CMD_PYT,
+    LOGS_PATH,
+    VEH_PARAMS_PATH,
+    BasePort,
+)
 from helpers.change_coordinates import Offset
 from helpers.mavlink import MAVConnection
 from oracle import Oracle
@@ -82,6 +89,7 @@ class Simulator:
                 after="exec bash",
                 visible=True,
                 title=f"ArduPilot SITL Launcher: Vehicle {sysid}",
+                env_cmd=ENV_CMD_ARP,
             )  # "exit"
             print(f"🚀 ArduPilot SITL vehicle {sysid} launched (PID {p.pid})")
 
@@ -91,6 +99,7 @@ class Simulator:
                 after="exec bash",
                 visible=True,
                 title=f"UAV logic: Vehicle {sysid}",
+                env_cmd=ENV_CMD_PYT,
             )  # "exit"
             print(f"🚀 UAV logic for vehicle {sysid} launched (PID {p.pid})")
             print(
@@ -108,7 +117,11 @@ class Simulator:
         for gcs_name, sysids in gcs_sysids.items():
             gcs_cmd = f'python3 gcs.py --name "{gcs_name}" --sysid "{sysids}"'
             p = self.create_process(
-                gcs_cmd, after="exec bash", visible=True, title=f"GCS: {gcs_name}"
+                gcs_cmd,
+                after="exec bash",
+                visible=True,
+                title=f"GCS: {gcs_name}",
+                env_cmd=ENV_CMD_PYT,
             )  # "exit"
             print(f"🚀 GCS {gcs_name} launched (PID {p.pid})")
         return oracle
@@ -127,8 +140,14 @@ class Simulator:
         after: str = "exit",
         visible: bool = True,
         title: str = "Terminal",
+        env_cmd: str | None = None,
     ) -> Popen[bytes]:
         """Launch a subprocess, optionally in a visible terminal."""
+        bash_cmd = [
+            "bash",
+            "-c",
+            (f"{env_cmd}; " if env_cmd else "") + f"{cmd}; {after}",
+        ]
         if visible:
             if platform.system() == "Linux":
                 return Popen(
@@ -137,13 +156,11 @@ class Simulator:
                         "--title",
                         title,
                         "--",
-                        "bash",
-                        "-c",
-                        f"{cmd}; {after}",
                     ]
+                    + bash_cmd
                 )
             raise OSError("Unsupported OS for visible terminal mode.")
-        return Popen(cmd.split())
+        return Popen(bash_cmd)
 
     def __repr__(self) -> str:
         return f"name: '{self.name}'\noffsets: {self.offsets}\nconfig: {self.config}"
