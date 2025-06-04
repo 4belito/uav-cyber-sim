@@ -1,1 +1,4 @@
 5-dynamic_actions_old.ipynb
+**/__pycache__/
+*.pkl
+ardupilot_logs/
