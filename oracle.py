@@ -38,7 +38,7 @@ class Oracle:
         name: str = "Oracle ⚪",
     ) -> None:
         self.pos: dict[int, Position] = {}
-        self.conns = {i + 1: conn for i, conn in enumerate(conns)}
+        self.conns = {conn.target_system: conn for conn in conns}
         self.name = name
 
     def remove(self, sysid: int):
@@ -103,7 +103,7 @@ class Oracle:
             conn.mav.command_ack_send(
                 command=CustomCmd.PLAN_DONE, result=mavlink2.MAV_RESULT_ACCEPTED
             )
-            print(f"✅ Vehicle {sysid} terminated")
+            print(f"✅ Vehicle {sysid} completed its mission")
             return True
         return False
 
