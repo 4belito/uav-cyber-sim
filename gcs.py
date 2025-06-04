@@ -31,7 +31,7 @@ def main():
         for sysid in list(gcs.conns.keys()):
             if gcs.is_plan_done(sysid):
                 gcs.remove(sysid)
-    print(f"✅ All UAVs assigned to GCS '{gcs_name}' have completed their mission.")
+    print(f"✅ All UAVs assigned to GCS {gcs_name} have completed their mission.")
     trajectory_file = f"trajectories_{gcs_name}.pkl"
     with open(trajectory_file, "wb") as file:
         pickle.dump(gcs.paths, file)
