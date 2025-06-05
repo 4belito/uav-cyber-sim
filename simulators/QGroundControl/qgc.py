@@ -42,8 +42,19 @@ class QGC(Simulator):
 
     """
 
-    def __init__(self, offsets: List[Offset], plans: List[Plan], origin: Offset):
-        super().__init__(name=VisualizerName.QGROUND, offsets=offsets, plans=plans)
+    def __init__(
+        self,
+        offsets: List[Offset],
+        plans: List[Plan],
+        origin: Offset,
+        visible_terminals: bool = False,
+    ):
+        super().__init__(
+            name=VisualizerName.QGROUND,
+            offsets=offsets,
+            plans=plans,
+            visible_terminals=visible_terminals,
+        )
         self.config: ConfigQGroundControl = ConfigQGroundControl(offsets, origin)
 
     def _add_vehicle_cmd_fn(self, i: int):

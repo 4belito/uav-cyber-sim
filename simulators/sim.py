@@ -56,6 +56,7 @@ class Simulator:
         name: VisualizerName = VisualizerName.NONE,
         offsets: list[Offset] | None = None,
         plans: list[Plan] | None = None,
+        visible_terminals: bool = True,
     ):
         self.name = name
         self.config: Any | None = None
@@ -63,6 +64,7 @@ class Simulator:
         self.n_uavs: int = len(self.offsets)
         self.ardu_path: Path = ARDUPILOT_VEHICLE_PATH
         self.plans: list[Plan] = plans or [Plan.basic()]
+        self.visible_terminals = visible_terminals
 
     def launch(self, gcs_sysids: dict[str, list[int]]) -> Oracle:
         """Launches vehicle instances and the optional simulator."""
@@ -87,7 +89,7 @@ class Simulator:
             p = self.create_process(
                 veh_cmd,
                 after="exec bash",
-                visible=True,
+                visible=self.visible_terminals,
                 title=f"ArduPilot SITL Launcher: Vehicle {sysid}",
                 env_cmd=ENV_CMD_ARP,
             )  # "exit"
@@ -97,7 +99,7 @@ class Simulator:
             p = self.create_process(
                 logic_cmd,
                 after="exec bash",
-                visible=True,
+                visible=self.visible_terminals,
                 title=f"UAV logic: Vehicle {sysid}",
                 env_cmd=ENV_CMD_PYT,
             )  # "exit"
@@ -119,7 +121,7 @@ class Simulator:
             p = self.create_process(
                 gcs_cmd,
                 after="exec bash",
-                visible=True,
+                visible=self.visible_terminals,
                 title=f"GCS: {gcs_name}",
                 env_cmd=ENV_CMD_PYT,
             )  # "exit"

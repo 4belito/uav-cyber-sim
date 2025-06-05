@@ -129,8 +129,19 @@ class Gazebo(Simulator):
     It configures drone models, world markers, and coordinates with ArduPilot logic.
     """
 
-    def __init__(self, offsets: List[Offset], plans: List[Plan], config: ConfigGazebo):
-        super().__init__(name=VisualizerName.GAZEBO, offsets=offsets, plans=plans)
+    def __init__(
+        self,
+        offsets: List[Offset],
+        plans: List[Plan],
+        config: ConfigGazebo,
+        visible_terminals: bool = False,
+    ):
+        super().__init__(
+            name=VisualizerName.GAZEBO,
+            offsets=offsets,
+            plans=plans,
+            visible_terminals=visible_terminals,
+        )
         self.config: ConfigGazebo = config
 
     def _add_vehicle_cmd_fn(self, i: int) -> str:
