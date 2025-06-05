@@ -12,6 +12,7 @@ from pathlib import Path
 import platform
 from subprocess import Popen
 from typing import Any
+from concurrent import futures
 
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
@@ -57,6 +58,7 @@ class Simulator:
         offsets: list[Offset] | None = None,
         plans: list[Plan] | None = None,
         visible_terminals: bool = True,
+        oracle_name: str = "Oracle ⚪",
     ):
         self.name = name
         self.config: Any | None = None
@@ -65,6 +67,7 @@ class Simulator:
         self.ardu_path: Path = ARDUPILOT_VEHICLE_PATH
         self.plans: list[Plan] = plans or [Plan.basic()]
         self.visible_terminals = visible_terminals
+        self.oracle_name = oracle_name
 
     def launch(self, gcs_sysids: dict[str, list[int]]) -> Oracle:
         """Launches vehicle instances and the optional simulator."""
@@ -72,50 +75,12 @@ class Simulator:
         oracle = self.launch_vehicles(gcs_sysids)
         return oracle
 
-    def launch_vehicles(
-        self, gcs_sysids: dict[str, list[int]], oracle_name: str = "Oracle ⚪"
-    ) -> Oracle:
+    def launch_vehicles(self, gcs_sysids: dict[str, list[int]]) -> Oracle:
         """Launches ArduPilot and logic processes for each UAV."""
-        orc_conns: list[MAVConnection] = []
-        for i in range(self.n_uavs):
-            sysid = i + 1
-            veh_cmd = (
-                f"python3 {self.ardu_path}"
-                f" -v ArduCopter -I{i} --sysid {sysid} --no-rebuild"
-                f" --use-dir={LOGS_PATH} --add-param-file {VEH_PARAMS_PATH}"
-                f" --no-mavproxy"
-            )
-            veh_cmd += self._add_vehicle_cmd_fn(i)
-            p = self.create_process(
-                veh_cmd,
-                after="exec bash",
-                visible=self.visible_terminals,
-                title=f"ArduPilot SITL Launcher: Vehicle {sysid}",
-                env_cmd=ENV_CMD_ARP,
-            )  # "exit"
-            print(f"🚀 ArduPilot SITL vehicle {sysid} launched (PID {p.pid})")
+        with futures.ThreadPoolExecutor() as executor:
+            orc_conns = list(executor.map(self._launch_uav, range(self.n_uavs)))
 
-            logic_cmd = f"python3 proxy.py --sysid {sysid}"
-            p = self.create_process(
-                logic_cmd,
-                after="exec bash",
-                visible=self.visible_terminals,
-                title=f"UAV logic: Vehicle {sysid}",
-                env_cmd=ENV_CMD_PYT,
-            )  # "exit"
-            print(f"🚀 UAV logic for vehicle {sysid} launched (PID {p.pid})")
-            print(
-                f"🔗 UAV logic {sysid} is connected to Ardupilot SITL vehicle {sysid}"
-            )
-
-            ## Connect to oracle
-            port = BasePort.ORC + 10 * (sysid - 1)
-            conn: MAVConnection = connect(f"udp:127.0.0.1:{port}")  # type: ignore
-            conn.wait_heartbeat()
-            print(f"🔗 UAV logic {sysid} is connected to {oracle_name}")
-            orc_conns.append(conn)
-
-        oracle = Oracle(orc_conns, name=oracle_name)
+        oracle = Oracle(orc_conns, name=self.oracle_name)
         for gcs_name, sysids in gcs_sysids.items():
             gcs_cmd = f'python3 gcs.py --name "{gcs_name}" --sysid "{sysids}"'
             p = self.create_process(
@@ -127,6 +92,42 @@ class Simulator:
             )  # "exit"
             print(f"🚀 GCS {gcs_name} launched (PID {p.pid})")
         return oracle
+
+    def _launch_uav(self, i: int):
+        sysid = i + 1
+        veh_cmd = (
+            f"python3 {self.ardu_path}"
+            f" -v ArduCopter -I{i} --sysid {sysid} --no-rebuild"
+            f" --use-dir={LOGS_PATH} --add-param-file {VEH_PARAMS_PATH}"
+            f" --no-mavproxy"
+        )
+        veh_cmd += self._add_vehicle_cmd_fn(i)
+        p = self.create_process(
+            veh_cmd,
+            after="exec bash",
+            visible=self.visible_terminals,
+            title=f"ArduPilot SITL Launcher: Vehicle {sysid}",
+            env_cmd=ENV_CMD_ARP,
+        )  # "exit"
+        print(f"🚀 ArduPilot SITL vehicle {sysid} launched (PID {p.pid})")
+
+        logic_cmd = f"python3 proxy.py --sysid {sysid}"
+        p = self.create_process(
+            logic_cmd,
+            after="exec bash",
+            visible=self.visible_terminals,
+            title=f"UAV logic: Vehicle {sysid}",
+            env_cmd=ENV_CMD_PYT,
+        )  # "exit"
+        print(f"🚀 UAV logic for vehicle {sysid} launched (PID {p.pid})")
+        print(f"🔗 UAV logic {sysid} is connected to Ardupilot SITL vehicle {sysid}")
+
+        ## Connect to oracle
+        port = BasePort.ORC + 10 * (sysid - 1)
+        conn: MAVConnection = connect(f"udp:127.0.0.1:{port}")  # type: ignore
+        conn.wait_heartbeat()
+        print(f"🔗 UAV logic {sysid} is connected to {self.oracle_name}")
+        return conn
 
     def _add_vehicle_cmd_fn(self, _i: int) -> str:
         """Optional hook to additional command-line args."""
