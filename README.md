@@ -30,3 +30,13 @@ ENV_CMD_PYT = "source ~/.bashrc && conda activate uav-cyber-sim11"
 ENV_CMD_ARP = "source ~/.profile"
 ENV_CMD_GAZ = "source ~/.profile"
 ```
+
+**If you plan on using the QGroundControl simulator, run it once manually:**
+```shell
+~/QGroundControl.AppImage --appimage-extract-and-run
+```
+
+**If you encounter "cannot connect to display" error, run the following on your host system:**
+```shell
+xhost +local:root
+```
