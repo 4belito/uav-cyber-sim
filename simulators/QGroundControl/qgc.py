@@ -6,9 +6,9 @@ QGroundControl and configures it to connect to multiple ArduPilot UAV instances 
 It modifies the QGroundControl.ini file to set up connection links for each UAV.
 """
 
-from dataclasses import dataclass
 import os
 import subprocess
+from dataclasses import dataclass
 from typing import List
 
 from config import QGC_INI_PATH, QGC_PATH, BasePort
@@ -20,9 +20,7 @@ from simulators.sim import Simulator, VisualizerName
 
 @dataclass
 class ConfigQGroundControl:
-    """
-    Handles QGroundControl configuration based on UAV offsets and origin.
-    """
+    """Handles QGroundControl configuration based on UAV offsets and origin."""
 
     def __init__(self, offsets: List[Offset], origin: Offset):
         self.origin = origin
@@ -76,7 +74,8 @@ class QGC(Simulator):
             shell=False,  # Ensure safety when passing arguments
         )
         print(
-            "🗺️ QGroundControl launched for 2D visualization — simulation powered by ArduPilot SITL."
+            "🗺️ QGroundControl launched for 2D visualization — simulation powered "
+            "by ArduPilot SITL."
         )
 
     def _delete_all_links(self):

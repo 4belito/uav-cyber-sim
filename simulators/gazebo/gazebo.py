@@ -1,5 +1,5 @@
 """
-Gazebo Simulator Module
+Gazebo Simulator Module.
 
 This module defines a Gazebo-based simulator that extends the base Simulator class.
 It dynamically generates UAV model files, launches ArduPilot and logic processes,
@@ -15,17 +15,17 @@ Main Features:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import os
-from pathlib import Path
 import re
 import shutil
-from typing import Dict, List, Tuple
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Tuple
 
 import numpy as np
+import plotly.graph_objects as go  # type: ignore
 from numpy.typing import NDArray
-import plotly.graph_objects as go
 
 from config import ARDUPILOT_GAZEBO_MODELS, ENV_CMD_GAZ, Color
 from helpers.change_coordinates import Offset, Position, heading_to_yaw
@@ -67,7 +67,8 @@ Model = Tuple[str, Color]
 @dataclass
 class ConfigGazebo:
     """
-    Creates a trajectory from an (N, 3) array of waypoints as WaypointMarker objects.
+    Creates a trajectory from an (N, 3) array of waypoints as WaypointMarker
+    objects.
     """
 
     world_path: str
@@ -88,7 +89,7 @@ class ConfigGazebo:
         alpha: float = 0.05,
     ) -> TrajectoryMarker:
         """
-        Creates a trajectory from an (N, 3) array of waypoints as
+        Create a trajectory from an (N, 3) array of waypoints as
         WaypointMarker objects.
         """
         traj: List[WaypointMarker] = []
@@ -109,7 +110,8 @@ class ConfigGazebo:
 @dataclass
 class Pose:
     """
-    Represents a 3D pose with position (x, y, z) and orientation (roll, pitch, yaw).
+    Represent a 3D pose with position (x, y, z) and
+    orientation (roll, pitch, yaw).
     """
 
     x: float
@@ -163,13 +165,12 @@ class Gazebo(Simulator):
         base_port_in: int = 9002,
         step: int = 10,
     ) -> None:
-
         template_path = Path(ARDUPILOT_GAZEBO_MODELS) / "drone"
         output_dir = Path(ARDUPILOT_GAZEBO_MODELS)
         output_dir.mkdir(parents=True, exist_ok=True)
 
         for i in range(self.n_uavs):
-            name = f"drone{i+1}"
+            name = f"drone{i + 1}"
             new_model_path = output_dir / name
             if new_model_path.exists():
                 shutil.rmtree(new_model_path)
@@ -283,9 +284,9 @@ class Gazebo(Simulator):
         material = ET.SubElement(visual, "material")
         script = ET.SubElement(material, "script")
         ET.SubElement(script, "name").text = "Gazebo/Grey"
-        ET.SubElement(script, "uri").text = (
-            "file://media/materials/scripts/gazebo.material"
-        )
+        ET.SubElement(
+            script, "uri"
+        ).text = "file://media/materials/scripts/gazebo.material"
 
         shader = ET.SubElement(material, "shader", type="pixel")
         ET.SubElement(shader, "normal_map").text = "__default__"
@@ -312,6 +313,7 @@ class Gazebo(Simulator):
         frames: Tuple[float, float, float] = (0.2, 0.2, 0.2),
         ground: float | None = 0,
     ) -> None:
+        """Render a 3D interactive plot of waypoint trajectories using Plotly."""
         data, all_x, all_y, all_z = Gazebo._extract_plot_data(markers)
         ranges = Gazebo._compute_ranges(all_x, all_y, all_z, frames, ground)
         fig: go.Figure = go.Figure(data)

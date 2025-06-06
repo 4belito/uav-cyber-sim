@@ -1,6 +1,4 @@
-"""
-Tools to stop simulation processes and clean up log files.
-"""
+"""Tools to stop simulation processes and clean up log files."""
 
 import os
 import shutil
@@ -29,7 +27,7 @@ def kill_processes(victims: All | List[str] = "all"):
 
 
 def clean(victims: All | List[str] = "all", sim_out: bool = True):
-    """It ends the simulation"""
+    """End the simulation."""
     kill_processes(victims)
     if sim_out and LOGS_PATH.exists():
         shutil.rmtree(LOGS_PATH)

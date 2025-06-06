@@ -1,6 +1,6 @@
 """
-This module defines the Oracle and GCS classes, which handle UAV-to-UAV coordination,
-global position tracking, and end-of-plan signaling during MAVLink-based simulations.
+Define the GCS class to monitor UAVs through MAVLink messages and run GCS
+instances.
 """
 
 import argparse
@@ -16,6 +16,7 @@ from oracle import Oracle
 
 
 def main():
+    """Run a GCS instance to monitor UAVs."""
     gcs_name, system_ids = parse_arguments()
     conns: list[MAVConnection] = []
     for sysid in system_ids:
@@ -40,9 +41,7 @@ def main():
 
 
 class GCS(Oracle):
-    """
-    Ground Control Station class extending Oracle with trajectory logging.
-    """
+    """Ground Control Station class extending Oracle with trajectory logging."""
 
     def __init__(self, conns: list[MAVConnection], name: str = "blue 🟦"):
         self.name = name
@@ -50,15 +49,13 @@ class GCS(Oracle):
         self.paths: dict[int, list[Position]] = {sysid: [] for sysid in self.conns}
 
     def save_pos(self):
-        """
-        Save the current global position of each UAV to their trajectory path.
-        """
+        """Save the current global position of each UAV to their trajectory path."""
         for sysid, pos in self.pos.items():
             self.paths[sysid].append(pos)
 
 
 def parse_arguments():
-    """Parse List of GCS system IDs and GCS name"""
+    """Parse List of GCS system IDs and GCS name."""
     parser = argparse.ArgumentParser(description="Single GCS")
     parser.add_argument(
         "--sysids",

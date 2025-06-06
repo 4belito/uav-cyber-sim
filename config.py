@@ -54,9 +54,7 @@ class BasePort(IntEnum):
 
 # --- UAV Visualization Colors ---
 class Color(StrEnum):
-    """
-    Enum for supported UAV marker colors in visualizations.
-    """
+    """Enum for supported UAV marker colors in visualizations."""
 
     BLUE = "blue"
     GREEN = "green"
@@ -72,6 +70,6 @@ class Color(StrEnum):
 
 
 # --- Environment Setup Commands ---
-ENV_CMD_PYT = None
-ENV_CMD_ARP = None
-ENV_CMD_GAZ = None
+ENV_CMD_PYT = "source ~/.bashrc && conda activate uav-cyber-sim11"
+ENV_CMD_ARP = "source ~/.profile"
+ENV_CMD_GAZ = "source ~/.profile"

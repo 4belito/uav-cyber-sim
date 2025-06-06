@@ -1,6 +1,4 @@
-"""
-Distance utilities for computing Manhattan distances between vectors or arrays.
-"""
+"""Distance utilities for computing Manhattan distances between vectors or arrays."""
 
 import numpy as np
 from numpy.typing import NDArray
@@ -12,6 +10,6 @@ def manhattan_distance(
     """
     Compute the Manhattan distance between:
     - Two vectors → returns a float
-    - Two arrays → returns an array of floats
+    - Two arrays → returns an array of floats.
     """
     return np.sum(np.abs(x - y), axis=-1).squeeze()

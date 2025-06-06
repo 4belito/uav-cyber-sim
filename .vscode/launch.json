@@ -24,29 +24,3 @@
         }
     ]
 }
-// {
-//     "version": "0.2.0",
-//     "configurations": [
-//         {
-//             "name": "Debug MAVProxy",
-//             "type": "python",
-//             "request": "launch",
-//             "program": "/home/abeldg/.local/lib/python3.8/site-packages/MAVProxy/mavproxy.py",
-//             "args": [
-//                 "--retries",
-//                 "5",
-//                 "--out",
-//                 "127.0.0.1:14550",
-//                 "--master",
-//                 "tcp:127.0.0.1:5760",
-//                 "--sitl",
-//                 "127.0.0.1:5501"
-//             ],
-//             "console": "integratedTerminal",
-//             "cwd": "/home/abeldg", // <- or change this if you prefer
-//             "env": {
-//                 "PYTHONPATH": "/home/abeldg/.local/lib/python3.8/site-packages"
-//             }
-//         }
-//     ]
-// }

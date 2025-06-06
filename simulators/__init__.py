@@ -1,5 +1,10 @@
+from .gazebo.gazebo import (  # noqa: D104
+    ConfigGazebo,
+    Gazebo,
+    TrajectoryMarker,
+    WaypointMarker,
+)
 from .QGroundControl.qgc import QGC
-from .gazebo.gazebo import ConfigGazebo, Gazebo, TrajectoryMarker, WaypointMarker
 from .sim import Simulator
 
 __all__ = [

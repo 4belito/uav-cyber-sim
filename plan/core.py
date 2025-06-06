@@ -75,10 +75,10 @@ class MissionElement:
         self.sysid: int = cast(int, None)
 
     def act(self):
-        """Base method for mission logic; override in subclasses."""
+        """Execute the mission lement action; override in subclasses."""
 
     def reset(self):
-        """Resets element to NOT_STARTED state."""
+        """Reset the mission element to the NOT_STARTED state."""
         self.state = State.NOT_STARTED
 
     def __repr__(self) -> str:
@@ -127,14 +127,14 @@ class Step(MissionElement):
         super().__init__(name=name, emoji=emoji, is_improv=is_improv)
 
     def execute(self) -> None:
-        """Executes the step and marks it as IN_PROGRESS."""
+        """Execute the step and change state to IN_PROGRESS."""
         self.exec_fn(self.conn)
         if self.verbose:
             print(f"Vehicle {self.sysid}: ▶️ {self.class_name} Started: {self.name}")
         self.state = State.IN_PROGRESS
 
     def check(self) -> None:
-        """Checks step completion and updates state and position."""
+        """Check step completion and updates state and position."""
         answer, curr_pos = self.check_fn(self.conn, self.verbose)
         if curr_pos is not None:
             self.curr_pos = curr_pos
@@ -144,6 +144,7 @@ class Step(MissionElement):
                 print(f"Vehicle {self.sysid}: ✅ {self.class_name} Done: {self.name}")
 
     def act(self):
+        """Execute the step or check its progress based on current state."""
         if self.state == State.NOT_STARTED:
             self.execute()
         elif self.state == State.IN_PROGRESS:
@@ -161,6 +162,7 @@ class Step(MissionElement):
             print("⚠️ Already failed!. Cannot perform this step again!")
 
     def reset(self):
+        """Reset the step state and clear current position."""
         super().reset()
         self.curr_pos = None
 
@@ -174,8 +176,6 @@ class Action(MissionElement, Generic[T]):
     execution as a mission action.
     """
 
-    # pylint: disable=too-many-arguments
-    # pylint: disable=too-many-positional-arguments
     def __init__(
         self,
         name: str,
@@ -194,7 +194,7 @@ class Action(MissionElement, Generic[T]):
 
     def add(self, step: T) -> None:
         """
-        Adds a Step or Action to this Action/Plan.
+        Add a Step or Action to this Action/Plan.
         Maintains chaining via `next` and updates current element.
         """
         if self.steps:
@@ -207,6 +207,7 @@ class Action(MissionElement, Generic[T]):
         self.target_pos = step.target_pos
 
     def act(self):
+        """Execute current step based on the action's state."""
         if self.state == State.NOT_STARTED:
             self._start_action()
         elif self.state == State.IN_PROGRESS:
@@ -258,21 +259,20 @@ class Action(MissionElement, Generic[T]):
         )
 
     def update_pos(self, step: T):
-        """Updates current position and onair status based on a Step."""
+        """Update current position and onair status based on a Step."""
         self.onair = step.onair
         if step.curr_pos is not None:
             self.curr_pos = step.curr_pos
 
     def reset(self) -> None:
-        # Change the stated of the steps to no started
+        """Reset all steps and set the action state to NOT_STARTED."""
         for step in self.steps:
             step.reset()
-        # change current to the first step
         self.current = self.steps[0] if self.steps else None
-        # change the action state to no statrted
         super().reset()
 
     def bind(self, connection: MAVConnection, verbose: int = 1) -> None:
+        """Bind the action to the MAVLink connection and set verbosity."""
         for step in self.steps:
             step.bind(connection, verbose)
         super().bind(connection, verbose)
@@ -291,9 +291,9 @@ class Action(MissionElement, Generic[T]):
 
     def add_next(self, new_step: T) -> None:
         """
-        Inserts a new step/action immediately after the current step.
+        Insert a new step/action immediately after the current step.
         Maintains chaining and updates the 'next' pointers accordingly.
-        current<new<next
+        current<new<next.
         """
         if self.current is None:
             # If no current step exists, treat it like a normal add
@@ -313,9 +313,9 @@ class Action(MissionElement, Generic[T]):
 
     def add_prev(self, new_step: T) -> None:
         """
-        Inserts a new step/action immediately before the current step.
+        Insert a new step/action immediately before the current step.
         Maintains chaining and updates the 'next' pointers accordingly.
-        prev<new<current
+        prev<new<current.
         """
         if self.current is None:
             # If no current step exists, treat it like a normal add
