@@ -59,6 +59,7 @@ class Simulator:
         plans: list[Plan] | None = None,
         visible_terminals: bool = True,
         oracle_name: str = "Oracle ⚪",
+        delay_visualizer: bool = False,
     ):
         self.name = name
         self.config: Any | None = None
@@ -68,11 +69,16 @@ class Simulator:
         self.plans: list[Plan] = plans or [Plan.basic()]
         self.visible_terminals = visible_terminals
         self.oracle_name = oracle_name
+        self.delay_visualizer = delay_visualizer
 
     def launch(self, gcs_sysids: dict[str, list[int]]) -> Oracle:
         """Launches vehicle instances and the optional simulator."""
-        self._launch_visualizer()
-        oracle = self.launch_vehicles(gcs_sysids)
+        if self.delay_visualizer:
+            oracle = self.launch_vehicles(gcs_sysids)
+            self._launch_visualizer()
+        else:
+            self._launch_visualizer()
+            oracle = self.launch_vehicles(gcs_sysids)
         return oracle
 
     def launch_vehicles(self, gcs_sysids: dict[str, list[int]]) -> Oracle:

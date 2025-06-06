@@ -54,6 +54,7 @@ class QGC(Simulator):
             offsets=offsets,
             plans=plans,
             visible_terminals=visible_terminals,
+            delay_visualizer=True,
         )
         self.config: ConfigQGroundControl = ConfigQGroundControl(offsets, origin)
 
