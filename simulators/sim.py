@@ -73,19 +73,13 @@ class Simulator:
         self.delay_visualizer = delay_visualizer
 
     def launch(self, gcs_sysids: dict[str, list[int]]) -> Oracle:
-<<<<<<< Updated upstream
-        """Launches vehicle instances and the optional simulator."""
+        """Launch vehicle instances and the optional simulator."""
         if self.delay_visualizer:
             oracle = self.launch_vehicles(gcs_sysids)
             self._launch_visualizer()
         else:
             self._launch_visualizer()
             oracle = self.launch_vehicles(gcs_sysids)
-=======
-        """Launch vehicle instances and the optional simulator."""
-        self._launch_visualizer()
-        oracle = self.launch_vehicles(gcs_sysids)
->>>>>>> Stashed changes
         return oracle
 
     def launch_vehicles(self, gcs_sysids: dict[str, list[int]]) -> Oracle:
