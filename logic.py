@@ -2,21 +2,18 @@
 
 # Third Party imports
 import argparse
-from queue import Queue
-import subprocess
 import time
-from typing import List
-import threading
 
 from pymavlink import mavutil  # type: ignore
 from pymavlink.dialects.v20 import common as mavlink2  # type: ignore
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
 # First Party imports
-from config import BasePort, Color
-from helpers.mavlink import CustomCmd, MavCmd, MAVConnection, MAVLinkMessage
+from config import Color
+from helpers.mavlink import CustomCmd, MavCmd, MAVConnection
 from params.simulation import HEARTBEAT_PERIOD
-from plan import Plan
+from plan import Plan, State
+from vehicle_logic import VehicleLogic
 
 ### Hardcoded for now as part of a step-by-step development process
 ########## 5 UAVs ####################
@@ -113,9 +110,9 @@ def create_connection_tcp(base_port: int, idx: int, retries: int = 5):
     port = base_port + 10 * idx
     for attempt in range(retries):
         try:
-            conn: MAVConnection = connect(f"tcp:127.0.0.1:{port}")  # type: ignore
-            # send_heartbeat(conn)
-            # conn.wait_heartbeat()
+            conn: MAVConnection = connect(f"tcpin:127.0.0.1:{port}")  # type: ignore
+            send_heartbeat(conn)
+            conn.wait_heartbeat()
             print("✅ Heartbeat received")
             return conn
         except (ConnectionError, TimeoutError) as e:
@@ -124,164 +121,35 @@ def create_connection_tcp(base_port: int, idx: int, retries: int = 5):
     raise RuntimeError("Failed to connect to ArduPilot via TCP")
 
 
-class MessageRouter(threading.Thread):
-    def __init__(
-        self,
-        source: MAVConnection,
-        targets: list[Queue[bytes]],
-        labels: list[str],
-        sysid: int = 1,
-    ):
-        super().__init__()
-        self.source = source
-        self.targets = targets
-        self.labels = labels
-        self.sysid = sysid
-        self.stop_event = threading.Event()
-
-    def run(self):
-        while not self.stop_event.is_set():
-            try:
-                msg: MAVLinkMessage | None = self.source.recv_match(
-                    blocking=True, timeout=0.1
-                )  # type: ignore
-                if msg:
-                    self.dispatch_message(msg)
-            except:
-                pass
-
-    def stop(self):
-        self.stop_event.set()
-
-    def dispatch_message(self, msg: MAVLinkMessage):
-        msg_type = msg.get_type()
-        msg_buff = msg.get_msgbuf()
-        for q, label in zip(self.targets, self.labels):
-            print(f"{label} {self.sysid}: {msg_type}")
-            q.put(msg_buff)
-            # conn.write(msg_buff)
-
-
-def route_message(
-    source: MAVConnection,
-    targets: List[MAVConnection],
-    labels: List[str],
-    sysid: int = 1,
-) -> None:
-    """
-    Receives a MAVLink message from the source and forwards it to the target
-    connections.
-    """
-    msg = source.recv_msg()
-    if msg:
-        dispatch_message(msg, targets, labels, sysid)
-
-
-def dispatch_message(
-    msg: MAVLinkMessage,
-    targets: List[MAVConnection],
-    labels: List[str],
-    sysid: int = 1,
-) -> None:
-    """
-    Forwards a given MAVLink message to the target connections with logging.
-    """
-    msg_type = msg.get_type()
-    msg_buff = msg.get_msgbuf()
-    for conn, label in zip(targets, labels):
-        print(f"{label} {sysid}: {msg_type}")
-        conn.write(msg_buff)
-
-
 def start_proxy(sysid: int, verbose: int = 1):
     """Start bidirectional proxy for a given UAV system_id"""
     i = sysid - 1
+    # TODO: include the port in config.py
+    ap_conn = create_connection_tcp(base_port=5000, idx=i)
 
-    # TODO: probably should start the logic from sim.py
-    # this would also remove the need to hard-code the plan in logic.py
-    subprocess.Popen(
-        [
-            # "gnome-terminal",
-            # "--",
-            "bash",
-            "-c",
-            f"source ~/.bashrc; conda activate uav-cyber-sim11; python3 logic.py --sysid {sysid}; exec bash",
-        ]
-    )
-    ap_conn = create_connection_tcp(base_port=BasePort.ARP, idx=i)
-    cs_conn = create_connection_udp(base_port=BasePort.GCS, idx=i)
-    oc_conn = create_connection_udp(base_port=BasePort.ORC, idx=i)
-    vh_conn = create_connection_tcp(base_port=5000, idx=i)
-    ap_queue = Queue[bytes]()
-    cs_queue = Queue[bytes]()
-    oc_queue = Queue[bytes]()
-    vh_queue = Queue[bytes]()
+    # TODO: proxy these connections through proxy.py for sending done signals
+    # cs_conn = create_connection_udp(base_port=BasePort.GCS, idx=i)
+    # oc_conn = create_connection_udp(base_port=BasePort.ORC, idx=i)
+
     print(f"\n🚀 Starting Vehicle {sysid}")
-
-    # ARP → GCS + ORC + VEH
-    router1 = MessageRouter(
-        source=ap_conn,
-        targets=[cs_queue, oc_queue, vh_queue],
-        labels=["⬅️ GCS ← ARP", "⬅️ ORC ← ARP", "⬅️ VEH ← ARP"],
-        sysid=sysid,
-    )
-
-    # GCS → ARP
-    router2 = MessageRouter(
-        source=cs_conn,
-        targets=[ap_queue],
-        labels=["➡️ GCS → ARP"],
-        sysid=sysid,
-    )
-
-    # ORC → ARP
-    router3 = MessageRouter(
-        source=oc_conn,
-        targets=[ap_queue],
-        labels=["➡️ ORC → ARP"],
-        sysid=sysid,
-    )
-
-    # VEH → ARP
-    router4 = MessageRouter(
-        source=vh_conn, targets=[ap_queue], labels=["⬅️ ARP ← VEH"], sysid=sysid
-    )
+    logic = VehicleLogic(ap_conn, home=homes[i], plan=plans[i], verbose=verbose)
 
     try:
-        router1.start()
-        router2.start()
-        router3.start()
-        router4.start()
-
         while True:
-            while not oc_queue.empty():
-                oc_conn.write(oc_queue.get())
+            if heartbeat_period.trigger():
+                send_heartbeat(ap_conn)
 
-            while not cs_queue.empty():
-                cs_conn.write(cs_queue.get())
-
-            while not ap_queue.empty():
-                ap_conn.write(ap_queue.get())
-
-            while not vh_queue.empty():
-                vh_conn.write(vh_queue.get())
-
+            if logic.plan.state == State.DONE:
+                #     send_done_until_ack(oc_conn, sysid)
+                #     send_done_until_ack(cs_conn, sysid)
+                break
+            logic.act()
             time.sleep(0.01)
     finally:
-        router1.stop()
-        router2.stop()
-        router3.stop()
-        router4.stop()
 
-        router1.join()
-        router2.join()
-        router3.join()
-        router4.join()
-
-        cs_conn.close()
+        # cs_conn.close()
         ap_conn.close()
-        oc_conn.close()
-        vh_conn.close()
+        # oc_conn.close()
         print(f"❎ Vehicle {sysid} logic stopped.")
 
 

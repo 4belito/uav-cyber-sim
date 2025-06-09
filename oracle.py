@@ -8,19 +8,39 @@ from pymavlink.dialects.v20 import common as mavlink2  # type: ignore
 from helpers.change_coordinates import Position, local2global_pos  # ,global2local
 from helpers.mavlink import CustomCmd, MAVConnection
 from plan.actions import get_local_position
+from config import Color
+from plan.planner import Plan
 
 # from vehicle_logic import Neighbors, VehicleLogic
 
 ### Hardcoded for now as part of a step-by-step development process
 ########## 5 UAVs ####################
-offsets = [
-    (0.0, 0.0, 0.0, 0.0),
-    (10.0, 0.0, 0.0, 45.0),
-    (-5.0, -10.0, 0.0, 225.0),
-    (-15.0, 0.0, 0.0, 0.0),
-    (0.0, -20.0, 0.0, 0.0),
+gcses = [
+    ("blue 🟦", Color.BLUE),
+    ("green 🟩", Color.GREEN),
+    ("yellow 🟨", Color.YELLOW),
+    # ("orange 🟧", Color.ORANGE),
+    # ("red 🟥", Color.RED),
 ]
+n_uavs_per_gcs = 5
+side_len = 5
+altitude = 5
+
+n_gcs = len(gcses)
+n_vehicles = n_gcs * n_uavs_per_gcs
+offsets = [
+    (i * 3 * side_len, j * 3 * side_len, 0, 0)
+    for i in range(n_gcs)
+    for j in range(n_uavs_per_gcs)
+]
+
+
 homes = [offset[:3] for offset in offsets]
+
+offset = (0, 0, 0, 0)  # east, north, up, heading
+local_path = Plan.create_square_path(side_len=5, alt=5)
+plans = [Plan.basic(wps=local_path, wp_margin=0.5)]
+homes = [offset[:3]]
 ##################################
 
 
