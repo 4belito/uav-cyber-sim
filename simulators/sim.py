@@ -1,18 +1,18 @@
 """
 Simulation script that launches the full setup:
-1. ArduPilot instances for each vehicle
-2. Logic process for each vehicle
-3. Optionally a simulator (None, QGroundControl, or Gazebo)
+1. ArduPilot instances for each vehicle.
+2. Logic process for each vehicle.
+3. Optionally a simulator (None, QGroundControl, or Gazebo).
 """
 
 from __future__ import annotations
 
+import platform
+from concurrent import futures
 from enum import Enum
 from pathlib import Path
-import platform
 from subprocess import Popen
 from typing import Any
-from concurrent import futures
 
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
@@ -50,6 +50,7 @@ class Simulator:
         name (VisualizerName): Type of simulator to use.
         offsets (list[Offset]): Spawn offsets for each UAV.
         plans (list[Plan]): Mission plans for each UAV.
+
     """
 
     def __init__(
@@ -72,7 +73,7 @@ class Simulator:
         self.delay_visualizer = delay_visualizer
 
     def launch(self, gcs_sysids: dict[str, list[int]]) -> Oracle:
-        """Launches vehicle instances and the optional simulator."""
+        """Launch vehicle instances and the optional simulator."""
         if self.delay_visualizer:
             oracle = self.launch_vehicles(gcs_sysids)
             self._launch_visualizer()
@@ -82,7 +83,7 @@ class Simulator:
         return oracle
 
     def launch_vehicles(self, gcs_sysids: dict[str, list[int]]) -> Oracle:
-        """Launches ArduPilot and logic processes for each UAV."""
+        """Launch ArduPilot and logic processes for each UAV."""
         with futures.ThreadPoolExecutor() as executor:
             orc_conns = list(executor.map(self._launch_uav, range(self.n_uavs)))
 
@@ -136,11 +137,11 @@ class Simulator:
         return conn
 
     def _add_vehicle_cmd_fn(self, _i: int) -> str:
-        """Optional hook to additional command-line args."""
+        """Add optional command-line arguments for the vehicle."""
         return ""
 
     def _launch_visualizer(self) -> None:
-        """Optional hook to launch a visual simulator or GUI application."""
+        """Launch a visual simulator or GUI application if configured."""
         print("🙈 Running without visualization.")
 
     def create_process(

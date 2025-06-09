@@ -9,8 +9,8 @@ connections.
 from enum import Enum, IntEnum
 from typing import Literal, Optional, Protocol, overload
 
-from pymavlink import mavutil
-from pymavlink.dialects.v20 import common as mavlink
+from pymavlink import mavutil  # type: ignore
+from pymavlink.dialects.v20 import common as mavlink  # type: ignore
 
 
 class MavCmd(IntEnum):
@@ -38,7 +38,7 @@ class MavCmd(IntEnum):
 
 
 class CustomCmd(IntEnum):
-    """official MAV_CMD values generally range from 0 to ~2999"""
+    """official MAV_CMD values generally range from 0 to ~2999."""
 
     PLAN_DONE = 3000  # Custom command to mark end of plan
 
@@ -92,7 +92,7 @@ class FlightMode(IntEnum):
 
     @classmethod
     def get_name(cls, value: int) -> str:
-        """Returns the name of a flight mode given its integer value."""
+        """Return the name of a flight mode given its integer value."""
         for key, val in cls.__members__.items():
             if val == value:
                 return key
@@ -100,7 +100,7 @@ class FlightMode(IntEnum):
 
     @classmethod
     def get_value(cls, name: str) -> int:
-        """Returns the integer value of a flight mode by name."""
+        """Return the integer value of a flight mode by name."""
         try:
             return getattr(cls, name.upper())
         except AttributeError as exc:

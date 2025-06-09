@@ -1,6 +1,6 @@
 """
-This module defines the Oracle and GCS classes, which handle UAV-to-UAV coordination,
-global position tracking, and end-of-plan signaling during MAVLink-based simulations.
+Define the Oracle class to simulate UAV-to-UAV communication.
+Currently provides basic global position tracking and mission completion detection.
 """
 
 from pymavlink.dialects.v20 import common as mavlink2  # type: ignore
@@ -62,24 +62,18 @@ class Oracle:
         self.name = name
 
     def remove(self, sysid: int):
-        """
-        Remove vehicles from the enviroment
-        """
+        """Remove vehicles from the enviroment."""
         del self.conns[sysid]
 
     def gather_broadcasts(self):
-        """
-        Collect and store boradcasts (global positions sofar) from all vehicles.
-        """
+        """Collect and store boradcasts (global positions sofar) from all vehicles."""
         for sysid in self.conns:
             pos = self.get_global_pos(sysid)
             if pos is not None:
                 self.pos[sysid] = pos
 
     def get_global_pos(self, sysid: int):
-        """
-        Get the current global position of the specified vehicle.
-        """
+        """Get the current global position of the specified vehicle."""
         pos = get_local_position(self.conns[sysid])
         if pos is not None:
             pos = local2global_pos(pos, homes[sysid - 1])
@@ -114,9 +108,7 @@ class Oracle:
     #     )
 
     def is_plan_done(self, sysid: int) -> bool:
-        """
-        Listen for a STATUSTEXT("DONE") message and respond with COMMAND_ACK.
-        """
+        """Listen for a STATUSTEXT("DONE") message and respond with COMMAND_ACK."""
         conn = self.conns[sysid]
         msg = conn.recv_match(type="STATUSTEXT", blocking=False)
         if msg and msg.text == "DONE":
@@ -129,9 +121,7 @@ class Oracle:
 
 
 class GCS(Oracle):
-    """
-    Ground Control Station class extending Oracle with trajectory logging.
-    """
+    """Ground Control Station class extending Oracle with trajectory logging."""
 
     def __init__(self, conns: list[MAVConnection], name: str = "blue 🟦"):
         self.name = name
@@ -139,9 +129,7 @@ class GCS(Oracle):
         self.paths: dict[int, list[Position]] = {sysid: [] for sysid in self.conns}
 
     def save_pos(self):
-        """
-        Save the current global position of each UAV to their trajectory path.
-        """
+        """Save the current global position of each UAV to their trajectory path."""
         for sysid, pos in self.pos.items():
             self.paths[sysid].append(pos)
 
@@ -152,7 +140,8 @@ class GCS(Oracle):
 
         Raises:
             ValueError: If a vehicle system ID is assigned to more than one GCS.
-        """
+
+        """  # noqa: D401
         reverse: dict[int, str] = {}
         for name, id_list in gcss.items():
             for sysid in id_list:

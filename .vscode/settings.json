@@ -1,9 +1,55 @@
 {
-    // Existing completions (from previous step)...
+    "python.defaultInterpreterPath": "/home/ubuntu/miniconda3/envs/uav-cyber-sim11/bin/python",
+    // ----------------------------
+    // Formatter and Code Actions
+    // ----------------------------
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+        "source.fixAll": "explicit",
+        "source.fixAll.ruff": "explicit",
+        "source.organizeImports": "explicit"
+    },
+    // ----------------------------
+    // Ruff (only standalone)
+    // ----------------------------
+    "ruff.enable": true,
+    "ruff.lint.enable": true,
+    "ruff.format.enable": true, // set to true if you want Ruff to replace Black
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff", // Ruff formatter
+        "editor.formatOnSave": true
+    },
+    "ruff.organizeImports": true,
+    // NOTE: `pyproject.toml` should define select/ignore rules; remove this list if you use TOML
+    // "ruff.lint.select": ["E", "F", "I", "D", "N", "ANN"],
+    // ----------------------------
+    // Disable legacy Python linters (no conflicts!)
+    // ----------------------------
+    "python.linting.enabled": false,
+    "python.linting.pylintEnabled": false,
+    "python.linting.flake8Enabled": false,
+    "python.linting.mypyEnabled": false,
+    "python.linting.ruffEnabled": false,
+    // ----------------------------
+    // Python Analysis (Pylance)
+    // ----------------------------
+    "python.languageServer": "Pylance",
+    "python.analysis.typeCheckingMode": "strict",
     "python.analysis.autoImportCompletions": true,
     "python.analysis.useLibraryCodeForTypes": true,
     "python.analysis.completeFunctionParens": true,
-    "python.languageServer": "Pylance",
+    "python.analysis.diagnosticSeverityOverrides": {
+        "reportMissingDocstring": "none",
+        "reportMissingFunctionDocstring": "none",
+        "reportMissingParameterType": "warning",
+        "reportMissingReturnType": "warning",
+        "reportMissingTypeArgument": "warning",
+        "reportUnknownParameterType": "warning",
+        "reportUnknownVariableType": "warning"
+    },
+    // ----------------------------
+    // Editor Behavior
+    // ----------------------------
     "editor.parameterHints.enabled": true,
     "editor.signatureHelp.enabled": true,
     "editor.quickSuggestions": {
@@ -13,15 +59,8 @@
     },
     "editor.suggestOnTriggerCharacters": true,
     "editor.hover.enabled": true,
-    "python.analysis.typeCheckingMode": "strict", // ✅ Enables strict mode
-    // ✅ Enable warnings for missing parameter and return type annotations
-    "python.analysis.diagnosticSeverityOverrides": {
-        "reportMissingTypeStubs": "none", // optional: hide stub warnings
-        "reportMissingParameterType": "warning", // function/method param annotations
-        "reportMissingReturnType": "warning", // function/method return annotations
-        "reportMissingTypeArgument": "warning", // e.g., List[...] missing inner type
-        "reportUnknownParameterType": "warning", // inferred but unclear types
-        "reportUnknownVariableType": "warning"
-    },
-    "notebook.lineNumbers": "on",
+    // ----------------------------
+    // Notebook
+    // ----------------------------
+    "notebook.lineNumbers": "on"
 }

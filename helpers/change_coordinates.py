@@ -1,13 +1,11 @@
-"""
-Utility functions for coordinate transformations.
-"""
+"""Utility functions for coordinate transformations."""
 
 import math
 from typing import List, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
-from pymavlink import mavextra
+from pymavlink import mavextra  # type: ignore
 
 Offset = Tuple[float, float, float, float]
 Position = Tuple[float, float, float]

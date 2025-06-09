@@ -1,6 +1,4 @@
-"""
-Vehicle logic module for executing mission plans with mode switching.
-"""
+"""Vehicle logic module for executing mission plans with mode switching."""
 
 from enum import StrEnum
 
@@ -61,7 +59,6 @@ class VehicleLogic:
 
     def act(self):
         """Perform the next step in the mission plan."""
-
         # if self.neighbors.vehs:
         #     i = np.argmin(self.neighbors.dist)
         #     self.check_avoidance(obst_pos=self.neighbors.pos[i])
@@ -133,7 +130,8 @@ class VehicleLogic:
     #                 self.back_mode = self.mode
     #                 self.set_mode(VehicleMode.AVOIDANCE)
     #             return
-    #     if self.mode == VehicleMode.AVOIDANCE and self.current_step.state == State.DONE:
+    #     if self.mode == VehicleMode.AVOIDANCE and
+    #                                   self.current_step.state == State.DONE:
     #         self.set_mode(self.back_mode)
 
     # def check_dynamic_action(self):
@@ -156,12 +154,14 @@ class VehicleLogic:
     #             self.pos, self.plan.dynamic_wps, eps=self.plan.wp_margin
     #         )
     #         goto_step = self.create_goto(
-    #             pos=next_wp, target_pos=next_wp, cause_text="(dynamic)", is_improv=True
+    #             pos=next_wp, target_pos=next_wp, cause_text="(dynamic)",
+    #                                                                is_improv=True
     #         )
     #     else:
     #         next_wp = find_best_waypoint(self.pos, final_wp, valid_waypoints)
     #         goto_step = self.create_goto(
-    #             pos=next_wp, target_pos=next_wp, cause_text="(dynamic)", is_improv=False
+    #             pos=next_wp, target_pos=next_wp, cause_text="(dynamic)",
+    #                                                                   is_improv=False
     #         )
     #     self.inject(goto_step)
 
