@@ -207,6 +207,13 @@ class MAVConnection(Protocol):
     @overload
     def recv_match(
         self,
+        timeout: Optional[float] = ...,
+        blocking: Optional[bool] = ...,
+    ) -> Optional[MAVLinkMessage]: ...
+
+    @overload
+    def recv_match(
+        self,
         type: Literal["HEARTBEAT"],  # pylint: disable=redefined-builtin
         timeout: Optional[float] = ...,
     ) -> Optional[HeartbeatMessage]: ...

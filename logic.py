@@ -9,10 +9,11 @@ from pymavlink.dialects.v20 import common as mavlink2  # type: ignore
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
 # First Party imports
-from config import Color
+from config import BasePort, Color
 from helpers.mavlink import CustomCmd, MavCmd, MAVConnection
 from params.simulation import HEARTBEAT_PERIOD
 from plan import Plan, State
+from proxy import create_connection_udp
 from vehicle_logic import VehicleLogic
 
 ### Hardcoded for now as part of a step-by-step development process
@@ -93,45 +94,24 @@ def send_heartbeat(conn: MAVConnection):
     conn.mav.heartbeat_send(MavCmd.TYPE_GCS, MavCmd.AUTOPILOT_INVALID, 0, 0, 0)
 
 
-def create_connection_udp(base_port: int, idx: int, is_input: bool = False):
-    """Create and in or out connection and wait for geting the hearbeat in"""
-    port = base_port + 10 * idx
-    if is_input:
-        conn: MAVConnection = connect(f"udp:127.0.0.1:{port}")  # type: ignore
-        conn.wait_heartbeat()
-    else:
-        conn: MAVConnection = connect(f"udpout:127.0.0.1:{port}")  # type: ignore
-        # send_heartbeat(conn)
-    return conn
-
-
 def create_connection_tcp(base_port: int, idx: int, retries: int = 5):
     """Create and in or out connection and wait for geting the hearbeat in"""
     port = base_port + 10 * idx
-    for attempt in range(retries):
-        try:
-            conn: MAVConnection = connect(f"tcpin:127.0.0.1:{port}")  # type: ignore
-            send_heartbeat(conn)
-            conn.wait_heartbeat()
-            print("✅ Heartbeat received")
-            return conn
-        except (ConnectionError, TimeoutError) as e:
-            print(f"Retry {attempt+1}/{retries} failed: {e}")
-            time.sleep(0.1)
-    raise RuntimeError("Failed to connect to ArduPilot via TCP")
+    conn: MAVConnection = connect(f"tcpin:127.0.0.1:{port}")  # type: ignore
+    conn.wait_heartbeat()
+    send_heartbeat(conn)
+    print("✅ Heartbeat received")
+    return conn
 
 
 def start_proxy(sysid: int, verbose: int = 1):
     """Start bidirectional proxy for a given UAV system_id"""
     i = sysid - 1
-    # TODO: include the port in config.py
-    ap_conn = create_connection_tcp(base_port=5000, idx=i)
+    ap_conn = create_connection_tcp(base_port=BasePort.VEH, idx=i)
+    cs_conn = create_connection_udp(base_port=BasePort.GCS, idx=i)
+    oc_conn = create_connection_udp(base_port=BasePort.ORC, idx=i)
 
-    # TODO: proxy these connections through proxy.py for sending done signals
-    # cs_conn = create_connection_udp(base_port=BasePort.GCS, idx=i)
-    # oc_conn = create_connection_udp(base_port=BasePort.ORC, idx=i)
-
-    print(f"\n🚀 Starting Vehicle {sysid}")
+    print(f"\n🚀 Starting Vehicle {sysid} logic")
     logic = VehicleLogic(ap_conn, home=homes[i], plan=plans[i], verbose=verbose)
 
     try:
@@ -140,16 +120,16 @@ def start_proxy(sysid: int, verbose: int = 1):
                 send_heartbeat(ap_conn)
 
             if logic.plan.state == State.DONE:
-                #     send_done_until_ack(oc_conn, sysid)
-                #     send_done_until_ack(cs_conn, sysid)
+                send_done_until_ack(oc_conn, sysid)
+                send_done_until_ack(cs_conn, sysid)
                 break
             logic.act()
             time.sleep(0.01)
     finally:
 
-        # cs_conn.close()
+        cs_conn.close()
         ap_conn.close()
-        # oc_conn.close()
+        oc_conn.close()
         print(f"❎ Vehicle {sysid} logic stopped.")
 
 

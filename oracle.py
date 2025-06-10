@@ -9,7 +9,6 @@ from helpers.change_coordinates import Position, local2global_pos  # ,global2loc
 from helpers.mavlink import CustomCmd, MAVConnection
 from plan.actions import get_local_position
 from config import Color
-from plan.planner import Plan
 
 # from vehicle_logic import Neighbors, VehicleLogic
 
@@ -37,10 +36,10 @@ offsets = [
 
 homes = [offset[:3] for offset in offsets]
 
-offset = (0, 0, 0, 0)  # east, north, up, heading
-local_path = Plan.create_square_path(side_len=5, alt=5)
-plans = [Plan.basic(wps=local_path, wp_margin=0.5)]
-homes = [offset[:3]]
+# offset = (0, 0, 0, 0)  # east, north, up, heading
+# local_path = Plan.create_square_path(side_len=5, alt=5)
+# plans = [Plan.basic(wps=local_path, wp_margin=0.5)]
+# homes = [offset[:3]]
 ##################################
 
 

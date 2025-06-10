@@ -50,6 +50,7 @@ class BasePort(IntEnum):
     ARP = 5760  # Ardupilot Vehicle(TCP)
     GCS = 14551  # Ground Control Station(UDP)
     ORC = 14552  # Oracle(UDP)
+    VEH = 14553
 
 
 # --- UAV Visualization Colors ---

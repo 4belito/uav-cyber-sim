@@ -118,7 +118,7 @@ class Simulator:
         )  # "exit"
         print(f"🚀 ArduPilot SITL vehicle {sysid} launched (PID {p.pid})")
 
-        logic_cmd = f"python3 proxy.py --sysid {sysid}"
+        logic_cmd = f"python3 logic.py --sysid {sysid}"
         p = self.create_process(
             logic_cmd,
             after="exec bash",
@@ -127,6 +127,16 @@ class Simulator:
             env_cmd=ENV_CMD_PYT,
         )  # "exit"
         print(f"🚀 UAV logic for vehicle {sysid} launched (PID {p.pid})")
+
+        proxy_cmd = f"python3 proxy.py --sysid {sysid}"
+        p = self.create_process(
+            proxy_cmd,
+            after="exec bash",
+            visible=self.visible_terminals,
+            title=f"Proxy: Vehicle {sysid}",
+            env_cmd=ENV_CMD_PYT,
+        )  # "exit"
+        print(f"🚀 Proxy for vehicle {sysid} launched (PID {p.pid})")
         print(f"🔗 UAV logic {sysid} is connected to Ardupilot SITL vehicle {sysid}")
 
         ## Connect to oracle
