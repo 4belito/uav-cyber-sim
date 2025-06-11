@@ -1,14 +1,16 @@
 """
 Define the Oracle class to simulate UAV-to-UAV communication.
 Currently provides basic global position tracking and mission completion detection.
+Define the Oracle class to simulate UAV-to-UAV communication.
+Currently provides basic global position tracking and mission completion detection.
 """
 
 from pymavlink.dialects.v20 import common as mavlink2  # type: ignore
 
+from config import Color
 from helpers.change_coordinates import Position, local2global_pos  # ,global2local
 from helpers.mavlink import CustomCmd, MAVConnection
 from plan.actions import get_local_position
-from config import Color
 
 # from vehicle_logic import Neighbors, VehicleLogic
 
@@ -28,7 +30,7 @@ altitude = 5
 n_gcs = len(gcses)
 n_vehicles = n_gcs * n_uavs_per_gcs
 offsets = [
-    (i * 3 * side_len, j * 3 * side_len, 0, 0)
+    (i * 10 * side_len, j * 3 * side_len, 0, 0)
     for i in range(n_gcs)
     for j in range(n_uavs_per_gcs)
 ]
@@ -51,21 +53,17 @@ class Oracle:
     positions, and listens for plan-completion signals.
     """
 
-    def __init__(
-        self,
-        conns: list[MAVConnection],
-        name: str = "Oracle ⚪",
-    ) -> None:
+    def __init__(self, conns: list[MAVConnection], name: str = "Oracle ⚪") -> None:
         self.pos: dict[int, Position] = {}
         self.conns = {conn.target_system: conn for conn in conns}
         self.name = name
 
     def remove(self, sysid: int):
-        """Remove vehicles from the enviroment."""
+        """Remove vehicles from the environment."""
         del self.conns[sysid]
 
     def gather_broadcasts(self):
-        """Collect and store boradcasts (global positions sofar) from all vehicles."""
+        """Collect and store broadcasts (global positions so far) from all vehicles."""
         for sysid in self.conns:
             pos = self.get_global_pos(sysid)
             if pos is not None:
@@ -117,37 +115,3 @@ class Oracle:
             print(f"✅ Vehicle {sysid} completed its mission")
             return True
         return False
-
-
-class GCS(Oracle):
-    """Ground Control Station class extending Oracle with trajectory logging."""
-
-    def __init__(self, conns: list[MAVConnection], name: str = "blue 🟦"):
-        self.name = name
-        super().__init__(conns, name=f"GCS {name}")
-        self.paths: dict[int, list[Position]] = {sysid: [] for sysid in self.conns}
-
-    def save_pos(self):
-        """Save the current global position of each UAV to their trajectory path."""
-        for sysid, pos in self.pos.items():
-            self.paths[sysid].append(pos)
-
-    @staticmethod
-    def map_sysid_to_gcs(gcss: dict[str, list[int]]) -> dict[int, str]:
-        """
-        Builds a mapping from vehicle system ID to the name of its assigned GCS.
-
-        Raises:
-            ValueError: If a vehicle system ID is assigned to more than one GCS.
-
-        """  # noqa: D401
-        reverse: dict[int, str] = {}
-        for name, id_list in gcss.items():
-            for sysid in id_list:
-                if sysid in reverse:
-                    raise ValueError(
-                        f"The vehicle with system id {sysid} belongs to more than"
-                        f" one GCS: {reverse[sysid]} and {name}"
-                    )
-                reverse[sysid] = name
-        return reverse

@@ -1,19 +1,17 @@
 """Multi-UAV MAVLink Proxy."""
 
 import argparse
-from queue import Queue
-import time
 import threading
+import time
+from queue import Queue
 
 from pymavlink import mavutil  # type: ignore
-from pymavlink.dialects.v20 import common as mavlink2  # type: ignore
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
 # First Party imports
 from config import BasePort
 from helpers.mavlink import MavCmd, MAVConnection, MAVLinkMessage
 from params.simulation import HEARTBEAT_PERIOD
-
 
 heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
 
