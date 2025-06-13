@@ -1,4 +1,4 @@
-"""Multi-UAV MAVLink Proxy"""
+"""Multi-UAV MAVLink Proxy."""
 
 # Third Party imports
 import argparse
@@ -44,7 +44,7 @@ altitude = 5
 n_gcs = len(gcses)
 n_vehicles = n_gcs * n_uavs_per_gcs
 offsets = [
-    (i * 3 * side_len, j * 3 * side_len, 0, 0)
+    (i * 10 * side_len, j * 3 * side_len, 0, 0)
     for i in range(n_gcs)
     for j in range(n_uavs_per_gcs)
 ]
@@ -77,7 +77,7 @@ def main():
 
 
 def parse_arguments() -> tuple[int, int]:
-    """Parse a single system ID"""
+    """Parse a single system ID."""
     parser = argparse.ArgumentParser(description="Single UAV MAVLink Proxy")
     parser.add_argument(
         "--sysid",
@@ -98,8 +98,8 @@ def send_heartbeat(conn: MAVConnection):
     conn.mav.heartbeat_send(MavCmd.TYPE_GCS, MavCmd.AUTOPILOT_INVALID, 0, 0, 0)
 
 
-def create_connection_tcp(base_port: int, offset: int, retries: int = 5):
-    """Create and in or out connection and wait for geting the hearbeat in"""
+def create_connection_tcp(base_port: int, offset: int):
+    """Create and in or out connection and wait for geting the hearbeat in."""
     port = base_port + offset
     conn: MAVConnection = connect(f"tcpin:127.0.0.1:{port}")  # type: ignore
     conn.wait_heartbeat()
@@ -109,7 +109,7 @@ def create_connection_tcp(base_port: int, offset: int, retries: int = 5):
 
 
 def start_proxy(sysid: int, port_offset: int, verbose: int = 1):
-    """Start bidirectional proxy for a given UAV system_id"""
+    """Start bidirectional proxy for a given UAV system_id."""
     i = sysid - 1
     ap_conn = create_connection_tcp(base_port=BasePort.VEH, offset=port_offset)
     cs_conn = create_connection_udp(base_port=BasePort.GCS, offset=port_offset)
@@ -130,7 +130,6 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1):
             logic.act()
             time.sleep(0.01)
     finally:
-
         cs_conn.close()
         ap_conn.close()
         oc_conn.close()
