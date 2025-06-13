@@ -8,6 +8,7 @@ Simulation script that launches the full setup:
 from __future__ import annotations
 
 import platform
+import socket
 from concurrent import futures
 from enum import Enum
 from pathlib import Path
@@ -74,6 +75,7 @@ class Simulator:
 
     def launch(self, gcs_sysids: dict[str, list[int]]) -> Oracle:
         """Launch vehicle instances and the optional simulator."""
+        self.port_offsets = self.find_port_offsets()
         if self.delay_visualizer:
             oracle = self.launch_vehicles(gcs_sysids)
             self._launch_visualizer()
@@ -89,7 +91,7 @@ class Simulator:
 
         oracle = Oracle(orc_conns, name=self.oracle_name)
         for gcs_name, sysids in gcs_sysids.items():
-            gcs_cmd = f'python3 gcs.py --name "{gcs_name}" --sysid "{sysids}"'
+            gcs_cmd = f'python3 gcs.py --name "{gcs_name}" --sysid "{sysids}" --port-offsets "{[self.port_offsets[sysid - 1] for sysid in sysids]}"'
             p = self.create_process(
                 gcs_cmd,
                 after="exec bash",
@@ -107,6 +109,8 @@ class Simulator:
             f" -v ArduCopter -I{i} --sysid {sysid} --no-rebuild"
             f" --use-dir={LOGS_PATH} --add-param-file {VEH_PARAMS_PATH}"
             f" --no-mavproxy"
+            f" --port-offset={self.port_offsets[i]}"
+            + (" --terminal" if self.visible_terminals else "")
         )
         veh_cmd += self._add_vehicle_cmd_fn(i)
         p = self.create_process(
@@ -118,7 +122,9 @@ class Simulator:
         )  # "exit"
         print(f"🚀 ArduPilot SITL vehicle {sysid} launched (PID {p.pid})")
 
-        logic_cmd = f"python3 logic.py --sysid {sysid}"
+        logic_cmd = (
+            f"python3 logic.py --sysid {sysid} --port-offset={self.port_offsets[i]}"
+        )
         p = self.create_process(
             logic_cmd,
             after="exec bash",
@@ -128,7 +134,9 @@ class Simulator:
         )  # "exit"
         print(f"🚀 UAV logic for vehicle {sysid} launched (PID {p.pid})")
 
-        proxy_cmd = f"python3 proxy.py --sysid {sysid}"
+        proxy_cmd = (
+            f"python3 proxy.py --sysid {sysid} --port-offset={self.port_offsets[i]}"
+        )
         p = self.create_process(
             proxy_cmd,
             after="exec bash",
@@ -140,11 +148,39 @@ class Simulator:
         print(f"🔗 UAV logic {sysid} is connected to Ardupilot SITL vehicle {sysid}")
 
         ## Connect to oracle
-        port = BasePort.ORC + 10 * (sysid - 1)
+        port = BasePort.ORC + self.port_offsets[i]
         conn: MAVConnection = connect(f"udp:127.0.0.1:{port}")  # type: ignore
         conn.wait_heartbeat()
         print(f"🔗 UAV logic {sysid} is connected to {self.oracle_name}")
         return conn
+
+    def find_port_offsets(self):
+        base_ports = [
+            BasePort.ARP,
+            BasePort.GCS,
+            BasePort.ORC,
+            BasePort.QGC,
+            BasePort.VEH,
+        ]
+        unit_offset = 10
+        offsets = list[int]()
+
+        cur_offset = 0
+        while len(offsets) < self.n_uavs:
+            for base_port in base_ports:
+                port = base_port + cur_offset
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(0.01)
+                try:
+                    s.bind(("127.0.0.1", port))
+                    s.close()
+                except:
+                    break
+            else:
+                offsets.append(cur_offset)
+                # print(f"Found offset {len(offsets)} - {cur_offset}")
+            cur_offset += unit_offset
+        return offsets
 
     def _add_vehicle_cmd_fn(self, _i: int) -> str:
         """Add optional command-line arguments for the vehicle."""
