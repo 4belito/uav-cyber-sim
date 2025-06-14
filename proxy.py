@@ -18,12 +18,12 @@ heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
 
 def main() -> None:
     """Parse arguments and launch the MAVLink proxy."""
-    system_id = parse_arguments()
+    system_id, port_offset = parse_arguments()
     print(f"System id: {system_id}")
-    start_proxy(system_id, verbose=2)
+    start_proxy(system_id, port_offset, verbose=2)
 
 
-def parse_arguments() -> int:
+def parse_arguments() -> tuple[int, int]:
     """Parse a single system ID."""
     parser = argparse.ArgumentParser(description="Single UAV MAVLink Proxy")
     parser.add_argument(
@@ -32,7 +32,11 @@ def parse_arguments() -> int:
         required=True,
         help="System ID of the UAV (e.g., 1)",
     )
-    return parser.parse_args().sysid
+    parser.add_argument(
+        "--port-offset", type=int, required=True, help="Port offset to use (e.g. 10)"
+    )
+    args = parser.parse_args()
+    return (args.sysid, args.port_offset)
 
 
 # taken from mavproxy
@@ -42,10 +46,10 @@ def send_heartbeat(conn: MAVConnection) -> None:
 
 
 def create_connection_udp(
-    base_port: int, idx: int, is_input: bool = False
+    base_port: int, offset: int, is_input: bool = False
 ) -> MAVConnection:
     """Create and in or out connection and wait for geting the hearbeat in."""
-    port = base_port + 10 * idx
+    port = base_port + offset
     if is_input:
         conn: MAVConnection = connect(f"udp:127.0.0.1:{port}")  # type: ignore
         conn.wait_heartbeat()
@@ -55,9 +59,11 @@ def create_connection_udp(
     return conn
 
 
-def create_connection_tcp(base_port: int, idx: int, retries: int = 5) -> MAVConnection:
+def create_connection_tcp(
+    base_port: int, offset: int, retries: int = 20
+) -> MAVConnection:
     """Create and in or out connection and wait for geting the hearbeat in."""
-    port = base_port + 10 * idx
+    port = base_port + offset
     for attempt in range(retries):
         try:
             conn: MAVConnection = connect(f"tcp:127.0.0.1:{port}")  # type: ignore
@@ -104,14 +110,12 @@ class MessageRouter(threading.Thread):
             q.put(msg_buff)
 
 
-def start_proxy(sysid: int, verbose: int = 1) -> None:
+def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
     """Start bidirectional proxy for a given UAV system_id."""
-    i = sysid - 1
-
-    ap_conn = create_connection_tcp(base_port=BasePort.ARP, idx=i)
-    cs_conn = create_connection_udp(base_port=BasePort.GCS, idx=i)
-    oc_conn = create_connection_udp(base_port=BasePort.ORC, idx=i)
-    vh_conn = create_connection_tcp(base_port=BasePort.VEH, idx=i)
+    ap_conn = create_connection_tcp(base_port=BasePort.ARP, offset=port_offset)
+    cs_conn = create_connection_udp(base_port=BasePort.GCS, offset=port_offset)
+    oc_conn = create_connection_udp(base_port=BasePort.ORC, offset=port_offset)
+    vh_conn = create_connection_tcp(base_port=BasePort.VEH, offset=port_offset)
 
     ap_queue = Queue[bytes]()
     cs_queue = Queue[bytes]()

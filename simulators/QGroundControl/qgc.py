@@ -187,7 +187,7 @@ class QGC(Simulator):
         new_lines: List[str] = []
         for i in range(n):
             idx = count + i
-            port = BasePort.QGC + step * i
+            port = BasePort.QGC + self.port_offsets[i]
             new_lines.extend(
                 [
                     f"Link{idx}\\auto=true\n",

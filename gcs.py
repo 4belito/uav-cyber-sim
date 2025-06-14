@@ -17,10 +17,10 @@ from oracle import Oracle
 
 def main():
     """Run a GCS instance to monitor UAVs."""
-    gcs_name, system_ids = parse_arguments()
+    gcs_name, system_ids, port_offsets = parse_arguments()
     conns: list[MAVConnection] = []
-    for sysid in system_ids:
-        port = BasePort.GCS + 10 * (sysid - 1)
+    for sysid, port_offset in zip(system_ids, port_offsets):
+        port = BasePort.GCS + port_offset
         conn: MAVConnection = connect(f"udp:127.0.0.1:{port}")  # type: ignore
         conn.wait_heartbeat()
         print(f"🔗 UAV logic {sysid} is connected")
@@ -54,7 +54,7 @@ class GCS(Oracle):
             self.paths[sysid].append(pos)
 
 
-def parse_arguments():
+def parse_arguments() -> tuple[str, list[int], list[int]]:
     """Parse List of GCS system IDs and GCS name."""
     parser = argparse.ArgumentParser(description="Single GCS")
     parser.add_argument(
@@ -64,12 +64,19 @@ def parse_arguments():
         help='ystem ID Lsit of the UAVs belonging to the GCS (e.g. "[1,3,4]")',
     )
     parser.add_argument(
+        "--port-offsets",
+        type=ast.literal_eval,
+        required=True,
+        help='Port offset list for the UAVs belonging to the GCS (e.g. "[0,10,30]")',
+    )
+    parser.add_argument(
         "--name",
         type=str,
         required=True,
         help="System ID Lsit of the UAVs belonging to the GCS (e.g., [1, 3,4])",
     )
-    return parser.parse_args().name, parser.parse_args().sysids
+    args = parser.parse_args()
+    return args.name, args.sysids, args.port_offsets
 
 
 if __name__ == "__main__":

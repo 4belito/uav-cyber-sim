@@ -71,12 +71,12 @@ heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
 
 
 def main():
-    system_id = parse_arguments()
+    system_id, port_offset = parse_arguments()
     print(f"System id: {system_id}")
-    start_proxy(system_id, verbose=2)
+    start_proxy(system_id, port_offset, verbose=2)
 
 
-def parse_arguments():
+def parse_arguments() -> tuple[int, int]:
     """Parse a single system ID."""
     parser = argparse.ArgumentParser(description="Single UAV MAVLink Proxy")
     parser.add_argument(
@@ -85,7 +85,11 @@ def parse_arguments():
         required=True,
         help="System ID of the UAV (e.g., 1)",
     )
-    return parser.parse_args().sysid
+    parser.add_argument(
+        "--port-offset", type=int, required=True, help="Port offset to use (e.g. 10)"
+    )
+    args = parser.parse_args()
+    return (args.sysid, args.port_offset)
 
 
 # taken from mavproxy
@@ -94,9 +98,9 @@ def send_heartbeat(conn: MAVConnection):
     conn.mav.heartbeat_send(MavCmd.TYPE_GCS, MavCmd.AUTOPILOT_INVALID, 0, 0, 0)
 
 
-def create_connection_tcp(base_port: int, idx: int):
+def create_connection_tcp(base_port: int, offset: int):
     """Create and in or out connection and wait for geting the hearbeat in."""
-    port = base_port + 10 * idx
+    port = base_port + offset
     conn: MAVConnection = connect(f"tcpin:127.0.0.1:{port}")  # type: ignore
     conn.wait_heartbeat()
     send_heartbeat(conn)
@@ -104,12 +108,12 @@ def create_connection_tcp(base_port: int, idx: int):
     return conn
 
 
-def start_proxy(sysid: int, verbose: int = 1):
+def start_proxy(sysid: int, port_offset: int, verbose: int = 1):
     """Start bidirectional proxy for a given UAV system_id."""
     i = sysid - 1
-    ap_conn = create_connection_tcp(base_port=BasePort.VEH, idx=i)
-    cs_conn = create_connection_udp(base_port=BasePort.GCS, idx=i)
-    oc_conn = create_connection_udp(base_port=BasePort.ORC, idx=i)
+    ap_conn = create_connection_tcp(base_port=BasePort.VEH, offset=port_offset)
+    cs_conn = create_connection_udp(base_port=BasePort.GCS, offset=port_offset)
+    oc_conn = create_connection_udp(base_port=BasePort.ORC, offset=port_offset)
 
     print(f"\n🚀 Starting Vehicle {sysid} logic")
     logic = VehicleLogic(ap_conn, home=homes[i], plan=plans[i], verbose=verbose)
