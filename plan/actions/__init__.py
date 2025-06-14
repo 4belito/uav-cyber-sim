@@ -6,6 +6,7 @@ from .change_parameter import make_change_nav_speed
 from .land import make_land
 from .navegation import get_local_position, make_go_to, make_path
 from .pre_arm import make_pre_arm
+from .start_mission import make_start_mission
 from .take_off import make_takeoff
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     "make_path",
     "get_local_position",
     "make_go_to",
+    "make_start_mission",
 ]

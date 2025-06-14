@@ -61,3 +61,27 @@ def find_spawns(loc: Offset, homes: List[Offset]) -> List[Offset]:
         offset = (g[0], g[1], alt + z, head)
         spawns.append(offset)
     return spawns
+
+
+def localned_to_global_relative_int(
+    pos_local: Position, home_gps: Tuple[float, float, float]
+) -> Tuple[int, int, float]:
+    """
+    Convert local NED (meters) to global relative coordinates in
+    MAV_FRAME_GLOBAL_RELATIVE_ALT_INT frame.
+    Returns (lat_int, lon_int, alt_m).
+    """
+    x, y, z = pos_local
+    home_lat, home_lon, _ = home_gps
+
+    # Convert x/y offset to GPS lat/lon
+    lat, lon = mavextra.gps_offset(home_lat, home_lon, x, y)  # type: ignore
+
+    # z is down in NED, so negate it to get up (positive altitude)
+    alt = -z
+
+    # Convert lat/lon to integer * 1e7 format
+    lat_int = int(lat * 1e7)
+    lon_int = int(lon * 1e7)
+
+    return lat_int, lon_int, alt

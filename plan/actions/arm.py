@@ -13,7 +13,7 @@ from plan.core import Action, ActionNames, Step, StepFailed
 
 
 def make_arm() -> Action[Step]:
-    """Builds an Action to arm the UAV, including exec and check logic."""
+    """Build an Action to arm the UAV, including exec and check logic."""
     arm = Action[Step](name=ActionNames.ARM, emoji="🔐")
     arm.add(
         Step(
@@ -27,9 +27,7 @@ def make_arm() -> Action[Step]:
 
 
 def exec_arm(conn: MAVConnection) -> None:
-    """
-    Send ARM command to the UAV.
-    """
+    """Send ARM command to the UAV."""
     conn.mav.command_long_send(
         conn.target_system,
         conn.target_component,

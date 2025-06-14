@@ -25,7 +25,7 @@ def in_same_orthant(
     eps: float = 1.0,
 ) -> NDArray[np.bool_]:
     """
-    Returns a mask for waypoints in the same orthant as the target w.r.t. the current
+    Return a mask for waypoints in the same orthant as the target w.r.t. the current
     position.
     """
     if dims is None:
@@ -53,7 +53,7 @@ def in_same_corridor(
     dims: None | List[int] = None,
 ) -> NDArray[np.bool_]:
     """
-    Returns a mask for waypoints that match the current position along at
+    Return a mask for waypoints that match the current position along at
     least two axes (within eps).
     """
     if dims is None:
@@ -69,7 +69,7 @@ def is_close_to(
     dims: None | List[int] = None,
 ) -> NDArray[np.bool_]:
     """
-    Returns a boolean mask for waypoints close to the current point along given
+    Return a boolean mask for waypoints close to the current point along given
     dimensions.
     """
     if dims is None:
@@ -82,7 +82,7 @@ def remove_wp(
     arr: NDArray[np.float64], row: NDArray[np.float64], eps: float = 1.0
 ) -> NDArray[np.float64]:
     """
-    Removes rows from a 2D array that are within eps (Euclidean distance) of a given
+    Remove rows from a 2D array that are within eps (Euclidean distance) of a given
     row.
     """
     # Compute Euclidean distance from each row to the target row
@@ -98,7 +98,7 @@ def adjust_one_significant_axis_toward_corridor(
     current: NDArray[np.float64], waypoints: NDArray[np.float64], eps: float = 1.0
 ) -> NDArray[np.float64]:
     """
-    Adjusts one significant axis (difference > eps) to bring the drone closer to a valid
+    Adjust one significant axis (difference > eps) to bring the drone closer to a valid
     corridor.
     Only one coordinate is modified.
     """
@@ -131,7 +131,7 @@ def get_valid_waypoints(
 ) -> NDArray[np.float64]:
     """
     Filter points that share x or y with the target AND are in the correct
-    quadrant
+    quadrant.
     """
     waypoints = remove_wp(waypoints, current, eps=eps)
     if same_orthant:
@@ -147,10 +147,9 @@ def find_best_waypoint(
     valid_waypoints: NDArray[np.float64],
 ) -> NDArray[np.float64]:
     """
-    Returns the waypoint closest to both current and target positions using
+    Return the waypoint closest to both current and target positions using
     Manhattan distance.
     """
-
     dist_to_curr = manhattan_distance(valid_waypoints, current)
     dist_to_target = manhattan_distance(valid_waypoints, target)
     best_i_valid = np.argmin(dist_to_curr + dist_to_target)

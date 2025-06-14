@@ -28,7 +28,7 @@ from plan.core import Action, ActionNames, Step, StepFailed
 
 
 def make_pre_arm() -> Action[Step]:
-    """Builds a pre-arm Action that validates safety and system readiness checks."""
+    """Build a pre-arm Action that validates safety and system readiness checks."""
     pre_arm = Action[Step](name=ActionNames.PREARM, emoji="🔧")
     # Steps
     disarm = Step("Check disarmed", check_fn=check_disarmed, onair=False)
@@ -57,7 +57,7 @@ def make_pre_arm() -> Action[Step]:
 
 # === CHECK FUNCTIONS ===
 def check_disarmed(conn: MAVConnection, _verbose: int):
-    """Fails if the UAV is currently armed."""
+    """Fail if the UAV is currently armed."""
     msg = conn.recv_match(type="HEARTBEAT")
     if not msg:
         return False, None
@@ -67,7 +67,7 @@ def check_disarmed(conn: MAVConnection, _verbose: int):
 
 
 def check_ekf_status(conn: MAVConnection, verbose: int):
-    """Checks whether all required EKF flags are set."""
+    """Check whether all required EKF flags are set."""
     msg = conn.recv_match(type="EKF_STATUS_REPORT")
     if not msg:
         return False, None
@@ -81,7 +81,7 @@ def check_ekf_status(conn: MAVConnection, verbose: int):
 
 
 def check_gps_status(conn: MAVConnection, verbose: int):
-    """Fails if GPS fix is not 3D (fix_type < 3)."""
+    """Fail if GPS fix is not 3D (fix_type < 3)."""
     msg = conn.recv_match(type="GPS_RAW_INT")
     if not msg:
         return False, None
@@ -98,7 +98,7 @@ def check_gps_status(conn: MAVConnection, verbose: int):
 
 
 def check_sys_status(conn: MAVConnection, _verbose: int):
-    """Fails if battery is low or any required sensors are unhealthy."""
+    """Fail if battery is low or any required sensors are unhealthy."""
     msg = conn.recv_match(type="SYS_STATUS")
     if not msg:
         return False, None

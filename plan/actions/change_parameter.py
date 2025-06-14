@@ -16,9 +16,7 @@ from plan.core import Action, ActionNames, Step
 
 
 def make_change_nav_speed(speed: float) -> Action[Step]:
-    """
-    Returns an Action that changes the UAV's WPNAV_SPEED.
-    """
+    """Return an Action that changes the UAV's WPNAV_SPEED."""
     action = Action[Step](name=ActionNames.CHANGE_NAVSPEED, emoji="🎚️")
     exec_fn = partial(exec_set_nav_speed, speed=speed)
     check_fn = partial(check_set_nav_speed, speed=speed)
@@ -33,9 +31,7 @@ def make_change_nav_speed(speed: float) -> Action[Step]:
 
 
 def exec_set_nav_speed(conn: MAVConnection, speed: float = 5) -> None:
-    """
-    Sends a SET_PARAM command to change WPNAV_SPEED (navigation speed).
-    """
+    """Send a SET_PARAM command to change WPNAV_SPEED (navigation speed)."""
     speed_cmps = speed * 100  # ArduPilot uses cm/s
     conn.mav.param_set_send(
         conn.target_system,
@@ -49,9 +45,7 @@ def exec_set_nav_speed(conn: MAVConnection, speed: float = 5) -> None:
 def check_set_nav_speed(
     conn: MAVConnection, _verbose: int, speed: float = 0
 ) -> Tuple[bool, None]:
-    """
-    Checks whether the WPNAV_SPEED parameter has been updated.
-    """
+    """Check whether the WPNAV_SPEED parameter has been updated."""
     msg = conn.recv_match(type="PARAM_VALUE")
     if not msg:
         return False, None

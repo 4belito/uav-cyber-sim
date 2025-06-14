@@ -7,20 +7,19 @@ steps based on HEARTBEAT messages and supported flight modes.
 
 from functools import partial
 
-from helpers.mavlink import FlightMode, MAVConnection
+from helpers.mavlink import FlightMode, MavCmd, MAVConnection
 from plan.core import Action, ActionNames, Step
 
 
-def make_set_mode(mode_name: str, onair: bool = False) -> Action[Step]:
-    """Creates an Action to switch the UAV flight mode."""
-    mode_value = FlightMode.get_value(mode_name)
+def make_set_mode(flight_mode: FlightMode, onair: bool = False) -> Action[Step]:
+    """Create an Action to switch the UAV flight mode."""
     action = Action[Step](
-        f"{ActionNames.CHANGE_FLIGHTMODE}: {mode_name.upper()}", emoji="⚙️"
+        f"{ActionNames.CHANGE_FLIGHTMODE}: {flight_mode.name}", emoji="⚙️"
     )
-    exec_fn = partial(exec_set_mode, mode=mode_value)
-    check_fn = partial(check_set_mode, mode=mode_value)
+    exec_fn = partial(exec_set_mode, mode=flight_mode)
+    check_fn = partial(check_set_mode, mode=flight_mode)
     step = Step(
-        name=f"Switch to {mode_name.upper()}",
+        name=f"Switch to {flight_mode.name}",
         check_fn=check_fn,
         exec_fn=exec_fn,
         onair=onair,
@@ -29,16 +28,30 @@ def make_set_mode(mode_name: str, onair: bool = False) -> Action[Step]:
     return action
 
 
-def exec_set_mode(conn: MAVConnection, mode: int = 0) -> None:
-    """Sends the SET_MODE command to the UAV with the given mode value."""
-    conn.set_mode(mode)
+def exec_set_mode(conn: MAVConnection, mode: FlightMode) -> None:
+    """Send the SET_MODE command to the UAV with the given mode value."""
+    conn.mav.command_long_send(
+        conn.target_system,
+        conn.target_component,
+        MavCmd.SET_MODE,
+        0,
+        MavCmd.CUSTOM_MODE_ENABLE,
+        mode.value,
+        0,
+        0,
+        0,
+        0,
+        0,
+    )
+
+    # conn.set_mode(mode)
 
 
 def check_set_mode(
-    conn: MAVConnection, _verbose: int, mode: int = 0
+    conn: MAVConnection, _verbose: int, mode: FlightMode
 ) -> tuple[bool, None]:
-    """Verifies the UAV has switched to the target flight mode."""
+    """Verify the UAV has switched to the target flight mode."""
     msg = conn.recv_match(type="HEARTBEAT", timeout=1.0)
-    if msg and msg.custom_mode == mode:
+    if msg and msg.custom_mode == mode.value:
         return True, None
     return False, None

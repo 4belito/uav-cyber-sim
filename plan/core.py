@@ -39,6 +39,7 @@ class ActionNames(StrEnum):
     LAND = "LAND"
     CHANGE_FLIGHTMODE = "MODE"
     CHANGE_NAVSPEED = "CHANGE_NAV_SPEED"
+    START_MISSION = "START_MISSION"
 
 
 class StepFailed(Exception):

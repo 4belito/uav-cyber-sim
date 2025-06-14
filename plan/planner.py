@@ -10,6 +10,7 @@ from enum import StrEnum
 import numpy as np
 from numpy.typing import NDArray
 
+from helpers.mavlink import FlightMode
 from plan.actions import (
     make_arm,
     make_change_nav_speed,
@@ -17,6 +18,7 @@ from plan.actions import (
     make_path,
     make_pre_arm,
     make_set_mode,
+    make_start_mission,
     make_takeoff,
 )
 from plan.core import Step
@@ -75,7 +77,7 @@ class Plan(Action[Action[Step]]):
     def create_square_path(
         side_len: float = 10, alt: float = 5, clockwise: bool = True
     ):
-        """Generates square-shaped waypoints for a trajectory."""
+        """Generate square-shaped waypoints for a trajectory."""
         if clockwise:
             wps = np.array(
                 [
@@ -107,7 +109,7 @@ class Plan(Action[Action[Step]]):
         wp_margin: float = 0.5,
         navegation_speed: float = 5,
     ):
-        """Creates a square-shaped trajectory with takeoff and landing."""
+        """Create a square-shaped trajectory with takeoff and landing."""
         wps = cls.create_square_path(side_len, alt)
         return cls.basic(
             wps=wps,
@@ -129,12 +131,12 @@ class Plan(Action[Action[Step]]):
         dynamic_wps: NDArray[np.float64] | None = None,
         takeoff_alt: float = 1.0,
     ) -> Plan:
-        """Creates a basic plan with configurable waypoints and options."""
+        """Create a basic plan with configurable waypoints and options."""
         land_wp = wps[-1].copy()
         land_wp[2] = 0
         plan = cls(name=name, mode=mode, dynamic_wps=dynamic_wps, wp_margin=wp_margin)
         plan.add(make_pre_arm())
-        plan.add(make_set_mode("GUIDED"))
+        plan.add(make_set_mode(FlightMode.GUIDED))
         if navegation_speed != 5:
             plan.add(make_change_nav_speed(speed=navegation_speed))
         plan.add(make_arm())
@@ -144,7 +146,7 @@ class Plan(Action[Action[Step]]):
         plan.add(make_land(final_wp=land_wp))
         return plan
 
-    ## Improve this for no repeating code
+    # TODO Improve this for no repeating code
 
     @classmethod
     # pylint: disable=too-many-arguments
@@ -157,13 +159,25 @@ class Plan(Action[Action[Step]]):
         name: str = "hover",
         takeoff_alt: float = 5.0,
     ):
-        """Creates a plan to take off, reach a point, and hover."""
+        """Create a plan to take off, reach a point, and hover."""
         plan = cls(name)
         plan.add(make_pre_arm())
-        plan.add(make_set_mode("GUIDED"))
+        plan.add(make_set_mode(FlightMode.GUIDED))
         if navegation_speed != 5:
             plan.add(make_change_nav_speed(speed=navegation_speed))
         plan.add(make_arm())
         plan.add(make_takeoff(altitude=takeoff_alt))
         plan.add(make_path(wps=wps, wp_margin=wp_margin))
+        return plan
+
+    # TODO include here the mission somehow. Maybe by passing a name file argument
+
+    @classmethod
+    def auto(cls, name: str = ""):
+        """Create a plan to execute a mission in auto mode."""
+        plan = cls(name)
+        plan.add(make_pre_arm())
+        plan.add(make_set_mode(FlightMode.GUIDED))
+        plan.add(make_arm())
+        plan.add(make_start_mission())
         return plan

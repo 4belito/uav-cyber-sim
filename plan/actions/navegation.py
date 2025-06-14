@@ -1,3 +1,4 @@
+# pyright: reportMissingTypeStubs=false
 """
 Defines logic for navigating to local NED waypoints using MAVLink.
 
@@ -6,12 +7,12 @@ Includes:
 - Construction of Step and Action objects to integrate into mission plans.
 """
 
-from functools import partial
 import math
+from functools import partial
 
 import numpy as np
 from numpy.typing import NDArray
-from pymavlink import mavutil
+from pymavlink import mavutil  # type: ignore
 
 from helpers.change_coordinates import Position, global_switch_local_ned
 from helpers.mavlink import MavCmd, MAVConnection, ask_msg, stop_msg
@@ -22,7 +23,7 @@ from plan.core import Action, ActionNames, Step
 def make_path(
     wps: NDArray[np.float64] | None = None, wp_margin: float = 0.5
 ) -> Action[Step]:
-    """Creates a FLY action composed of multiple go-to waypoint steps."""
+    """Create a FLY action composed of multiple go-to waypoint steps."""
     go_local_action = Action[Step](name=ActionNames.FLY, emoji="🛩️")
     if wps is None:
         return go_local_action  # Return empty action if no waypoints
@@ -33,7 +34,7 @@ def make_path(
 
 
 def get_local_position(conn: MAVConnection):
-    """Requests and returns the UAV's current local NED position."""
+    """Request and return the UAV's current local NED position."""
     ## Check this to make blocking optional parameter
     msg = conn.recv_match(type="LOCAL_POSITION_NED", blocking=True, timeout=0.001)
     # This does not work. I'am not sure why
@@ -47,7 +48,7 @@ TYPE_MASK = int(0b110111111000)
 
 
 def exec_go_local(conn: MAVConnection, wp: Position, ask_pos_interval: int = 100_000):
-    """Sends a MAVLink command to move the UAV to a local waypoint."""
+    """Send a MAVLink command to move the UAV to a local waypoint."""
     wp = global_switch_local_ned(wp)
     go_msg = mavutil.mavlink.MAVLink_set_position_target_local_ned_message(
         10,
@@ -96,7 +97,7 @@ def make_go_to(
     target_pos: Position | None = None,
     is_improv: bool = False,
 ) -> Step:
-    """Builds a Step that moves the UAV to a specific waypoint."""
+    """Build a Step that moves the UAV to a specific waypoint."""
     if target_pos is None:
         target_pos = wp
     goto_step = Step(
@@ -111,5 +112,5 @@ def make_go_to(
 
 
 def fmt(wp: Position):
-    """Formats a waypoint as a tuple of readable values."""
+    """Format a waypoint as a tuple of readable values."""
     return tuple(int(x) if float(x).is_integer() else round(float(x), 2) for x in wp)

@@ -1,6 +1,4 @@
-"""
-Defines a LAND action with execution and landing check using MAVLink commands.
-"""
+"""Defines a LAND action with execution and landing check using MAVLink commands."""
 
 from helpers.change_coordinates import Position
 from helpers.mavlink import MavCmd, MAVConnection, ask_msg, stop_msg
