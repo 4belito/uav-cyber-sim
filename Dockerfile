@@ -97,7 +97,7 @@ RUN git clone https://github.com/4belito/qgroundcontrol.git --recurse-submodules
     ./deploy/create_linux_appimage.sh . ./build/staging && \
     mv QGroundControl.AppImage ~ && \
 	cd && \
-	rm -rf qgroundontrol && \
+	rm -rf qgroundcontrol && \
 	chmod a+x QGroundControl.AppImage
 
 # INSTALL GAZEBO
