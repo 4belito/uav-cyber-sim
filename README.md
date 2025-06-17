@@ -19,17 +19,10 @@ A Docker image with preinstalled dependencies is available on Docker Hub as [dal
 
 To enable running GUI applications (e.g. QGroundControl, Gazebo) inside Docker on Linux systems, launch the container with the following command:
 ```shell
-docker run -it -u ubuntu --env="DISPLAY" --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" --volume="/dev/dri:/dev/dri:ro" --name <container name> dalbick/uav-cyber-sim
+docker run -u ubuntu --env="DISPLAY" --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" --volume="/dev/dri:/dev/dri:ro" --name <container name> dalbick/uav-cyber-sim
 ```
 
 VS Code's 'Dev Containers' extension can be used to attach to a running container in order to run the example Jupyter notebooks. 
-
-**The last 3 lines in config.py have to be changed to the following when running the image:**
-```python
-ENV_CMD_PYT = "source ~/.bashrc && conda activate uav-cyber-sim11"
-ENV_CMD_ARP = "source ~/.profile"
-ENV_CMD_GAZ = "source ~/.profile"
-```
 
 **If you plan on using the QGroundControl simulator, run it once manually:**
 ```shell

@@ -12,7 +12,7 @@ from params.simulation import CONNECT_GCS_TO_ARP
 # --- System Paths ---
 HOME = Path.home()
 QGC_PATH = HOME / "QGroundControl.AppImage"
-QGC_INI_PATH = HOME / ".config" / "QGroundControl.org" / "QGroundControl.ini"
+QGC_INI_PATH = HOME / ".config" / "QGroundControl.org" / "QGroundControl Daily.ini"
 ARDUPILOT_VEHICLE_PATH = HOME / "ardupilot" / "Tools" / "autotest" / "sim_vehicle.py"
 ARDUPILOT_GAZEBO_MODELS = HOME / "ardupilot_gazebo" / "models"
 
@@ -71,6 +71,6 @@ class Color(StrEnum):
 
 
 # --- Environment Setup Commands ---
-ENV_CMD_PYT = "source ~/.bashrc && conda activate uav-cyber-sim11"
+ENV_CMD_PYT = None
 ENV_CMD_ARP = "source ~/.profile"
 ENV_CMD_GAZ = "source ~/.profile"
