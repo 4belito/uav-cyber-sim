@@ -34,10 +34,10 @@ gcses = [
     ("blue 🟦", Color.BLUE),
     ("green 🟩", Color.GREEN),
     ("yellow 🟨", Color.YELLOW),
-    # ("orange 🟧", Color.ORANGE),
-    # ("red 🟥", Color.RED),
+    ("orange 🟧", Color.ORANGE),
+    ("red 🟥", Color.RED),
 ]
-n_uavs_per_gcs = 5
+n_uavs_per_gcs = 12
 side_len = 5
 altitude = 5
 
