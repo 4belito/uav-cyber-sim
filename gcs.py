@@ -11,7 +11,7 @@ from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
 from config import BasePort
 from helpers.change_coordinates import Position
-from helpers.mavlink import MAVConnection
+from mavlink.customtypes.connection import MAVConnection
 from oracle import Oracle
 
 

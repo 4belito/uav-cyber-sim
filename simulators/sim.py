@@ -26,7 +26,7 @@ from config import (
     BasePort,
 )
 from helpers.change_coordinates import Offset
-from helpers.mavlink import MAVConnection
+from mavlink.customtypes.connection import MAVConnection
 from oracle import Oracle
 from plan import Plan
 

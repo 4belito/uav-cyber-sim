@@ -10,7 +10,7 @@ from enum import StrEnum
 import numpy as np
 from numpy.typing import NDArray
 
-from helpers.mavlink import FlightMode
+from mavlink.enums import CopterMode
 from plan.actions import (
     make_arm,
     make_change_nav_speed,
@@ -20,6 +20,7 @@ from plan.actions import (
     make_set_mode,
     make_start_mission,
     make_takeoff,
+    make_upload_mission,
 )
 from plan.core import Step
 
@@ -76,7 +77,7 @@ class Plan(Action[Action[Step]]):
     @staticmethod
     def create_square_path(
         side_len: float = 10, alt: float = 5, clockwise: bool = True
-    ):
+    ) -> NDArray[np.float64]:
         """Generate square-shaped waypoints for a trajectory."""
         if clockwise:
             wps = np.array(
@@ -123,7 +124,7 @@ class Plan(Action[Action[Step]]):
     # pylint: disable=too-many-positional-arguments
     def basic(
         cls,
-        wps: NDArray[np.float64] = np.array([[0, 0, 5]]),
+        wps: NDArray[np.float64] = np.array([[0.0, 0.0, 5.0]]),
         wp_margin: float = 0.5,
         navegation_speed: float = 5,
         name: str = "basic",
@@ -136,7 +137,7 @@ class Plan(Action[Action[Step]]):
         land_wp[2] = 0
         plan = cls(name=name, mode=mode, dynamic_wps=dynamic_wps, wp_margin=wp_margin)
         plan.add(make_pre_arm())
-        plan.add(make_set_mode(FlightMode.GUIDED))
+        plan.add(make_set_mode(CopterMode.GUIDED))
         if navegation_speed != 5:
             plan.add(make_change_nav_speed(speed=navegation_speed))
         plan.add(make_arm())
@@ -162,7 +163,7 @@ class Plan(Action[Action[Step]]):
         """Create a plan to take off, reach a point, and hover."""
         plan = cls(name)
         plan.add(make_pre_arm())
-        plan.add(make_set_mode(FlightMode.GUIDED))
+        plan.add(make_set_mode(CopterMode.GUIDED))
         if navegation_speed != 5:
             plan.add(make_change_nav_speed(speed=navegation_speed))
         plan.add(make_arm())
@@ -173,11 +174,12 @@ class Plan(Action[Action[Step]]):
     # TODO include here the mission somehow. Maybe by passing a name file argument
 
     @classmethod
-    def auto(cls, name: str = ""):
+    def auto(cls, name: str = "", mission_name: str = "misison"):
         """Create a plan to execute a mission in auto mode."""
         plan = cls(name)
+        plan.add(make_upload_mission(mission_name))
         plan.add(make_pre_arm())
-        plan.add(make_set_mode(FlightMode.GUIDED))
+        plan.add(make_set_mode(CopterMode.GUIDED))
         plan.add(make_arm())
         plan.add(make_start_mission())
         return plan

@@ -5,12 +5,16 @@ import threading
 import time
 from queue import Queue
 
+import pymavlink.dialects.v20.ardupilotmega as mavlink
 from pymavlink import mavutil  # type: ignore
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
 # First Party imports
 from config import BasePort
-from helpers.mavlink import MavCmd, MAVConnection, MAVLinkMessage
+from mavlink.customtypes.connection import MAVConnection
+from mavlink.enums import Autopilot, Type
+
+# from helpers.mavlink.mavutil import MavCmd
 from params.simulation import HEARTBEAT_PERIOD
 
 heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
@@ -42,7 +46,7 @@ def parse_arguments() -> tuple[int, int]:
 # taken from mavproxy
 def send_heartbeat(conn: MAVConnection) -> None:
     """Send a GCS heartbeat message to the UAV."""
-    conn.mav.heartbeat_send(MavCmd.TYPE_GCS, MavCmd.AUTOPILOT_INVALID, 0, 0, 0)
+    conn.mav.heartbeat_send(Type.GCS, Autopilot.INVALID, 0, 0, 0)
 
 
 def create_connection_udp(
@@ -102,7 +106,7 @@ class MessageRouter(threading.Thread):
             except:
                 self.stop_event.set()
 
-    def dispatch_message(self, msg: MAVLinkMessage):
+    def dispatch_message(self, msg: mavlink.MAVLink_message):
         msg_type = msg.get_type()
         msg_buff = msg.get_msgbuf()
         for q, label in zip(self.targets, self.labels):

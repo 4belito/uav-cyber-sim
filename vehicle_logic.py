@@ -3,7 +3,7 @@
 from enum import StrEnum
 
 from helpers.change_coordinates import Position
-from helpers.mavlink import MAVConnection  # ,CustomCmd, MavCmd,  MAVLinkMessage
+from mavlink.customtypes.connection import MAVConnection
 from plan.planner import Action, Plan, Step  # , State
 
 # from typing import List

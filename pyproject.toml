@@ -8,3 +8,6 @@ extend-ignore = ["D205", "D212", "D107", "D105"]
 
 [tool.ruff.format]
 quote-style = "double"
+
+[tool.mypy]
+ignore_missing_imports = true

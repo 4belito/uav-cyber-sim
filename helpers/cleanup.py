@@ -12,6 +12,7 @@ ALL_PROCESSES = [
     "gazebo",
     "mavproxy",
     "proxy.py",
+    "logic.py",
     "gcs.py",
 ]
 

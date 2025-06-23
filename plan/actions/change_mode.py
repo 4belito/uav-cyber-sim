@@ -7,11 +7,12 @@ steps based on HEARTBEAT messages and supported flight modes.
 
 from functools import partial
 
-from helpers.mavlink import FlightMode, MavCmd, MAVConnection
+from mavlink.customtypes.connection import MAVConnection
+from mavlink.enums import CmdDo, CopterMode, ModeFlag
 from plan.core import Action, ActionNames, Step
 
 
-def make_set_mode(flight_mode: FlightMode, onair: bool = False) -> Action[Step]:
+def make_set_mode(flight_mode: CopterMode, onair: bool = False) -> Action[Step]:
     """Create an Action to switch the UAV flight mode."""
     action = Action[Step](
         f"{ActionNames.CHANGE_FLIGHTMODE}: {flight_mode.name}", emoji="⚙️"
@@ -28,14 +29,14 @@ def make_set_mode(flight_mode: FlightMode, onair: bool = False) -> Action[Step]:
     return action
 
 
-def exec_set_mode(conn: MAVConnection, mode: FlightMode) -> None:
+def exec_set_mode(conn: MAVConnection, _verbose: int, mode: CopterMode) -> None:
     """Send the SET_MODE command to the UAV with the given mode value."""
     conn.mav.command_long_send(
         conn.target_system,
         conn.target_component,
-        MavCmd.SET_MODE,
+        CmdDo.SET_MODE,
         0,
-        MavCmd.CUSTOM_MODE_ENABLE,
+        ModeFlag.CUSTOM_MODE_ENABLED,
         mode.value,
         0,
         0,
@@ -48,7 +49,7 @@ def exec_set_mode(conn: MAVConnection, mode: FlightMode) -> None:
 
 
 def check_set_mode(
-    conn: MAVConnection, _verbose: int, mode: FlightMode
+    conn: MAVConnection, _verbose: int, mode: CopterMode
 ) -> tuple[bool, None]:
     """Verify the UAV has switched to the target flight mode."""
     msg = conn.recv_match(type="HEARTBEAT", timeout=1.0)

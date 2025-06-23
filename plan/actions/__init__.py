@@ -8,6 +8,7 @@ from .navegation import get_local_position, make_go_to, make_path
 from .pre_arm import make_pre_arm
 from .start_mission import make_start_mission
 from .take_off import make_takeoff
+from .upload_mission import make_upload_mission
 
 __all__ = [
     "make_pre_arm",
@@ -20,4 +21,5 @@ __all__ = [
     "get_local_position",
     "make_go_to",
     "make_start_mission",
+    "make_upload_mission",
 ]

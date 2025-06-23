@@ -5,12 +5,14 @@ import argparse
 import time
 
 from pymavlink import mavutil  # type: ignore
-from pymavlink.dialects.v20 import common as mavlink2  # type: ignore
+from pymavlink.dialects.v20 import ardupilotmega as mavlink  # type: ignore
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
 # First Party imports
-from config import BasePort, Color
-from helpers.mavlink import CustomCmd, MavCmd, MAVConnection
+from config import BasePort
+from mavlink.customtypes.connection import MAVConnection
+from mavlink.enums import Autopilot, Type
+from mavlink.util import CustomCmd
 from params.simulation import HEARTBEAT_PERIOD
 from plan import Plan, State
 from proxy import create_connection_udp
@@ -30,38 +32,39 @@ from vehicle_logic import VehicleLogic
 # plans = [Plan.basic(wps=path, wp_margin=0.5) for path in local_paths]
 
 
-gcses = [
-    ("blue 🟦", Color.BLUE),
-    ("green 🟩", Color.GREEN),
-    ("yellow 🟨", Color.YELLOW),
-    ("orange 🟧", Color.ORANGE),
-    ("red 🟥", Color.RED),
-]
-n_uavs_per_gcs = 12
-side_len = 5
-altitude = 5
+# gcses = [
+#     ("blue 🟦", Color.BLUE),
+#     ("green 🟩", Color.GREEN),
+#     ("yellow 🟨", Color.YELLOW),
+#     ("orange 🟧", Color.ORANGE),
+#     ("red 🟥", Color.RED),
+# ]
+# n_uavs_per_gcs = 12
+# side_len = 5
+# altitude = 5
 
-n_gcs = len(gcses)
-n_vehicles = n_gcs * n_uavs_per_gcs
-offsets = [
-    (i * 10 * side_len, j * 3 * side_len, 0, 0)
-    for i in range(n_gcs)
-    for j in range(n_uavs_per_gcs)
-]
+# n_gcs = len(gcses)
+# n_vehicles = n_gcs * n_uavs_per_gcs
+# offsets = [
+#     (i * 10 * side_len, j * 3 * side_len, 0, 0)
+#     for i in range(n_gcs)
+#     for j in range(n_uavs_per_gcs)
+# ]
 
-local_paths = [
-    Plan.create_square_path(side_len=side_len, alt=altitude) for _ in range(n_vehicles)
-]
-plans = [Plan.basic(wps=path, wp_margin=0.5) for path in local_paths]
-
-
-homes = [offset[:3] for offset in offsets]
+# local_paths = [
+#     Plan.create_square_path(side_len=side_len, alt=altitude) for _ in range(n_vehicles)
+# ]
+# plans = [Plan.basic(wps=path, wp_margin=0.5) for path in local_paths]
 
 
-# offset = (0, 0, 0, 0)  # east, north, up, heading
+# homes = [offset[:3] for offset in offsets]
+
+
+offset = (0, 0, 0, 0)  # east, north, up, heading
 # local_path = Plan.create_square_path(side_len=5, alt=5)
 # plans = [Plan.basic(wps=local_path, wp_margin=0.5)]
-# homes = [offset[:3]]
+plans = [Plan.auto(mission_name="simple_mission")]
+homes = [offset[:3]]
 
 
 ########################################
@@ -95,7 +98,7 @@ def parse_arguments() -> tuple[int, int]:
 # taken from mavproxy
 def send_heartbeat(conn: MAVConnection):
     """Send a GCS heartbeat message to the UAV."""
-    conn.mav.heartbeat_send(MavCmd.TYPE_GCS, MavCmd.AUTOPILOT_INVALID, 0, 0, 0)
+    conn.mav.heartbeat_send(Type.GCS, Autopilot.INVALID, 0, 0, 0)
 
 
 def create_connection_tcp(base_port: int, offset: int):
@@ -141,7 +144,7 @@ def send_done_until_ack(conn: MAVConnection, idx: int, max_attempts: int = 100):
     Send 'DONE' via STATUSTEXT repeatedly until receiving a COMMAND_ACK.
     Assumes `conn` is a dedicated MAVLink connection for one UAV.
     """
-    msg = mavlink2.MAVLink_statustext_message(severity=6, text=b"DONE")
+    msg = mavlink.MAVLink_statustext_message(severity=6, text=b"DONE")
 
     for attempt in range(max_attempts):
         print(f"📤 GCS ← UAV {idx}: Sending DONE (attempt {attempt + 1})")

@@ -9,7 +9,7 @@ from enum import StrEnum
 from typing import Callable, Generic, List, Self, TypeVar, cast
 
 from helpers.change_coordinates import Position
-from helpers.mavlink import MAVConnection
+from mavlink.customtypes.connection import MAVConnection
 
 
 class State(StrEnum):
@@ -40,6 +40,7 @@ class ActionNames(StrEnum):
     CHANGE_FLIGHTMODE = "MODE"
     CHANGE_NAVSPEED = "CHANGE_NAV_SPEED"
     START_MISSION = "START_MISSION"
+    UPLOAD_MISSION = "UPLOAD_MISSION"
 
 
 class StepFailed(Exception):
@@ -101,10 +102,6 @@ class MissionElement:
             )
 
 
-def _noop_exec(_: MAVConnection) -> None:
-    pass
-
-
 class Step(MissionElement):
     """Executable mission step with a check and optional execution function."""
 
@@ -115,12 +112,12 @@ class Step(MissionElement):
         name: str,
         onair: bool,
         check_fn: Callable[[MAVConnection, int], tuple[bool, Position | None]],
-        exec_fn: Callable[[MAVConnection], None] | None = None,
+        exec_fn: Callable[[MAVConnection, int], None],
         target_pos: Position = (0, 0, 0),
         emoji: str = "🔹",
         is_improv: bool = False,
     ) -> None:
-        self.exec_fn = exec_fn or _noop_exec
+        self.exec_fn = exec_fn
         self.check_fn = check_fn
         self.curr_pos: Position | None = None
         self.onair = onair
@@ -129,7 +126,7 @@ class Step(MissionElement):
 
     def execute(self) -> None:
         """Execute the step and change state to IN_PROGRESS."""
-        self.exec_fn(self.conn)
+        self.exec_fn(self.conn, self.verbose)
         if self.verbose:
             print(f"Vehicle {self.sysid}: ▶️ {self.class_name} Started: {self.name}")
         self.state = State.IN_PROGRESS
@@ -166,6 +163,11 @@ class Step(MissionElement):
         """Reset the step state and clear current position."""
         super().reset()
         self.curr_pos = None
+
+    @staticmethod
+    def noop_exec(_conn: MAVConnection, _verbose: int) -> None:
+        """No execution."""
+        pass
 
 
 T = TypeVar("T", bound=MissionElement)

@@ -1,4 +1,3 @@
-# pyright: reportMissingTypeStubs=false
 """
 Defines logic for navigating to local NED waypoints using MAVLink.
 
@@ -12,11 +11,34 @@ from functools import partial
 
 import numpy as np
 from numpy.typing import NDArray
-from pymavlink import mavutil  # type: ignore
+from pymavlink import mavutil
 
 from helpers.change_coordinates import Position, global_switch_local_ned
-from helpers.mavlink import MavCmd, MAVConnection, ask_msg, stop_msg
+from mavlink.customtypes.connection import MAVConnection
+from mavlink.enums import Frame, MsgID
+from mavlink.util import ask_msg, stop_msg
 from plan.core import Action, ActionNames, Step
+
+
+def make_go_to(
+    wp: Position,
+    wp_margin: float = 0.5,
+    cause_text: str = "",
+    target_pos: Position | None = None,
+    is_improv: bool = False,
+) -> Step:
+    """Build a Step that moves the UAV to a specific waypoint."""
+    if target_pos is None:
+        target_pos = wp
+    goto_step = Step(
+        f"go to {cause_text} -> {fmt(wp)}",
+        check_fn=partial(check_reach_wp, wp=wp, wp_margin=wp_margin),
+        exec_fn=partial(exec_go_local, wp=wp),
+        target_pos=target_pos,
+        onair=True,
+        is_improv=is_improv,
+    )
+    return goto_step
 
 
 ## Make the action
@@ -47,14 +69,16 @@ def get_local_position(conn: MAVConnection):
 TYPE_MASK = int(0b110111111000)
 
 
-def exec_go_local(conn: MAVConnection, wp: Position, ask_pos_interval: int = 100_000):
+def exec_go_local(
+    conn: MAVConnection, _verbose: int, wp: Position, ask_pos_interval: int = 100_000
+):
     """Send a MAVLink command to move the UAV to a local waypoint."""
     wp = global_switch_local_ned(wp)
     go_msg = mavutil.mavlink.MAVLink_set_position_target_local_ned_message(
         10,
         conn.target_system,
         conn.target_component,
-        MavCmd.LOCAL_COORD,
+        Frame.LOCAL_NED,
         TYPE_MASK,
         *wp,
         0,
@@ -67,7 +91,7 @@ def exec_go_local(conn: MAVConnection, wp: Position, ask_pos_interval: int = 100
         0,
     )
     conn.mav.send(go_msg)
-    ask_msg(conn, MavCmd.LOCAL_POSITION_NED_ID, interval=ask_pos_interval)
+    ask_msg(conn, MsgID.LOCAL_POSITION_NED, interval=ask_pos_interval)
 
 
 def check_reach_wp(
@@ -86,29 +110,8 @@ def check_reach_wp(
     else:
         answer = False
     if answer:
-        stop_msg(conn, MavCmd.LOCAL_POSITION_NED_ID)
+        stop_msg(conn, MsgID.LOCAL_POSITION_NED)
     return answer, pos
-
-
-def make_go_to(
-    wp: Position,
-    wp_margin: float = 0.5,
-    cause_text: str = "",
-    target_pos: Position | None = None,
-    is_improv: bool = False,
-) -> Step:
-    """Build a Step that moves the UAV to a specific waypoint."""
-    if target_pos is None:
-        target_pos = wp
-    goto_step = Step(
-        f"go to {cause_text} -> {fmt(wp)}",
-        check_fn=partial(check_reach_wp, wp=wp, wp_margin=wp_margin),
-        exec_fn=partial(exec_go_local, wp=wp),
-        target_pos=target_pos,
-        onair=True,
-        is_improv=is_improv,
-    )
-    return goto_step
 
 
 def fmt(wp: Position):

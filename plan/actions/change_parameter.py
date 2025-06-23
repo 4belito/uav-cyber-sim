@@ -11,7 +11,9 @@ Includes:
 from functools import partial
 from typing import Tuple
 
-from helpers.mavlink import MAVConnection, ParamName, ParamType
+from ardupilot.enums import WPNav
+from mavlink.customtypes.connection import MAVConnection
+from mavlink.enums import ParamType
 from plan.core import Action, ActionNames, Step
 
 
@@ -30,13 +32,13 @@ def make_change_nav_speed(speed: float) -> Action[Step]:
     return action
 
 
-def exec_set_nav_speed(conn: MAVConnection, speed: float = 5) -> None:
+def exec_set_nav_speed(conn: MAVConnection, _verbose: int, speed: float = 5) -> None:
     """Send a SET_PARAM command to change WPNAV_SPEED (navigation speed)."""
     speed_cmps = speed * 100  # ArduPilot uses cm/s
     conn.mav.param_set_send(
         conn.target_system,
         conn.target_component,
-        ParamName.NAV_SPEED,
+        WPNav.SPEED,
         speed_cmps,
         ParamType.REAL32,
     )
@@ -50,7 +52,7 @@ def check_set_nav_speed(
     if not msg:
         return False, None
 
-    expected = ParamName.NAV_SPEED
+    expected = WPNav.SPEED
     speed_cmps = speed * 100
 
     return (msg.param_id == expected and msg.param_value == speed_cmps), None

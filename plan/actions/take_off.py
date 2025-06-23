@@ -9,7 +9,9 @@ Includes:
 
 from functools import partial
 
-from helpers.mavlink import MavCmd, MAVConnection, ask_msg, stop_msg
+from mavlink.customtypes.connection import MAVConnection
+from mavlink.enums import CmdNav, LandState, MsgID
+from mavlink.util import ask_msg, stop_msg
 from plan.core import Action, ActionNames, Step
 
 
@@ -30,12 +32,12 @@ def make_takeoff(altitude: float = 1.0) -> Action[Step]:
     return takeoff_action
 
 
-def exec_takeoff(conn: MAVConnection, altitude: float = 1.0):
+def exec_takeoff(conn: MAVConnection, _verbose: int, altitude: float = 1.0):
     """Send TAKEOFF command to reach target altitude."""
     conn.mav.command_long_send(
         conn.target_system,
         conn.target_component,
-        MavCmd.TAKEOFF,
+        CmdNav.TAKEOFF,
         0,
         0,
         0,
@@ -45,13 +47,13 @@ def exec_takeoff(conn: MAVConnection, altitude: float = 1.0):
         0,
         altitude,
     )
-    ask_msg(conn, MavCmd.EXT_STATE)
+    ask_msg(conn, MsgID.EXTENDED_SYS_STATE)
 
 
 def check_takeoff(conn: MAVConnection, _verbose: int):
     """Check if UAV is in TAKEOFF state."""
     msg = conn.recv_match(type="EXTENDED_SYS_STATE", blocking=True, timeout=0.01)
-    take_off = bool(msg and msg.landed_state == MavCmd.TAKEOFF_STATE)
+    take_off = bool(msg and msg.landed_state == LandState.TAKEOFF)
     if take_off:
-        stop_msg(conn, MavCmd.EXT_STATE)
+        stop_msg(conn, MsgID.EXTENDED_SYS_STATE)
     return take_off, None

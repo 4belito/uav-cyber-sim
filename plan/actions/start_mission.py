@@ -2,7 +2,8 @@
 
 from functools import partial
 
-from helpers.mavlink import MavCmd, MAVConnection
+from mavlink.customtypes.connection import MAVConnection
+from mavlink.enums import Cmd
 from plan.core import Action, ActionNames, Step
 
 
@@ -20,12 +21,12 @@ def make_start_mission() -> Action[Step]:
     return arm
 
 
-def exec_start_mission(conn: MAVConnection) -> None:
+def exec_start_mission(conn: MAVConnection, _verbose: int) -> None:
     """Send MISSION_START command to begin executing the mission."""
     conn.mav.command_long_send(
         conn.target_system,
         conn.target_component,
-        MavCmd.START_MISSION,
+        Cmd.MISSION_START,
         0,
         0,
         0,
