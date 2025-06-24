@@ -106,7 +106,7 @@ class MessageRouter(threading.Thread):
         msg_type = msg.get_type()
         msg_buff = msg.get_msgbuf()
         for q, label in zip(self.targets, self.labels):
-            print(f"{label} {self.sysid}: {msg_type}")
+            # print(f"{label} {self.sysid}: {msg_type}")
             q.put(msg_buff)
 
 

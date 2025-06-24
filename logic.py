@@ -153,7 +153,7 @@ def send_done_until_ack(conn: MAVConnection, idx: int, max_attempts: int = 100):
             if ack and ack.command == CustomCmd.PLAN_DONE:
                 print("✅ ACK received. DONE message acknowledged.")
                 return
-            time.sleep(0.001)
+            time.sleep(0.01)
 
     print("⚠️ No ACK received after max attempts.")
 
