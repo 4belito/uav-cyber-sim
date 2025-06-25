@@ -8,26 +8,16 @@ It modifies the QGroundControl.ini file to set up connection links for each UAV.
 
 import os
 import subprocess
-from dataclasses import dataclass
-from typing import List
 
 from config import QGC_INI_PATH, QGC_PATH, BasePort
-from helpers.change_coordinates import Offset, find_spawns
+
+# find_spawns
+from mavlink.customtypes.location import ENUPoses, GRAPose
 from params.simulation import CONNECT_GCS_TO_ARP
-from plan import Plan
+from plan import Plans
 from simulators.sim import Simulator, VisualizerName
 
-
-@dataclass
-class ConfigQGroundControl:
-    """Handles QGroundControl configuration based on UAV offsets and origin."""
-
-    def __init__(self, offsets: List[Offset], origin: Offset):
-        self.origin = origin
-        self.spawns = find_spawns(origin, offsets)
-
-    def __repr__(self):
-        return f"Origin={self.origin}, Spawns={self.spawns}"
+from .config import ConfigQGC
 
 
 class QGC(Simulator):
@@ -42,9 +32,9 @@ class QGC(Simulator):
 
     def __init__(
         self,
-        offsets: List[Offset],
-        plans: List[Plan],
-        origin: Offset,
+        offsets: ENUPoses,
+        plans: Plans,
+        origin: GRAPose,
         visible_terminals: bool = False,
     ):
         super().__init__(
@@ -54,10 +44,13 @@ class QGC(Simulator):
             visible_terminals=visible_terminals,
             delay_visualizer=True,
         )
-        self.config: ConfigQGroundControl = ConfigQGroundControl(offsets, origin)
+        self.config = ConfigQGC(offsets, origin)
 
     def _add_vehicle_cmd_fn(self, i: int):
-        spawn_str = ",".join(map(str, self.config.spawns[i]))
+        if isinstance(self.config, ConfigQGC):
+            spawn_str = ",".join(map(str, self.config.spawns[i]))
+        else:
+            raise RuntimeError("Expected QGC config but got something else")
         return f" --custom-location={spawn_str}"
 
     def _launch_visualizer(self):
@@ -83,7 +76,7 @@ class QGC(Simulator):
             lines = f.readlines()
 
         inside_links = False
-        new_lines: List[str] = []
+        new_lines: list[str] = []
 
         for line in lines:
             if line.strip() == "[LinkConfigurations]":
@@ -111,7 +104,7 @@ class QGC(Simulator):
         with open(QGC_INI_PATH, "r", encoding="utf-8") as file:
             lines = file.readlines()
 
-        new_lines: List[str] = []
+        new_lines: list[str] = []
         in_autoconnect = False
         autoconnect_found = False
         udp_written = False
@@ -184,7 +177,7 @@ class QGC(Simulator):
                 count = 0
 
         # Prepare new link entries
-        new_lines: List[str] = []
+        new_lines: list[str] = []
         for i in range(n):
             idx = count + i
             port = BasePort.QGC + self.port_offsets[i]

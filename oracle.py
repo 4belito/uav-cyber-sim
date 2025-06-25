@@ -7,11 +7,10 @@ Currently provides basic global position tracking and mission completion detecti
 
 from pymavlink.dialects.v20 import common as mavlink2  # type: ignore
 
-from helpers.change_coordinates import Position, local2global_pos  # ,global2local
+from helpers.change_coordinates import rel_to_abs  # ,global2local
 from mavlink.customtypes.connection import MAVConnection
-from mavlink.util import CustomCmd
-from plan.actions import get_local_position
-from plan.planner import Plan
+from mavlink.customtypes.location import ENU, ENUPose
+from mavlink.util import CustomCmd, get_ENU_position
 
 # from vehicle_logic import Neighbors, VehicleLogic
 
@@ -45,11 +44,11 @@ from plan.planner import Plan
 # homes = [offset[:3]]
 
 
-offset = (0, 0, 0, 0)  # east, north, up, heading
-# local_path = Plan.create_square_path(side_len=5, alt=5)
+offset = ENUPose(-1, 1, 0, 0)  # east, north, up, heading
+# local_path = Plan.create_square_path(side_len=5, alt=5, clockwise=False)
 # plans = [Plan.basic(wps=local_path, wp_margin=0.5)]
-plans = [Plan.auto(mission_name="simple_mission")]
-homes = [offset[:3]]
+# plans = [Plan.auto(mission_name="simple_mission")]
+homes = [ENU(*offset[:3])]
 
 ##################################
 
@@ -63,7 +62,7 @@ class Oracle:
     """
 
     def __init__(self, conns: list[MAVConnection], name: str = "Oracle ⚪") -> None:
-        self.pos: dict[int, Position] = {}
+        self.pos: dict[int, ENU] = {}
         self.conns = {conn.target_system: conn for conn in conns}
         self.name = name
 
@@ -78,11 +77,11 @@ class Oracle:
             if pos is not None:
                 self.pos[sysid] = pos
 
-    def get_global_pos(self, sysid: int):
+    def get_global_pos(self, sysid: int) -> ENU | None:
         """Get the current global position of the specified vehicle."""
-        pos = get_local_position(self.conns[sysid])
+        pos = get_ENU_position(self.conns[sysid])
         if pos is not None:
-            pos = local2global_pos(pos, homes[sysid - 1])
+            pos = rel_to_abs(pos, homes[sysid - 1], cls=ENU)
         return pos
 
     # def update_neighbors(self, sysid: int):

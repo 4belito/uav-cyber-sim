@@ -19,7 +19,7 @@ from plan.core import Step
 
 def make_upload_mission(mission_name: str, from_scratch: bool = True) -> Action[Step]:
     """Create an upload mission action."""
-    upload_mission = Action[Step](name=ActionNames.UPLOAD_MISSION, emoji="📤🚁 ")
+    upload_mission = Action[Step](name=ActionNames.UPLOAD_MISSION, emoji="📤")
     if from_scratch:
         upload_mission.add(
             Step(
@@ -40,7 +40,7 @@ def make_upload_mission(mission_name: str, from_scratch: bool = True) -> Action[
     return upload_mission
 
 
-# Upload Step
+# TODO: modularize this
 def exec_upload_mission(
     conn: MAVConnection,
     verbose: int = 1,
@@ -87,8 +87,6 @@ def check_upload_mission(
 
 
 # Clear missioins step
-
-
 def exec_clear_mission(
     conn: MAVConnection,
     verbose: int = 1,

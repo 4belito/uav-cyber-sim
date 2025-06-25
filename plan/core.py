@@ -8,8 +8,8 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Callable, Generic, List, Self, TypeVar, cast
 
-from helpers.change_coordinates import Position
 from mavlink.customtypes.connection import MAVConnection
+from mavlink.customtypes.location import ENU
 
 
 class State(StrEnum):
@@ -71,8 +71,8 @@ class MissionElement:
         ## live property(after building)
         self.conn: MAVConnection = cast(MAVConnection, None)
         self.onair: bool | None = None  # Default onair status
-        self.target_pos: Position | None = None  # Default target position
-        self.curr_pos: Position | None = None  # Default current position
+        self.target_pos: ENU | None = None  # Default target position
+        self.curr_pos: ENU | None = None  # Default current position
         self.verbose: int = 1
         self.sysid: int = cast(int, None)
 
@@ -111,15 +111,15 @@ class Step(MissionElement):
         self,
         name: str,
         onair: bool,
-        check_fn: Callable[[MAVConnection, int], tuple[bool, Position | None]],
+        check_fn: Callable[[MAVConnection, int], tuple[bool, ENU | None]],
         exec_fn: Callable[[MAVConnection, int], None],
-        target_pos: Position = (0, 0, 0),
+        target_pos: ENU = ENU(0, 0, 0),
         emoji: str = "🔹",
         is_improv: bool = False,
     ) -> None:
         self.exec_fn = exec_fn
         self.check_fn = check_fn
-        self.curr_pos: Position | None = None
+        self.curr_pos: ENU | None = None
         self.onair = onair
         self.target_pos = target_pos
         super().__init__(name=name, emoji=emoji, is_improv=is_improv)
@@ -184,8 +184,8 @@ class Action(MissionElement, Generic[T]):
         name: str,
         emoji: str = "🔘",
         onair: bool | None = None,
-        curr_pos: Position | None = None,
-        target_pos: Position | None = None,
+        curr_pos: ENU | None = None,
+        target_pos: ENU | None = None,
         is_improv: bool = False,
     ) -> None:
         self.steps: List[T] = []

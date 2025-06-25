@@ -4,15 +4,15 @@
 import argparse
 import time
 
-from pymavlink import mavutil  # type: ignore
-from pymavlink.dialects.v20 import ardupilotmega as mavlink  # type: ignore
-from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
+from pymavlink import mavutil
+from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
 # First Party imports
 from config import BasePort
 from mavlink.customtypes.connection import MAVConnection
+from mavlink.customtypes.location import ENU, ENUPose
 from mavlink.enums import Autopilot, Type
-from mavlink.util import CustomCmd
+from mavlink.util import CustomCmd, connect
 from params.simulation import HEARTBEAT_PERIOD
 from plan import Plan, State
 from proxy import create_connection_udp
@@ -52,7 +52,8 @@ from vehicle_logic import VehicleLogic
 # ]
 
 # local_paths = [
-#     Plan.create_square_path(side_len=side_len, alt=altitude) for _ in range(n_vehicles)
+#     Plan.create_square_path(side_len=side_len, alt=altitude)
+#       for _ in range(n_vehicles)
 # ]
 # plans = [Plan.basic(wps=path, wp_margin=0.5) for path in local_paths]
 
@@ -60,26 +61,27 @@ from vehicle_logic import VehicleLogic
 # homes = [offset[:3] for offset in offsets]
 
 
-offset = (0, 0, 0, 0)  # east, north, up, heading
-# local_path = Plan.create_square_path(side_len=5, alt=5)
-# plans = [Plan.basic(wps=local_path, wp_margin=0.5)]
-plans = [Plan.auto(mission_name="simple_mission")]
-homes = [offset[:3]]
+offset = ENUPose(-1, 1, 0, 0)  # east, north, up, heading
+rel_path = Plan.create_square_path(side_len=5, alt=5, clockwise=False)
+plans = [Plan.basic(wps=rel_path, wp_margin=0.5)]
+# plans = [Plan.auto(mission_name="simple_mission")]
+homes = [ENU(*offset[:3])]
 
 
 ########################################
-
+# TODO: Refactor this module
 
 heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
 
 
 def main():
-    system_id, port_offset = parse_arguments()
+    """Entry point for the Multi-UAV MAVLink Proxy."""
+    system_id, port_offset, verbose = parse_arguments()
     print(f"System id: {system_id}")
-    start_proxy(system_id, port_offset, verbose=2)
+    start_proxy(system_id, port_offset, verbose=verbose or 1)
 
 
-def parse_arguments() -> tuple[int, int]:
+def parse_arguments() -> tuple[int, int, int]:
     """Parse a single system ID."""
     parser = argparse.ArgumentParser(description="Single UAV MAVLink Proxy")
     parser.add_argument(
@@ -89,22 +91,28 @@ def parse_arguments() -> tuple[int, int]:
         help="System ID of the UAV (e.g., 1)",
     )
     parser.add_argument(
+        "--verbose",
+        type=int,
+        required=False,
+        help="verbose value (0,1,2)",
+    )
+    parser.add_argument(
         "--port-offset", type=int, required=True, help="Port offset to use (e.g. 10)"
     )
     args = parser.parse_args()
-    return (args.sysid, args.port_offset)
+    return (args.sysid, args.port_offset, args.verbose)
 
 
 # taken from mavproxy
-def send_heartbeat(conn: MAVConnection):
+def send_heartbeat(conn: MAVConnection) -> None:
     """Send a GCS heartbeat message to the UAV."""
     conn.mav.heartbeat_send(Type.GCS, Autopilot.INVALID, 0, 0, 0)
 
 
-def create_connection_tcp(base_port: int, offset: int):
+def create_connection_tcp(base_port: int, offset: int) -> MAVConnection:
     """Create and in or out connection and wait for geting the hearbeat in."""
     port = base_port + offset
-    conn: MAVConnection = connect(f"tcpin:127.0.0.1:{port}")  # type: ignore
+    conn = connect(f"tcpin:127.0.0.1:{port}")
     conn.wait_heartbeat()
     send_heartbeat(conn)
     print("✅ Heartbeat received")

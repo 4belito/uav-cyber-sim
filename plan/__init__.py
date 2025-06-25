@@ -1,7 +1,7 @@
 """Init file for plan package."""
 
 from .core import Action, ActionNames, State, Step
-from .planner import Plan, PlanMode
+from .planner import Plan, PlanMode, Plans
 
 __all__ = [
     "Action",
@@ -9,5 +9,6 @@ __all__ = [
     "State",
     "Step",
     "Plan",
+    "Plans",
     "PlanMode",
 ]

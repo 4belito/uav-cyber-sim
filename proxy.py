@@ -6,15 +6,13 @@ import time
 from queue import Queue
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
-from pymavlink import mavutil  # type: ignore
-from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
+from pymavlink import mavutil
 
 # First Party imports
 from config import BasePort
 from mavlink.customtypes.connection import MAVConnection
 from mavlink.enums import Autopilot, Type
-
-# from helpers.mavlink.mavutil import MavCmd
+from mavlink.util import connect
 from params.simulation import HEARTBEAT_PERIOD
 
 heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
@@ -22,12 +20,12 @@ heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
 
 def main() -> None:
     """Parse arguments and launch the MAVLink proxy."""
-    system_id, port_offset = parse_arguments()
+    system_id, port_offset, verbose = parse_arguments()
     print(f"System id: {system_id}")
-    start_proxy(system_id, port_offset, verbose=2)
+    start_proxy(system_id, port_offset, verbose)
 
 
-def parse_arguments() -> tuple[int, int]:
+def parse_arguments() -> tuple[int, int, int]:
     """Parse a single system ID."""
     parser = argparse.ArgumentParser(description="Single UAV MAVLink Proxy")
     parser.add_argument(
@@ -37,10 +35,16 @@ def parse_arguments() -> tuple[int, int]:
         help="System ID of the UAV (e.g., 1)",
     )
     parser.add_argument(
+        "--verbose",
+        type=int,
+        required=False,
+        help="verbose value (0,1,2)",
+    )
+    parser.add_argument(
         "--port-offset", type=int, required=True, help="Port offset to use (e.g. 10)"
     )
     args = parser.parse_args()
-    return (args.sysid, args.port_offset)
+    return (args.sysid, args.port_offset, args.verbose)
 
 
 # taken from mavproxy
@@ -89,6 +93,7 @@ class MessageRouter(threading.Thread):
         labels: list[str],
         sysid: int,
         stop_event: threading.Event,
+        verbose: int = 1,
     ):
         super().__init__()
         self.source = source
@@ -96,6 +101,7 @@ class MessageRouter(threading.Thread):
         self.labels = labels
         self.sysid = sysid
         self.stop_event = stop_event
+        self.verbose = verbose
 
     def run(self):
         while not self.stop_event.is_set():
@@ -110,7 +116,8 @@ class MessageRouter(threading.Thread):
         msg_type = msg.get_type()
         msg_buff = msg.get_msgbuf()
         for q, label in zip(self.targets, self.labels):
-            print(f"{label} {self.sysid}: {msg_type}")
+            if self.verbose == 3:
+                print(f"{label} {self.sysid}: {msg_type}")
             q.put(msg_buff)
 
 

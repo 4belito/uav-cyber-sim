@@ -10,8 +10,8 @@ import pickle
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
 from config import BasePort
-from helpers.change_coordinates import Position
 from mavlink.customtypes.connection import MAVConnection
+from mavlink.customtypes.location import ENUs
 from oracle import Oracle
 
 
@@ -46,7 +46,7 @@ class GCS(Oracle):
     def __init__(self, conns: list[MAVConnection], name: str = "blue 🟦"):
         self.name = name
         super().__init__(conns, name=f"GCS {name}")
-        self.paths: dict[int, list[Position]] = {sysid: [] for sysid in self.conns}
+        self.paths: dict[int, ENUs] = {sysid: [] for sysid in self.conns}
 
     def save_pos(self):
         """Save the current global position of each UAV to their trajectory path."""

@@ -6,10 +6,16 @@ Supports static and dynamic waypoint modes and includes predefined plans.
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Literal, overload
 
-import numpy as np
-from numpy.typing import NDArray
-
+from mavlink.customtypes.location import (
+    ENU,
+    XY,
+    ENUPose,
+    ENUPoses,
+    ENUs,
+    XYs,
+)
 from mavlink.enums import CopterMode
 from plan.actions import (
     make_arm,
@@ -53,7 +59,7 @@ class Plan(Action[Action[Step]]):
         name: str,
         emoji: str = "📋",
         mode: PlanMode = PlanMode.STATIC,
-        dynamic_wps: NDArray[np.float64] | None = None,
+        dynamic_wps: ENUs | None = None,
         wp_margin: float = 0.5,
     ) -> None:
         self.mode = mode
@@ -72,35 +78,76 @@ class Plan(Action[Action[Step]]):
             self.dynamic_wps = dynamic_wps
         else:
             raise ValueError(f"Unsupported plan mode: {mode}")
-        super().__init__(name, emoji=emoji, curr_pos=(0, 0, 0))
+        super().__init__(name, emoji=emoji, curr_pos=ENU(0, 0, 0))
+
+    @staticmethod
+    @overload
+    def create_square_path(
+        side_len: float,
+        alt: float,
+        clockwise: bool,
+        out_offset: Literal[False],
+    ) -> ENUs: ...
+
+    @staticmethod
+    @overload
+    def create_square_path(
+        side_len: float,
+        alt: float,
+        clockwise: bool,
+    ) -> ENUs: ...
+
+    @staticmethod
+    @overload
+    def create_square_path(
+        side_len: float,
+        alt: float,
+    ) -> ENUs: ...
+
+    @staticmethod
+    @overload
+    def create_square_path(
+        side_len: float,
+        alt: float,
+        clockwise: bool,
+        out_offset: Literal[True],
+    ) -> ENUPoses: ...
 
     @staticmethod
     def create_square_path(
-        side_len: float = 10, alt: float = 5, clockwise: bool = True
-    ) -> NDArray[np.float64]:
-        """Generate square-shaped waypoints for a trajectory."""
-        if clockwise:
-            wps = np.array(
-                [
-                    (0, 0, alt),
-                    (0, side_len, alt),
-                    (side_len, side_len, alt),
-                    (side_len, 0, alt),
-                    (0, 0, alt),
-                ]
-            )
-        else:
-            wps = np.array(
-                [
-                    (0, 0, alt),
-                    (0, side_len, alt),
-                    (-side_len, side_len, alt),
-                    (-side_len, 0, alt),
-                    (0, 0, alt),
-                ]
-            )
+        side_len: float = 10,
+        alt: float = 5,
+        clockwise: bool = True,
+        out_offset: bool = False,
+    ) -> ENUs | ENUPoses:
+        """Create a square path as a list of ENU positions or poses."""
+        coords = Plan.create_square_path_mapcoords(side_len, clockwise)
+        if out_offset:
+            return [ENUPose(x, y, alt, 0.0) for x, y in coords]
+        return [ENU(x, y, alt) for x, y in coords]
 
-        return wps
+    @staticmethod
+    def create_square_path_mapcoords(
+        side_len: float = 10, clockwise: bool = True
+    ) -> XYs:
+        """Create square path in XYs."""
+        if clockwise:
+            coords = [
+                XY(0, 0),
+                XY(0, side_len),
+                XY(side_len, side_len),
+                XY(side_len, 0),
+                XY(0, 0),
+            ]
+        else:
+            coords = [
+                XY(0, 0),
+                XY(side_len, 0),
+                XY(side_len, side_len),
+                XY(0, side_len),
+                XY(0, 0),
+            ]
+        return coords
 
     @classmethod
     def square(
@@ -108,10 +155,11 @@ class Plan(Action[Action[Step]]):
         side_len: float = 10,
         alt: float = 5,
         wp_margin: float = 0.5,
+        clockwise: bool = True,
         navegation_speed: float = 5,
     ):
         """Create a square-shaped trajectory with takeoff and landing."""
-        wps = cls.create_square_path(side_len, alt)
+        wps = cls.create_square_path(side_len, alt, clockwise)
         return cls.basic(
             wps=wps,
             wp_margin=wp_margin,
@@ -124,17 +172,16 @@ class Plan(Action[Action[Step]]):
     # pylint: disable=too-many-positional-arguments
     def basic(
         cls,
-        wps: NDArray[np.float64] = np.array([[0.0, 0.0, 5.0]]),
+        wps: ENUs = [ENU(0.0, 0.0, 5.0)],
         wp_margin: float = 0.5,
         navegation_speed: float = 5,
         name: str = "basic",
         mode: PlanMode = PlanMode.STATIC,
-        dynamic_wps: NDArray[np.float64] | None = None,
+        dynamic_wps: ENUs | None = None,
         takeoff_alt: float = 1.0,
     ) -> Plan:
         """Create a basic plan with configurable waypoints and options."""
-        land_wp = wps[-1].copy()
-        land_wp[2] = 0
+        land_wp = ENU(wps[-1][0], wps[-1][1], 0)
         plan = cls(name=name, mode=mode, dynamic_wps=dynamic_wps, wp_margin=wp_margin)
         plan.add(make_pre_arm())
         plan.add(make_set_mode(CopterMode.GUIDED))
@@ -154,7 +201,7 @@ class Plan(Action[Action[Step]]):
     # pylint: disable=too-many-positional-arguments
     def hover(
         cls,
-        wps: NDArray[np.float64] | None = None,
+        wps: ENUs | None = None,
         wp_margin: float = 0.5,
         navegation_speed: float = 5,
         name: str = "hover",
@@ -183,3 +230,6 @@ class Plan(Action[Action[Step]]):
         plan.add(make_arm())
         plan.add(make_start_mission())
         return plan
+
+
+Plans = list[Plan]

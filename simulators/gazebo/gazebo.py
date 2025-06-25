@@ -13,116 +13,20 @@ Main Features:
 
 """
 
-from __future__ import annotations
-
 import os
 import re
 import shutil
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Tuple
 
-import numpy as np
 import plotly.graph_objects as go  # type: ignore
-from numpy.typing import NDArray
 
-from config import ARDUPILOT_GAZEBO_MODELS, ENV_CMD_GAZ, Color
-from helpers.change_coordinates import Offset, Position, heading_to_yaw
-from plan import Plan
+from config import ARDUPILOT_GAZEBO_MODELS, ENV_CMD_GAZ
+from helpers.change_coordinates import heading_to_yaw
+from mavlink.customtypes.location import XYZRPY, ENUPoses
+from plan import Plans
+from simulators.gazebo.config import COLOR_MAP, ConfigGazebo, MarkerTrajs, WPMarker
 from simulators.sim import Simulator, VisualizerName
-
-COLOR_MAP: Dict[Color, str] = {
-    Color.BLUE: "0.0 0.0 1.0 1",
-    Color.GREEN: "0.306 0.604 0.024 1",
-    Color.RED: "0.8 0.0 0.0 1",
-    Color.ORANGE: "1.0 0.5 0.0 1",
-    Color.YELLOW: "1.0 1.0 0.0 1",
-}
-
-
-@dataclass
-class WaypointMarker:
-    """
-    Defines a visual waypoint marker with position, color, size, and transparency
-    in Gazebo.
-    """
-
-    pos: Position
-    color: Color = Color.GREEN
-    radius: float = 0.2
-    alpha: float = 0.05
-
-    def __repr__(self) -> str:
-        return (
-            f"WaypointMarker(pos={self.pos}, color='{self.color}', "
-            f"radius={self.radius}, alpha={self.alpha})"
-        )
-
-
-TrajectoryMarker = List[WaypointMarker]
-Model = Tuple[str, Color]
-
-
-@dataclass
-class ConfigGazebo:
-    """
-    Creates a trajectory from an (N, 3) array of waypoints as WaypointMarker
-    objects.
-    """
-
-    world_path: str
-    models: List[Model]
-    markers: List[TrajectoryMarker]
-
-    def __str__(self):
-        return (
-            f"world_path={self.world_path}, models={self.models}, "
-            f"markers={self.markers}"
-        )
-
-    @staticmethod
-    def create_trajectory_from_array(
-        array: NDArray[np.float64],
-        color: Color = Color.GREEN,
-        radius: float = 0.2,
-        alpha: float = 0.05,
-    ) -> TrajectoryMarker:
-        """
-        Create a trajectory from an (N, 3) array of waypoints as
-        WaypointMarker objects.
-        """
-        traj: List[WaypointMarker] = []
-        for row in array:
-            x, y, z = row
-            traj.append(
-                WaypointMarker(
-                    pos=(float(x), float(y), float(z)),
-                    color=color,
-                    radius=radius,
-                    alpha=alpha,
-                )
-            )
-
-        return traj
-
-
-@dataclass
-class Pose:
-    """
-    Represent a 3D pose with position (x, y, z) and
-    orientation (roll, pitch, yaw).
-    """
-
-    x: float
-    y: float
-    z: float
-    roll: float
-    pitch: float
-    yaw: float
-
-    def __str__(self) -> str:
-        return f"{self.x} {self.y} {self.z} {self.roll} {self.pitch} {self.yaw}"
 
 
 class Gazebo(Simulator):
@@ -133,8 +37,8 @@ class Gazebo(Simulator):
 
     def __init__(
         self,
-        offsets: List[Offset],
-        plans: List[Plan],
+        offsets: ENUPoses,
+        plans: Plans,
         config: ConfigGazebo,
         visible_terminals: bool = False,
     ):
@@ -144,24 +48,32 @@ class Gazebo(Simulator):
             plans=plans,
             visible_terminals=visible_terminals,
         )
-        self.config: ConfigGazebo = config
+        self.config = config
 
     def _add_vehicle_cmd_fn(self, i: int) -> str:
-        return f" -f gazebo-{self.config.models[i][0]}"
+        if isinstance(self.config, ConfigGazebo):
+            return " -f gazebo-iris"
+        else:
+            raise RuntimeError("Expected Gazebo config but got something else")
 
     def _launch_visualizer(self) -> None:
-        models = self.config.models
-        base_models = [f"{models[i][0]}_{models[i][1]}" for i in range(self.n_uavs)]
-        self._generate_drone_models_from_bases(base_models, base_port_in=9002, step=10)
-        updated_world = self._update_world(self.config.world_path)
-        self.create_process(
-            f"gazebo {updated_world}", visible=False, env_cmd=ENV_CMD_GAZ
-        )
-        print("🖥️ Gazebo launched for realistic simulation and 3D visualization.")
+        if isinstance(self.config, ConfigGazebo):
+            models = self.config.models
+            base_models = [f"{name}_{color}" for name, color in models]
+            self._generate_drone_models_from_bases(
+                base_models, base_port_in=9002, step=10
+            )
+            updated_world = self._update_world(self.config.world_path)
+            self.create_process(
+                f"gazebo {updated_world}", visible=False, env_cmd=ENV_CMD_GAZ
+            )
+            print("🖥️ Gazebo launched for realistic simulation and 3D visualization.")
+        else:
+            raise RuntimeError("Expected Gazebo config but got something else")
 
     def _generate_drone_models_from_bases(
         self,
-        base_models: List[str],
+        base_models: list[str],
         base_port_in: int = 9002,
         step: int = 10,
     ) -> None:
@@ -226,22 +138,26 @@ class Gazebo(Simulator):
                 world_elem.remove(model)
 
     def _add_marker_elements(self, world_elem: ET.Element) -> None:
-        for i, traj in enumerate(self.config.markers):
-            for j, waypoint in enumerate(traj):
-                marker_elem = self._generate_waypoint_element(waypoint, i, j)
-                world_elem.append(marker_elem)
+        if isinstance(self.config, ConfigGazebo):
+            for i, traj in enumerate(self.config.marker_trajs):
+                for j, waypoint in enumerate(traj):
+                    marker_elem = self._generate_waypoint_element(waypoint, i, j)
+                    world_elem.append(marker_elem)
+        else:
+            raise RuntimeError("Expected Gazebo config but got something else")
 
     def _add_drone_elements(self, world_elem: ET.Element) -> None:
         for i, (x, y, z, heading) in enumerate(self.offsets):
-            pose = Pose(x, y, z, 0, 0, heading_to_yaw(heading))
+            pose = XYZRPY(x, y, z, 0, 0, heading_to_yaw(heading))
             drone_elem = self._generate_drone_element(f"drone{i + 1}", pose)
             world_elem.append(drone_elem)
 
     def _generate_waypoint_element(
-        self, w: WaypointMarker, traj_id: int, way_id: int
+        self, w: WPMarker, traj_id: int, way_id: int
     ) -> ET.Element:
         model = ET.Element("model", name=f"waypoint_{traj_id}.{way_id}")
         x, y, z = w.pos
+
         ET.SubElement(model, "pose").text = f"{x} {y} {z} 0 0 0"
         link = ET.SubElement(model, "link", name="link")
 
@@ -276,7 +192,7 @@ class Gazebo(Simulator):
         for tag in ["self_collide", "enable_wind", "kinematic", "gravity"]:
             ET.SubElement(link, tag).text = "0"
 
-    def _add_visual(self, visual: ET.Element, w: WaypointMarker) -> None:
+    def _add_visual(self, visual: ET.Element, w: WPMarker) -> None:
         geometry = ET.SubElement(visual, "geometry")
         sphere = ET.SubElement(geometry, "sphere")
         ET.SubElement(sphere, "radius").text = str(w.radius)
@@ -299,7 +215,7 @@ class Gazebo(Simulator):
         ET.SubElement(visual, "transparency").text = str(w.alpha)
         ET.SubElement(visual, "cast_shadows").text = "1"
 
-    def _generate_drone_element(self, instance_name: str, pose: Pose) -> ET.Element:
+    def _generate_drone_element(self, instance_name: str, pose: XYZRPY) -> ET.Element:
         model = ET.Element("model", name=instance_name)
         ET.SubElement(model, "pose").text = f"{pose}"
         include = ET.SubElement(model, "include")
@@ -308,9 +224,9 @@ class Gazebo(Simulator):
 
     @staticmethod
     def plot_3d_interactive(
-        markers: List[TrajectoryMarker],
+        markers: MarkerTrajs,
         title: str = "title",
-        frames: Tuple[float, float, float] = (0.2, 0.2, 0.2),
+        frames: tuple[float, float, float] = (0.2, 0.2, 0.2),
         ground: float | None = 0,
     ) -> None:
         """Render a 3D interactive plot of waypoint trajectories using Plotly."""
@@ -332,12 +248,12 @@ class Gazebo(Simulator):
 
     @staticmethod
     def _extract_plot_data(
-        markers: List[TrajectoryMarker],
-    ) -> Tuple[List[go.Scatter3d], List[float], List[float], List[float]]:
-        data: List[go.Scatter3d] = []
-        all_x: List[float] = []
-        all_y: List[float] = []
-        all_z: List[float] = []
+        markers: MarkerTrajs,
+    ) -> tuple[list[go.Scatter3d], list[float], list[float], list[float]]:
+        data: list[go.Scatter3d] = []
+        all_x: list[float] = []
+        all_y: list[float] = []
+        all_z: list[float] = []
 
         for i, traj in enumerate(markers):
             if not traj:
@@ -361,13 +277,13 @@ class Gazebo(Simulator):
 
     @staticmethod
     def _compute_ranges(
-        all_x: List[float],
-        all_y: List[float],
-        all_z: List[float],
-        frames: Tuple[float, float, float],
+        all_x: list[float],
+        all_y: list[float],
+        all_z: list[float],
+        frames: tuple[float, float, float],
         ground: float | None,
-    ) -> List[List[float]]:
-        def scale(values: List[float], f: float) -> List[float]:
+    ) -> list[list[float]]:
+        def scale(values: list[float], f: float) -> list[float]:
             vmin, vmax = min(values), max(values)
             margin = f * (vmax - vmin)
             return [vmin - margin, vmax + margin]

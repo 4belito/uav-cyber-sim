@@ -1,9 +1,12 @@
-from .gazebo.gazebo import (  # noqa: D104
-    ConfigGazebo,
-    Gazebo,
-    TrajectoryMarker,
-    WaypointMarker,
-)
+"""
+Simulators package for UAV cyber simulation.
+
+This package provides interfaces and configuration classes for different UAV simulators
+and ground control software.
+"""
+
+from .gazebo.config import ConfigGazebo, MarkerTraj, MarkerTrajs, WPMarker
+from .gazebo.gazebo import Gazebo
 from .QGroundControl.qgc import QGC
 from .sim import Simulator
 
@@ -12,6 +15,7 @@ __all__ = [
     "QGC",
     "Gazebo",
     "ConfigGazebo",
-    "TrajectoryMarker",
-    "WaypointMarker",
+    "MarkerTraj",
+    "MarkerTrajs",
+    "WPMarker",
 ]

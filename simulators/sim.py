@@ -5,15 +5,12 @@ Simulation script that launches the full setup:
 3. Optionally a simulator (None, QGroundControl, or Gazebo).
 """
 
-from __future__ import annotations
-
 import platform
 import socket
 from concurrent import futures
 from enum import Enum
 from pathlib import Path
 from subprocess import Popen
-from typing import Any
 
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
@@ -25,10 +22,13 @@ from config import (
     VEH_PARAMS_PATH,
     BasePort,
 )
-from helpers.change_coordinates import Offset
 from mavlink.customtypes.connection import MAVConnection
+from mavlink.customtypes.location import ENUPose, ENUPoses
 from oracle import Oracle
-from plan import Plan
+from plan import Plan, Plans
+
+from .gazebo.config import ConfigGazebo
+from .QGroundControl.config import ConfigQGC
 
 
 class VisualizerName(str, Enum):
@@ -42,6 +42,9 @@ class VisualizerName(str, Enum):
         return str(self.value)
 
 
+# TODO: Improve Simulatior Class design
+
+
 class Simulator:
     """
     Base simulator class to manage UAV vehicle processes and optional external
@@ -49,29 +52,31 @@ class Simulator:
 
     Args:
         name (VisualizerName): Type of simulator to use.
-        offsets (list[Offset]): Spawn offsets for each UAV.
-        plans (list[Plan]): Mission plans for each UAV.
+        offsets: Spawn offsets for each UAV.
+        plans: Mission plans for each UAV.
 
     """
 
     def __init__(
         self,
         name: VisualizerName = VisualizerName.NONE,
-        offsets: list[Offset] | None = None,
-        plans: list[Plan] | None = None,
+        offsets: ENUPoses | None = None,
+        plans: Plans | None = None,
         visible_terminals: bool = True,
         oracle_name: str = "Oracle ⚪",
         delay_visualizer: bool = False,
+        verbose: int = 1,
     ):
         self.name = name
-        self.config: Any | None = None
-        self.offsets: list[Offset] = offsets or [(0, 0, 0, 0)]
+        self.config: ConfigGazebo | ConfigQGC | None = None
+        self.offsets = offsets or [ENUPose(0, 0, 0, 0)]
         self.n_uavs: int = len(self.offsets)
         self.ardu_path: Path = ARDUPILOT_VEHICLE_PATH
-        self.plans: list[Plan] = plans or [Plan.basic()]
+        self.plans: Plans = plans or [Plan.basic()]
         self.visible_terminals = visible_terminals
         self.oracle_name = oracle_name
         self.delay_visualizer = delay_visualizer
+        self.verbose = verbose
 
     def launch(self, gcs_sysids: dict[str, list[int]]) -> Oracle:
         """Launch vehicle instances and the optional simulator."""
@@ -91,7 +96,11 @@ class Simulator:
 
         oracle = Oracle(orc_conns, name=self.oracle_name)
         for gcs_name, sysids in gcs_sysids.items():
-            gcs_cmd = f'python3 gcs.py --name "{gcs_name}" --sysid "{sysids}" --port-offsets "{[self.port_offsets[sysid - 1] for sysid in sysids]}"'
+            gcs_cmd = (
+                f'python3 gcs.py --name "{gcs_name}" '
+                f'--sysid "{sysids}" '
+                f'--port-offsets "{[self.port_offsets[sysid - 1] for sysid in sysids]}"'
+            )
             p = self.create_process(
                 gcs_cmd,
                 after="exec bash",
@@ -123,7 +132,9 @@ class Simulator:
         print(f"🚀 ArduPilot SITL vehicle {sysid} launched (PID {p.pid})")
 
         logic_cmd = (
-            f"python3 logic.py --sysid {sysid} --port-offset={self.port_offsets[i]}"
+            f"python3 logic.py --sysid {sysid} "
+            f"--port-offset={self.port_offsets[i]} "
+            f"--verbose {self.verbose}"
         )
         p = self.create_process(
             logic_cmd,
@@ -135,7 +146,9 @@ class Simulator:
         print(f"🚀 UAV logic for vehicle {sysid} launched (PID {p.pid})")
 
         proxy_cmd = (
-            f"python3 proxy.py --sysid {sysid} --port-offset={self.port_offsets[i]}"
+            f"python3 proxy.py --sysid {sysid} "
+            f"--port-offset={self.port_offsets[i]} "
+            f"--verbose {self.verbose}"
         )
         p = self.create_process(
             proxy_cmd,
@@ -155,6 +168,7 @@ class Simulator:
         return conn
 
     def find_port_offsets(self):
+        """Find available port offsets for each UAV to avoid conflicts."""
         base_ports = [
             BasePort.ARP,
             BasePort.GCS,
@@ -174,7 +188,7 @@ class Simulator:
                 try:
                     s.bind(("127.0.0.1", port))
                     s.close()
-                except:
+                except Exception:
                     break
             else:
                 offsets.append(cur_offset)

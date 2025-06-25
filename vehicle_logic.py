@@ -2,8 +2,8 @@
 
 from enum import StrEnum
 
-from helpers.change_coordinates import Position
 from mavlink.customtypes.connection import MAVConnection
+from mavlink.customtypes.location import ENU
 from plan.planner import Action, Plan, Step  # , State
 
 # from typing import List
@@ -34,7 +34,7 @@ class VehicleLogic:
     def __init__(
         self,
         connection: MAVConnection,
-        home: Position,
+        home: ENU,
         plan: Plan,
         safety_radius: float = 5,
         radar_radius: float = 10,
@@ -43,12 +43,12 @@ class VehicleLogic:
         # Vehicle Creation
         self.conn = connection
         self.sysid = connection.target_system
-        self.home = home  # homes[self.sysid - 1]
+        self.home = home
         self.verbose = verbose
 
         # Mode Properties
         self.mode = VehicleMode.MISSION
-        self.plan = plan  # plans[self.sysid - 1]
+        self.plan = plan
         self.plan.bind(self.conn, verbose)
         self.back_mode = VehicleMode.MISSION
 
@@ -86,7 +86,7 @@ class VehicleLogic:
             return None
 
     @property
-    def pos(self) -> Position | None:
+    def pos(self) -> ENU | None:
         """Return the current estimated position of the UAV."""
         return self.plan.curr_pos
 
@@ -95,7 +95,7 @@ class VehicleLogic:
         return self.plan.onair
 
     @property
-    def target_pos(self) -> Position | None:
+    def target_pos(self) -> ENU | None:
         """Return the current step's target position, if any."""
         if self.current_step:
             return self.current_step.target_pos
