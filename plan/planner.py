@@ -21,6 +21,7 @@ from plan.actions import (
     make_arm,
     make_change_nav_speed,
     make_land,
+    make_monitoring,
     make_path,
     make_pre_arm,
     make_set_mode,
@@ -221,14 +222,22 @@ class Plan(Action[Action[Step]]):
     # TODO include here the mission somehow. Maybe by passing a name file argument
 
     @classmethod
-    def auto(cls, name: str = "", mission_name: str = "misison"):
+    def auto(
+        cls,
+        name: str = "",
+        mission_name: str = "misison",
+        from_scratch: bool = True,
+        check_until: int = 7,
+    ):
         """Create a plan to execute a mission in auto mode."""
         plan = cls(name)
-        plan.add(make_upload_mission(mission_name))
+        plan.add(make_upload_mission(mission_name, from_scratch))
         plan.add(make_pre_arm())
         plan.add(make_set_mode(CopterMode.GUIDED))
         plan.add(make_arm())
         plan.add(make_start_mission())
+        if check_until:
+            plan.add(make_monitoring(check_until))
         return plan
 
 

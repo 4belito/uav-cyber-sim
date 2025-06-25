@@ -9,6 +9,9 @@ format.
 
 import time
 from functools import partial
+from typing import cast
+
+import pymavlink.dialects.v20.ardupilotmega as mavlink
 
 from mavlink.customtypes.connection import MAVConnection
 from mavlink.customtypes.mission import MissionLoader
@@ -100,11 +103,45 @@ def check_clear_mission(
     verbose: int,
 ) -> tuple[bool, None]:
     """Verify that cleared mission was succesful."""
-    ack = conn.recv_match(type="MISSION_ACK", blocking=True, timeout=5)
-    if ack and MissionResult(ack.type) == MissionResult.ACCEPTED:
+    msg = conn.recv_match(type="STATUSTEXT")
+    if msg and msg.text == "ArduPilot Ready":
         if verbose == 2:
-            print("🎉 Mission upload successful!")
+            print("🧹 Cleared previous mission")
         return True, None
-    if verbose == 1:
-        print(f"⚠️ Mission upload failed or timed out: {ack}")
+    return False, None
+
+
+def check_monitoring(
+    conn: MAVConnection,
+    verbose: int,
+    n_items: int = 7,
+) -> tuple[bool, None]:
+    """
+    Monitor the UAV mission progress by checking for waypoint reached, position,
+    and mission completion messages.
+    """
+    msg = conn.recv_match(blocking=True, timeout=1)
+    if msg:
+        # ✅ Reached a waypoint
+        if msg.get_type() == "MISSION_ITEM_REACHED" and verbose:
+            msg = cast(mavlink.MAVLink_mission_item_reached_message, msg)
+            print(f"📌 Reached waypoint: {msg.seq}")
+            if msg.seq == n_items - 1:
+                print("✅ Final waypoint reached")
+
+        # ✅ UAV position
+        elif msg.get_type() == "GLOBAL_POSITION_INT" and verbose > 1:
+            msg = cast(mavlink.MAVLink_global_position_int_message, msg)
+            lat = msg.lat / 1e7
+            lon = msg.lon / 1e7
+            alt = msg.relative_alt / 1000.0
+            print(f"📍 Position: lat={lat:.7f}, lon={lon:.7f}, alt={alt:.2f} m")
+
+        # ✅ Look for end hints in text
+        elif msg.get_type() == "STATUSTEXT":
+            msg = cast(mavlink.MAVLink_statustext_message, msg)
+            text = msg.text.strip().lower()
+            if "disarming" in text:
+                print("🏁 Mission completed")
+                return True, None
     return False, None

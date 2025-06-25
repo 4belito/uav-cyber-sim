@@ -4,6 +4,7 @@ from .arm import make_arm
 from .change_mode import make_set_mode
 from .change_parameter import make_change_nav_speed
 from .land import make_land
+from .monitoring import make_monitoring
 from .navegation import make_go_to, make_path
 from .pre_arm import make_pre_arm
 from .start_mission import make_start_mission
@@ -21,4 +22,5 @@ __all__ = [
     "make_go_to",
     "make_start_mission",
     "make_upload_mission",
+    "make_monitoring",
 ]

@@ -7,14 +7,15 @@ connections.
 """
 
 from enum import IntEnum
+from pathlib import Path
 from typing import cast
 
 from pymavlink import mavutil
 
 from helpers.change_coordinates import NED_to_ENU
 from mavlink.customtypes.connection import MAVConnection
-from mavlink.customtypes.location import ENU, NED
-from mavlink.enums import CmdSet, MsgID
+from mavlink.customtypes.location import ENU, NED, GRAPoses
+from mavlink.enums import CmdNav, CmdSet, Frame, MsgID
 
 
 def connect(device: str) -> MAVConnection:
@@ -81,3 +82,45 @@ def get_ENU_position(conn: MAVConnection) -> ENU | None:
     if msg:
         return NED_to_ENU(NED(msg.x, msg.y, msg.z))
     return None
+
+
+def save_mission(name: str, poses: GRAPoses) -> None:
+    """
+    Save a .waypoints file from a sequence of GRAPose ppositions.
+    The file will include:
+    - Home (index 0, altitude = 0).
+    - Takeoff (index 1, to the first pose with alt).
+    - Mission waypoints (indices 2 to N).
+    - Return to launch (last index, with alt = 0).
+    """
+    path = Path(f"plan/missions/{name}.waypoints")
+    wp = CmdNav.WAYPOINT.value
+    takeoff = CmdNav.TAKEOFF.value
+    land = CmdNav.LAND.value
+    frame = Frame.GLOBAL_RELATIVE_ALT.value
+    with path.open("w") as f:
+        f.write("QGC WPL 110\n")
+
+        # Home location
+        home = poses[0]
+        f.write(
+            f"0\t0\t{frame}\t{wp}\t0\t0\t0\t0\t{home.lat:.7f}\t{home.lon:.7f}\t0.0\t1\n"
+        )
+
+        # Takeoff at first pose altitude (TPDO find out what parameter is 15)
+        f.write(
+            f"1\t0\t{frame}\t{takeoff}\t15\t0\t0\t0\t{home.lat:.7f}\t{home.lon:.7f}\t{home.alt:.1f}\t1\n"
+        )
+
+        # Mission waypoints
+        for i, pose in enumerate(poses[1:], start=2):
+            f.write(
+                f"{i}\t0\t{frame}\t{wp}\t0\t0\t0\t0\t{pose.lat:.7f}\t{pose.lon:.7f}\t{pose.alt:.1f}\t1\n"
+            )
+
+        # Return to Launch (RTL)
+        last = poses[-1]
+        rtl_index = len(poses) + 1
+        f.write(
+            f"{rtl_index}\t0\t{frame}\t{land}\t0\t0\t0\t0\t{last.lat:.7f}\t{last.lon:.7f}\t0.0\t1\n"
+        )
