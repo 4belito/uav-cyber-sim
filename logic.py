@@ -61,10 +61,9 @@ from vehicle_logic import VehicleLogic
 # homes = [offset[:3] for offset in offsets]
 
 
-offset = ENUPose(-1, 1, 0, 0)  # east, north, up, heading
-# rel_path = Plan.create_square_path(side_len=5, alt=5)
+offset = ENUPose(0, 0, 0, 0)  # east, north, up, heading
+rel_path = Plan.create_square_path(side_len=5, alt=5)
 # plans = [Plan.basic(wps=rel_path, wp_margin=0.5)]
-# plans = [Plan.auto(mission_name="simple_mission")]
 homes = [ENU(*offset[:3])]  # we dont need this
 
 plans = [Plan.auto(name="square_auto", mission_name="square", check_until=7)]

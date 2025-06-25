@@ -109,7 +109,7 @@ def save_mission(name: str, poses: GRAPoses) -> None:
 
         # Takeoff at first pose altitude (TPDO find out what parameter is 15)
         f.write(
-            f"1\t0\t{frame}\t{takeoff}\t15\t0\t0\t0\t{home.lat:.7f}\t{home.lon:.7f}\t{home.alt:.1f}\t1\n"
+            f"1\t0\t{frame}\t{takeoff}\t0\t0\t0\t0\t{home.lat:.7f}\t{home.lon:.7f}\t{home.alt:.1f}\t1\n"
         )
 
         # Mission waypoints

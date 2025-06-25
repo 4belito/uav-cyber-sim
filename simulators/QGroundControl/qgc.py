@@ -36,6 +36,7 @@ class QGC(Simulator):
         plans: Plans,
         origin: GRAPose,
         visible_terminals: bool = False,
+        verbose: int = 1,
     ):
         super().__init__(
             name=VisualizerName.QGROUND,
@@ -43,6 +44,7 @@ class QGC(Simulator):
             plans=plans,
             visible_terminals=visible_terminals,
             delay_visualizer=True,
+            verbose=verbose,
         )
         self.config = ConfigQGC(offsets, origin)
 

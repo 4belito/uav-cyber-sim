@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 
 from config import Color
-from mavlink.customtypes.location import ENU, ENUs
+from mavlink.customtypes.location import ENU, ENUs, GRAPoses
 
 COLOR_MAP: dict[Color, str] = {
     Color.BLUE: "0.0 0.0 1.0 1",
@@ -49,6 +49,7 @@ class ConfigGazebo:
     world_path: str
     models: Models
     marker_trajs: MarkerTrajs
+    origins: GRAPoses
 
     def __str__(self):
         return (

@@ -44,7 +44,7 @@ from mavlink.util import CustomCmd, get_ENU_position
 # homes = [offset[:3]]
 
 
-offset = ENUPose(-1, 1, 0, 0)  # east, north, up, heading
+offset = ENUPose(0, 0, 0, 0)  # east, north, up, heading
 # local_path = Plan.create_square_path(side_len=5, alt=5)
 # plans = [Plan.basic(wps=local_path, wp_margin=0.5)]
 # plans = [Plan.auto(mission_name="simple_mission")]

@@ -41,18 +41,21 @@ class Gazebo(Simulator):
         plans: Plans,
         config: ConfigGazebo,
         visible_terminals: bool = False,
+        verbose: int = 1,
     ):
         super().__init__(
             name=VisualizerName.GAZEBO,
             offsets=offsets,
             plans=plans,
             visible_terminals=visible_terminals,
+            verbose=verbose,
         )
         self.config = config
 
     def _add_vehicle_cmd_fn(self, i: int) -> str:
         if isinstance(self.config, ConfigGazebo):
-            return " -f gazebo-iris"
+            spawn_str = ",".join(map(str, self.config.origins[i]))
+            return f" -f gazebo-iris --console --custom-location={spawn_str}"
         else:
             raise RuntimeError("Expected Gazebo config but got something else")
 
