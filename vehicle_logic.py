@@ -34,7 +34,6 @@ class VehicleLogic:
     def __init__(
         self,
         connection: MAVConnection,
-        home: ENU,
         plan: Plan,
         safety_radius: float = 5,
         radar_radius: float = 10,
@@ -43,7 +42,6 @@ class VehicleLogic:
         # Vehicle Creation
         self.conn = connection
         self.sysid = connection.target_system
-        self.home = home
         self.verbose = verbose
 
         # Mode Properties

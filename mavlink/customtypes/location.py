@@ -1,6 +1,9 @@
 """Location types."""
 
-from typing import NamedTuple
+from typing import NamedTuple, Self, Type, TypeVar
+
+T = TypeVar("T")
+
 
 # === Base coordinate and pose types ===
 
@@ -11,6 +14,11 @@ class XY(NamedTuple):
     x: float
     y: float
 
+    @classmethod
+    def list(cls: Type[Self], data: list[tuple[float, float]]) -> list[Self]:
+        """Create a list of XY instances from a list of (x, y) tuples."""
+        return [cls(*pair) for pair in data]
+
 
 class XYZ(NamedTuple):
     """3D vector in a local Cartesian frame (e.g., ENU or NED)."""
@@ -19,6 +27,11 @@ class XYZ(NamedTuple):
     y: float
     z: float
 
+    @classmethod
+    def list(cls: Type[Self], data: list[tuple[float, float, float]]) -> list[Self]:
+        """Create a list of XYZ instances from a list of (x, y, z) tuples."""
+        return [cls(*pair) for pair in data]
+
 
 class LLA(NamedTuple):
     """Geographic position: latitude, longitude, altitude (WGS84, meters)."""
@@ -26,6 +39,11 @@ class LLA(NamedTuple):
     lat: float
     lon: float
     alt: float
+
+    @classmethod
+    def list(cls: Type[Self], data: list[tuple[float, float, float]]) -> list[Self]:
+        """Create a list of LLA instances from a list of (x, y, z) tuples."""
+        return [cls(*pair) for pair in data]
 
 
 class PoseXYZ(NamedTuple):
@@ -36,6 +54,13 @@ class PoseXYZ(NamedTuple):
     z: float
     heading: float = 0.0
 
+    @classmethod
+    def list(
+        cls: Type[Self], data: list[tuple[float, float, float, float]]
+    ) -> list[Self]:
+        """Create a list of PoseXYZ instances from a list of (x, y, z,h) tuples."""
+        return [cls(*pair) for pair in data]
+
 
 class PoseLLA(NamedTuple):
     """Geographic pose: lat, lon, alt + heading (degrees from North)."""
@@ -44,6 +69,11 @@ class PoseLLA(NamedTuple):
     lon: float
     alt: float
     heading: float = 0.0
+
+    @classmethod
+    def list(cls, data: list[tuple[float, float, float, float]]) -> list[Self]:
+        """Create a list of PoseLLA instances from (lat, lon, alt, heading) tuples."""
+        return [cls(*pair) for pair in data]
 
 
 class XYZRPY(NamedTuple):
@@ -55,6 +85,14 @@ class XYZRPY(NamedTuple):
     roll: float
     pitch: float
     yaw: float
+
+    @classmethod
+    def list(
+        cls,
+        data: list[tuple[float, float, float, float, float, float]],
+    ) -> list[Self]:
+        """Create a list of XYZRPY instances from (x, y, z, roll, pitch, yaw) tuples."""
+        return [cls(*pair) for pair in data]
 
     def __str__(self) -> str:
         return f"{self.x} {self.y} {self.z} {self.roll} {self.pitch} {self.yaw}"

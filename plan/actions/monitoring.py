@@ -7,7 +7,6 @@ format.
 
 """
 
-from functools import partial
 from typing import cast
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
@@ -17,24 +16,23 @@ from plan import Action, ActionNames
 from plan.core import Step
 
 
-def make_monitoring(until: int = 0) -> Action[Step]:
+def make_monitoring() -> Action[Step]:
     """Create an upload mission action."""
     monitoring = Action[Step](name=ActionNames.UPLOAD_MISSION, emoji="📤")
-    if until:
-        step = Step(
+    monitoring.add(
+        Step(
             "monitoring",
-            exec_fn=partial(Step.noop_exec),
-            check_fn=partial(check_monitoring, n_items=until),
+            exec_fn=Step.noop_exec,
+            check_fn=check_monitoring,
             onair=False,
         )
-        monitoring.add(step)
+    )
     return monitoring
 
 
 def check_monitoring(
     conn: MAVConnection,
     verbose: int,
-    n_items: int = 7,
 ) -> tuple[bool, None]:
     """
     Monitor the UAV mission progress by checking for waypoint reached, position,
@@ -46,8 +44,6 @@ def check_monitoring(
         if msg.get_type() == "MISSION_ITEM_REACHED" and verbose:
             msg = cast(mavlink.MAVLink_mission_item_reached_message, msg)
             print(f"📌 Reached waypoint: {msg.seq}")
-            if msg.seq == n_items - 1:
-                print("✅ Final waypoint reached")
 
         # ✅ UAV position
         elif msg.get_type() == "GLOBAL_POSITION_INT" and verbose > 1:

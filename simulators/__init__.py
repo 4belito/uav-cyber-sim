@@ -9,6 +9,7 @@ from .gazebo.config import ConfigGazebo, MarkerTraj, MarkerTrajs, WPMarker
 from .gazebo.gazebo import Gazebo
 from .QGroundControl.qgc import QGC
 from .sim import Simulator
+from .visualizer import NoneVisualizer, Visualizer
 
 __all__ = [
     "Simulator",
@@ -18,4 +19,6 @@ __all__ = [
     "MarkerTraj",
     "MarkerTrajs",
     "WPMarker",
+    "Visualizer",
+    "NoneVisualizer",
 ]

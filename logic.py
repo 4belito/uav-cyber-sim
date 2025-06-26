@@ -10,7 +10,6 @@ from pymavlink.dialects.v20 import ardupilotmega as mavlink
 # First Party imports
 from config import BasePort
 from mavlink.customtypes.connection import MAVConnection
-from mavlink.customtypes.location import ENU, ENUPose
 from mavlink.enums import Autopilot, Type
 from mavlink.util import CustomCmd, connect
 from params.simulation import HEARTBEAT_PERIOD
@@ -61,12 +60,14 @@ from vehicle_logic import VehicleLogic
 # homes = [offset[:3] for offset in offsets]
 
 
-offset = ENUPose(0, 0, 0, 0)  # east, north, up, heading
-rel_path = Plan.create_square_path(side_len=5, alt=5)
-# plans = [Plan.basic(wps=rel_path, wp_margin=0.5)]
-homes = [ENU(*offset[:3])]  # we dont need this
+# offset = ENUPose(0, 0, 0, 0)  # east, north, up, heading
+# # rel_path = Plan.create_square_path(side_len=5, alt=5)
+# # plans = [Plan.basic(wps=rel_path, wp_margin=0.5)]
+# homes = [ENU(*offset[:3])]  # we dont need this
 
-plans = [Plan.auto(name="square_auto", mission_name="square", check_until=7)]
+plans = [
+    Plan.auto(name="square_auto", mission_name=f"square_{i + 1}") for i in range(5)
+]
 ########################################
 # TODO: Refactor this module
 
@@ -126,7 +127,7 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1):
     oc_conn = create_connection_udp(base_port=BasePort.ORC, offset=port_offset)
 
     print(f"\n🚀 Starting Vehicle {sysid} logic")
-    logic = VehicleLogic(ap_conn, home=homes[i], plan=plans[i], verbose=verbose)
+    logic = VehicleLogic(ap_conn, plan=plans[i], verbose=verbose)
 
     try:
         while True:

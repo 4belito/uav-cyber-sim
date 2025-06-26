@@ -14,13 +14,10 @@ from config import QGC_INI_PATH, QGC_PATH, BasePort
 # find_spawns
 from mavlink.customtypes.location import ENUPoses, GRAPose
 from params.simulation import CONNECT_GCS_TO_ARP
-from plan import Plans
-from simulators.sim import Simulator, VisualizerName
-
-from .config import ConfigQGC
+from simulators.visualizer import Visualizer
 
 
-class QGC(Simulator):
+class QGC(Visualizer):
     """
     QGroundControl visualizer class.
 
@@ -30,36 +27,21 @@ class QGC(Simulator):
 
     """
 
+    name = "QGroundControl"
+
     def __init__(
         self,
-        offsets: ENUPoses,
-        plans: Plans,
         origin: GRAPose,
-        visible_terminals: bool = False,
-        verbose: int = 1,
+        enu_poses: ENUPoses,
     ):
-        super().__init__(
-            name=VisualizerName.QGROUND,
-            offsets=offsets,
-            plans=plans,
-            visible_terminals=visible_terminals,
-            delay_visualizer=True,
-            verbose=verbose,
-        )
-        self.config = ConfigQGC(offsets, origin)
+        super().__init__(origin, enu_poses)
 
-    def _add_vehicle_cmd_fn(self, i: int):
-        if isinstance(self.config, ConfigQGC):
-            spawn_str = ",".join(map(str, self.config.spawns[i]))
-        else:
-            raise RuntimeError("Expected QGC config but got something else")
-        return f" --custom-location={spawn_str}"
-
-    def _launch_visualizer(self):
+    def launch(self, port_offsets: list[int], verbose: int = 1):
+        """Launch the Gazebo."""
         self._delete_all_links()  # delete TCP
         if CONNECT_GCS_TO_ARP:
             # self._disable_autoconnect_udp()
-            self._add_tcp_links(n=self.n_uavs)
+            self._add_tcp_links(port_offsets)
         sim_cmd = [os.path.expanduser(QGC_PATH), "--appimage-extract-and-run"]
         # pylint: disable=consider-using-with
         subprocess.Popen(
@@ -68,10 +50,11 @@ class QGC(Simulator):
             stderr=subprocess.DEVNULL,  # Suppress error output
             shell=False,  # Ensure safety when passing arguments
         )
-        print(
-            "🗺️ QGroundControl launched for 2D visualization — simulation powered "
-            "by ArduPilot SITL."
-        )
+        if verbose:
+            print(
+                "🗺️ QGroundControl launched for 2D visualization — simulation powered "
+                "by ArduPilot SITL."
+            )
 
     def _delete_all_links(self):
         with open(QGC_INI_PATH, "r", encoding="utf-8") as f:
@@ -143,7 +126,7 @@ class QGC(Simulator):
         with open(QGC_INI_PATH, "w", encoding="utf-8") as file:
             file.writelines(new_lines)
 
-    def _add_tcp_links(self, n: int = 1, step: int = 10):
+    def _add_tcp_links(self, port_offsets: list[int]):
         with open(QGC_INI_PATH, "r", encoding="utf-8") as file:
             lines = file.readlines()
 
@@ -180,9 +163,9 @@ class QGC(Simulator):
 
         # Prepare new link entries
         new_lines: list[str] = []
-        for i in range(n):
+        for i in range(self.n_uavs):
             idx = count + i
-            port = BasePort.QGC + self.port_offsets[i]
+            port = BasePort.QGC + port_offsets[i]
             new_lines.extend(
                 [
                     f"Link{idx}\\auto=true\n",
@@ -196,7 +179,7 @@ class QGC(Simulator):
 
         # Insert new lines just before count=
         lines[count_line_idx:count_line_idx] = new_lines
-        lines[count_line_idx + len(new_lines)] = f"count={count + n}\n"
+        lines[count_line_idx + len(new_lines)] = f"count={count + self.n_uavs}\n"
 
         with open(QGC_INI_PATH, "w", encoding="utf-8") as file:
             file.writelines(lines)

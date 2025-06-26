@@ -23,13 +23,13 @@ import plotly.graph_objects as go  # type: ignore
 
 from config import ARDUPILOT_GAZEBO_MODELS, ENV_CMD_GAZ
 from helpers.change_coordinates import heading_to_yaw
-from mavlink.customtypes.location import XYZRPY, ENUPoses
-from plan import Plans
+from mavlink.customtypes.location import XYZRPY, ENUPoses, GRAPose
 from simulators.gazebo.config import COLOR_MAP, ConfigGazebo, MarkerTrajs, WPMarker
-from simulators.sim import Simulator, VisualizerName
+from simulators.sim import Simulator
+from simulators.visualizer import Visualizer
 
 
-class Gazebo(Simulator):
+class Gazebo(Visualizer):
     """
     Gazebo-specific simulator that launches UAVs in a Gazebo world.
     It configures drone models, world markers, and coordinates with ArduPilot logic.
@@ -37,42 +37,27 @@ class Gazebo(Simulator):
 
     def __init__(
         self,
-        offsets: ENUPoses,
-        plans: Plans,
+        origin: GRAPose,
+        enu_poses: ENUPoses,
         config: ConfigGazebo,
-        visible_terminals: bool = False,
-        verbose: int = 1,
     ):
-        super().__init__(
-            name=VisualizerName.GAZEBO,
-            offsets=offsets,
-            plans=plans,
-            visible_terminals=visible_terminals,
-            verbose=verbose,
-        )
+        super().__init__(origin, enu_poses)
         self.config = config
 
-    def _add_vehicle_cmd_fn(self, i: int) -> str:
-        if isinstance(self.config, ConfigGazebo):
-            spawn_str = ",".join(map(str, self.config.origins[i]))
-            return f" -f gazebo-iris --console --custom-location={spawn_str}"
-        else:
-            raise RuntimeError("Expected Gazebo config but got something else")
+    def add_vehicle_cmd(self) -> str:
+        """Add gazebo model (only iris TODO: add others)."""
+        return " -f gazebo-iris"
 
-    def _launch_visualizer(self) -> None:
-        if isinstance(self.config, ConfigGazebo):
-            models = self.config.models
-            base_models = [f"{name}_{color}" for name, color in models]
-            self._generate_drone_models_from_bases(
-                base_models, base_port_in=9002, step=10
-            )
-            updated_world = self._update_world(self.config.world_path)
-            self.create_process(
-                f"gazebo {updated_world}", visible=False, env_cmd=ENV_CMD_GAZ
-            )
-            print("🖥️ Gazebo launched for realistic simulation and 3D visualization.")
-        else:
-            raise RuntimeError("Expected Gazebo config but got something else")
+    def launch(self, port_offsets: list[int], verbose: int = 1):
+        """Launch the Gazebo simulator with the specified UAV and waypoints."""
+        models = self.config.models
+        base_models = [f"{name}_{color}" for name, color in models]
+        self._generate_drone_models_from_bases(base_models, base_port_in=9002, step=10)
+        updated_world = self._update_world(self.config.world_path)
+        Simulator.create_process(
+            f"gazebo {updated_world}", visible=False, env_cmd=ENV_CMD_GAZ
+        )
+        print("🖥️ Gazebo launched for realistic simulation and 3D visualization.")
 
     def _generate_drone_models_from_bases(
         self,
@@ -141,16 +126,13 @@ class Gazebo(Simulator):
                 world_elem.remove(model)
 
     def _add_marker_elements(self, world_elem: ET.Element) -> None:
-        if isinstance(self.config, ConfigGazebo):
-            for i, traj in enumerate(self.config.marker_trajs):
-                for j, waypoint in enumerate(traj):
-                    marker_elem = self._generate_waypoint_element(waypoint, i, j)
-                    world_elem.append(marker_elem)
-        else:
-            raise RuntimeError("Expected Gazebo config but got something else")
+        for i, traj in enumerate(self.config.marker_trajs):
+            for j, waypoint in enumerate(traj):
+                marker_elem = self._generate_waypoint_element(waypoint, i, j)
+                world_elem.append(marker_elem)
 
     def _add_drone_elements(self, world_elem: ET.Element) -> None:
-        for i, (x, y, z, heading) in enumerate(self.offsets):
+        for i, (x, y, z, heading) in enumerate(self.enu_poses):
             pose = XYZRPY(x, y, z, 0, 0, heading_to_yaw(heading))
             drone_elem = self._generate_drone_element(f"drone{i + 1}", pose)
             world_elem.append(drone_elem)

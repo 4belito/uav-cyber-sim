@@ -50,6 +50,9 @@ class PlanMode(StrEnum):
     STATIC = "STATIC"
 
 
+# TODO: move annotations out
+
+
 class Plan(Action[Action[Step]]):
     """A high-level mission plan composed of sequential UAV actions."""
 
@@ -59,95 +62,96 @@ class Plan(Action[Action[Step]]):
         self,
         name: str,
         emoji: str = "📋",
-        mode: PlanMode = PlanMode.STATIC,
-        dynamic_wps: ENUs | None = None,
-        wp_margin: float = 0.5,
     ) -> None:
-        self.mode = mode
-        self.wp_margin = wp_margin
-        if mode == PlanMode.STATIC:
-            if dynamic_wps is not None:
-                raise ValueError(
-                    "Do not provide dynamic_waypoints (dynamic_wps) for STATIC plans."
-                )
-            self.dynamic_wps = None
-        elif mode == PlanMode.DYNAMIC:
-            if dynamic_wps is None:
-                raise ValueError(
-                    "Dynamic waypoints (dynamic_wps) are required for DYNAMIC plans."
-                )
-            self.dynamic_wps = dynamic_wps
-        else:
-            raise ValueError(f"Unsupported plan mode: {mode}")
         super().__init__(name, emoji=emoji, curr_pos=ENU(0, 0, 0))
 
     @staticmethod
     @overload
-    def create_square_path(
-        side_len: float,
+    def create_rectangle_path(
+        xlen: float,
+        ylen: float,
         alt: float,
         clockwise: bool,
-        out_offset: Literal[False],
-    ) -> ENUs: ...
-
-    @staticmethod
-    @overload
-    def create_square_path(
-        side_len: float,
-        alt: float,
-        clockwise: bool,
-    ) -> ENUs: ...
-
-    @staticmethod
-    @overload
-    def create_square_path(
-        side_len: float,
-        alt: float,
-    ) -> ENUs: ...
-
-    @staticmethod
-    @overload
-    def create_square_path(
-        side_len: float,
-        alt: float,
-        clockwise: bool,
-        out_offset: Literal[True],
+        heading: int,
     ) -> ENUPoses: ...
+
+    @staticmethod
+    @overload
+    def create_rectangle_path(
+        xlen: float = ...,
+        ylen: float = ...,
+        alt: float = ...,
+        clockwise: bool = ...,
+        heading: Literal[None] = None,
+    ) -> ENUs: ...
+
+    @staticmethod
+    def create_rectangle_path(
+        xlen: float = 10,
+        ylen: float = 10,
+        alt: float = 5,
+        clockwise: bool = True,
+        heading: None | int = None,
+    ) -> ENUs | ENUPoses:
+        """Create a rectangle path as a list of ENU positions or poses."""
+        coords = Plan.create_rectangle_xypath(xlen, ylen, clockwise)
+        if heading is not None:
+            return [ENUPose(x, y, alt, heading) for x, y in coords]
+        return [ENU(x, y, alt) for x, y in coords]
+
+    @staticmethod
+    @overload
+    def create_square_path(
+        side_len: float,
+        alt: float,
+        clockwise: bool,
+        heading: int,
+    ) -> ENUPoses: ...
+
+    @staticmethod
+    @overload
+    def create_square_path(
+        side_len: float = ...,
+        alt: float = ...,
+        clockwise: bool = ...,
+        heading: Literal[None] = None,
+    ) -> ENUs: ...
 
     @staticmethod
     def create_square_path(
         side_len: float = 10,
         alt: float = 5,
         clockwise: bool = True,
-        out_offset: bool = False,
+        heading: int | None = None,
     ) -> ENUs | ENUPoses:
         """Create a square path as a list of ENU positions or poses."""
-        coords = Plan.create_square_path_mapcoords(side_len, clockwise)
-        if out_offset:
-            return [ENUPose(x, y, alt, 0.0) for x, y in coords]
-        return [ENU(x, y, alt) for x, y in coords]
+        return Plan.create_rectangle_path(side_len, side_len, alt, clockwise, heading)
 
     @staticmethod
-    def create_square_path_mapcoords(
-        side_len: float = 10, clockwise: bool = True
+    def create_rectangle_xypath(
+        xlen: float = 5, ylen: float = 5, clockwise: bool = True
     ) -> XYs:
         """Create square path in XYs."""
         if clockwise:
-            coords = [
-                XY(0, 0),
-                XY(0, side_len),
-                XY(side_len, side_len),
-                XY(side_len, 0),
-                XY(0, 0),
-            ]
+            coords = XY.list(
+                [
+                    (0, 0),
+                    (0, ylen),
+                    (xlen, ylen),
+                    (xlen, 0),
+                    (0, 0),
+                ]
+            )
         else:
-            coords = [
-                XY(0, 0),
-                XY(side_len, 0),
-                XY(side_len, side_len),
-                XY(0, side_len),
-                XY(0, 0),
-            ]
+            coords = XY.list(
+                [
+                    (0, 0),
+                    (xlen, 0),
+                    (xlen, ylen),
+                    (0, ylen),
+                    (0, 0),
+                ]
+            )
         return coords
 
     @classmethod
@@ -177,13 +181,11 @@ class Plan(Action[Action[Step]]):
         wp_margin: float = 0.5,
         navegation_speed: float = 5,
         name: str = "basic",
-        mode: PlanMode = PlanMode.STATIC,
-        dynamic_wps: ENUs | None = None,
         takeoff_alt: float = 1.0,
     ) -> Plan:
         """Create a basic plan with configurable waypoints and options."""
         land_wp = ENU(wps[-1][0], wps[-1][1], 0)
-        plan = cls(name=name, mode=mode, dynamic_wps=dynamic_wps, wp_margin=wp_margin)
+        plan = cls(name=name)
         plan.add(make_pre_arm())
         plan.add(make_set_mode(CopterMode.GUIDED))
         if navegation_speed != 5:
@@ -227,7 +229,7 @@ class Plan(Action[Action[Step]]):
         name: str = "",
         mission_name: str = "misison",
         from_scratch: bool = True,
-        check_until: int = 7,
+        monitor: bool = True,
     ):
         """Create a plan to execute a mission in auto mode."""
         plan = cls(name)
@@ -236,8 +238,8 @@ class Plan(Action[Action[Step]]):
         plan.add(make_set_mode(CopterMode.GUIDED))
         plan.add(make_arm())
         plan.add(make_start_mission())
-        if check_until:
-            plan.add(make_monitoring(check_until))
+        if monitor:
+            plan.add(make_monitoring())
         return plan
 
 

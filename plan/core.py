@@ -54,14 +54,11 @@ class MissionElement:
     Handles state, chaining, and verbosity.
     """
 
-    def __init__(
-        self, name: str = "action name", emoji: str = "📝", is_improv: bool = False
-    ) -> None:
+    def __init__(self, name: str = "action name", emoji: str = "📝") -> None:
         # General Properties(Step and Action shared)
         self.class_name = self.__class__.__name__
         self.name = name
         self.emoji = emoji
-        self.is_improv = is_improv
         self.state = State.NOT_STARTED
 
         ## Building properties
@@ -115,14 +112,13 @@ class Step(MissionElement):
         exec_fn: Callable[[MAVConnection, int], None],
         target_pos: ENU = ENU(0, 0, 0),
         emoji: str = "🔹",
-        is_improv: bool = False,
     ) -> None:
         self.exec_fn = exec_fn
         self.check_fn = check_fn
         self.curr_pos: ENU | None = None
         self.onair = onair
         self.target_pos = target_pos
-        super().__init__(name=name, emoji=emoji, is_improv=is_improv)
+        super().__init__(name=name, emoji=emoji)
 
     def execute(self) -> None:
         """Execute the step and change state to IN_PROGRESS."""
@@ -186,14 +182,13 @@ class Action(MissionElement, Generic[T]):
         onair: bool | None = None,
         curr_pos: ENU | None = None,
         target_pos: ENU | None = None,
-        is_improv: bool = False,
     ) -> None:
         self.steps: List[T] = []
         self.current: T | None = None
         self.onair = onair
         self.curr_pos = curr_pos
         self.target_pos = target_pos
-        super().__init__(name=name, emoji=emoji, is_improv=is_improv)  # ✅ no-op
+        super().__init__(name=name, emoji=emoji)  # ✅ no-op
 
     def add(self, step: T) -> None:
         """
@@ -291,58 +286,3 @@ class Action(MissionElement, Generic[T]):
             indented = "\n".join("  " + line for line in repr(step).splitlines())
             output.append(indented)
         return "\n".join(output)
-
-    def add_next(self, new_step: T) -> None:
-        """
-        Insert a new step/action immediately after the current step.
-        Maintains chaining and updates the 'next' pointers accordingly.
-        current<new<next.
-        """
-        if self.current is None:
-            # If no current step exists, treat it like a normal add
-            self.add(new_step)
-            return
-
-        next_step = self.current.next  # save next step
-        self.current.next = new_step  # current -> new
-        new_step.prev = self.current  # current <- new
-        new_step.next = next_step  #     new -> next
-        if next_step:
-            next_step.prev = new_step  #    new <- next
-
-        # Insert in the list just after the current step
-        current_index = self.steps.index(self.current)
-        self.steps.insert(current_index + 1, new_step)
-
-    def add_prev(self, new_step: T) -> None:
-        """
-        Insert a new step/action immediately before the current step.
-        Maintains chaining and updates the 'next' pointers accordingly.
-        prev<new<current.
-        """
-        if self.current is None:
-            # If no current step exists, treat it like a normal add
-            self.add(new_step)
-            return
-
-        prev_step = self.current.prev  # save prev_step
-        new_step.next = self.current  # new -> current
-        new_step.prev = prev_step  # prev <- new
-        self.current.prev = new_step  # new <- current
-        if prev_step:
-            prev_step.next = new_step  # prev -> new
-
-        current_index = self.steps.index(self.current)
-        self.steps.insert(current_index, new_step)
-
-    def add_over(self, new_step: T) -> None:
-        """Insert a step after current and mark current step as done."""
-        self.add_next(new_step)
-        self.current.state = State.DONE  # type: ignore[union-attr]
-        self.current = new_step
-
-    def add_now(self, new_step: T) -> None:
-        """Insert a step before current and reset it for immediate execution."""
-        self.add_prev(new_step)
-        self.current.reset()  # type: ignore[union-attr]
-        self.current = new_step

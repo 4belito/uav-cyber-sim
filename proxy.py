@@ -143,6 +143,7 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
         labels=["⬅️ GCS ← ARP", "⬅️ ORC ← ARP", "⬅️ VEH ← ARP"],
         sysid=sysid,
         stop_event=stop_event,
+        verbose=verbose,
     )
 
     # GCS → ARP
@@ -152,6 +153,7 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
         labels=["➡️ GCS → ARP"],
         sysid=sysid,
         stop_event=stop_event,
+        verbose=verbose,
     )
 
     # ORC → ARP
@@ -161,6 +163,7 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
         labels=["➡️ ORC → ARP"],
         sysid=sysid,
         stop_event=stop_event,
+        verbose=verbose,
     )
 
     # VEH → ARP
@@ -170,6 +173,7 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
         labels=["➡️ VEH → ARP"],
         sysid=sysid,
         stop_event=stop_event,
+        verbose=verbose,
     )
 
     try:
