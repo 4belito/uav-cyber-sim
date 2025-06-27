@@ -17,9 +17,10 @@ ARDUPILOT_VEHICLE_PATH = HOME / "ardupilot" / "Tools" / "autotest" / "sim_vehicl
 ARDUPILOT_GAZEBO_MODELS = HOME / "ardupilot_gazebo" / "models"
 
 # --- Local Paths ---
-LOGS_PATH = Path("ardupilot_logs").resolve()
-VEH_PARAMS_PATH = Path("params/vehicle.parm").resolve()
-SIM_PARAMS_PATH = Path("params/simulation.py").resolve()
+ROOT = Path(__file__).parent
+LOGS_PATH = (ROOT / "ardupilot_logs").resolve()
+VEH_PARAMS_PATH = (ROOT / "params/vehicle.parm").resolve()
+SIM_PARAMS_PATH = (ROOT / "params/simulation.py").resolve()
 
 # Ensure logs directory exists (can be cleaned later)
 LOGS_PATH.mkdir(parents=True, exist_ok=True)

@@ -24,7 +24,6 @@ def make_go_to(
     wp_margin: float = 0.5,
     cause_text: str = "",
     target_pos: ENU | None = None,
-    is_improv: bool = False,
 ) -> Step:
     """Build a Step that moves the UAV to a specific waypoint."""
     if target_pos is None:
@@ -35,7 +34,6 @@ def make_go_to(
         exec_fn=partial(exec_go_local, wp=wp),
         target_pos=target_pos,
         onair=True,
-        is_improv=is_improv,
     )
     return goto_step
 

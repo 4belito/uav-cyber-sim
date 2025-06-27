@@ -12,7 +12,7 @@ import subprocess
 from config import QGC_INI_PATH, QGC_PATH, BasePort
 
 # find_spawns
-from mavlink.customtypes.location import ENUPoses, GRAPose
+from mavlink.customtypes.location import GRAPoses
 from params.simulation import CONNECT_GCS_TO_ARP
 from simulators.visualizer import Visualizer
 
@@ -31,10 +31,14 @@ class QGC(Visualizer):
 
     def __init__(
         self,
-        origin: GRAPose,
-        enu_poses: ENUPoses,
+        gra_homes: GRAPoses,
     ):
-        super().__init__(origin, enu_poses)
+        self.gra_homes = gra_homes
+
+    def add_vehicle_cmd(self, i: int):
+        """Add GRA location to the vhecle comand."""
+        homes_str = ",".join(map(str, self.gra_homes[i]))
+        return f" --custom-location={homes_str}"
 
     def launch(self, port_offsets: list[int], verbose: int = 1):
         """Launch the Gazebo."""
@@ -163,7 +167,8 @@ class QGC(Visualizer):
 
         # Prepare new link entries
         new_lines: list[str] = []
-        for i in range(self.n_uavs):
+        n_ports = len(port_offsets)
+        for i in range(n_ports):
             idx = count + i
             port = BasePort.QGC + port_offsets[i]
             new_lines.extend(
@@ -179,7 +184,7 @@ class QGC(Visualizer):
 
         # Insert new lines just before count=
         lines[count_line_idx:count_line_idx] = new_lines
-        lines[count_line_idx + len(new_lines)] = f"count={count + self.n_uavs}\n"
+        lines[count_line_idx + len(new_lines)] = f"count={count + n_ports}\n"
 
         with open(QGC_INI_PATH, "w", encoding="utf-8") as file:
             file.writelines(lines)

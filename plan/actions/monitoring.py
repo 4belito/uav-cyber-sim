@@ -12,6 +12,8 @@ from typing import cast
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 
 from mavlink.customtypes.connection import MAVConnection
+from mavlink.enums import MsgID
+from mavlink.util import ask_msg, stop_msg
 from plan import Action, ActionNames
 from plan.core import Step
 
@@ -22,12 +24,21 @@ def make_monitoring() -> Action[Step]:
     monitoring.add(
         Step(
             "monitoring",
-            exec_fn=Step.noop_exec,
+            exec_fn=exec_monitoring,
             check_fn=check_monitoring,
             onair=False,
         )
     )
     return monitoring
+
+
+def exec_monitoring(
+    conn: MAVConnection,
+    verbose: int,
+) -> None:
+    """Start monitoring the UAV by requesting periodic GLOBAL_POSITION_INT."""
+    if verbose > 1:
+        ask_msg(conn, verbose, msg_id=MsgID.GLOBAL_POSITION_INT, interval=100_000)
 
 
 def check_monitoring(
@@ -43,21 +54,26 @@ def check_monitoring(
         # ✅ Reached a waypoint
         if msg.get_type() == "MISSION_ITEM_REACHED" and verbose:
             msg = cast(mavlink.MAVLink_mission_item_reached_message, msg)
-            print(f"📌 Reached waypoint: {msg.seq}")
+            print(f"Vehicle {conn.target_system}: 📌 Reached waypoint: {msg.seq}")
 
         # ✅ UAV position
-        elif msg.get_type() == "GLOBAL_POSITION_INT" and verbose > 1:
+        if (msg.get_type() == "GLOBAL_POSITION_INT") and (verbose > 1):
             msg = cast(mavlink.MAVLink_global_position_int_message, msg)
             lat = msg.lat / 1e7
             lon = msg.lon / 1e7
             alt = msg.relative_alt / 1000.0
-            print(f"📍 Position: lat={lat:.7f}, lon={lon:.7f}, alt={alt:.2f} m")
+            print(
+                f"Vehicle {conn.target_system}: 📍 Position: "
+                f"lat={lat:.7f}, lon={lon:.7f}, alt={alt:.2f} m"
+            )
 
         # ✅ Look for end hints in text
-        elif msg.get_type() == "STATUSTEXT":
+        if msg.get_type() == "STATUSTEXT" and verbose:
             msg = cast(mavlink.MAVLink_statustext_message, msg)
             text = msg.text.strip().lower()
             if "disarming" in text:
-                print("🏁 Mission completed")
+                print(f"Vehicle {conn.target_system}: 🏁 Mission completed")
+                if verbose > 1:
+                    stop_msg(conn, msg_id=MsgID.GLOBAL_POSITION_INT)
                 return True, None
     return False, None

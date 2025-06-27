@@ -65,9 +65,12 @@ from vehicle_logic import VehicleLogic
 # # plans = [Plan.basic(wps=rel_path, wp_margin=0.5)]
 # homes = [ENU(*offset[:3])]  # we dont need this
 
+
+######################################################################
 plans = [
     Plan.auto(name="square_auto", mission_name=f"square_{i + 1}") for i in range(5)
 ]
+# plans = [Plan.auto(name="square_auto", mission_name="square")]
 ########################################
 # TODO: Refactor this module
 

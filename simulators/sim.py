@@ -25,8 +25,6 @@ from mavlink.customtypes.connection import MAVConnection
 from oracle import Oracle
 from simulators.visualizer import Visualizer
 
-# TODO: Improve Simulatior Class design
-
 
 class Simulator:
     """
@@ -45,12 +43,13 @@ class Simulator:
     def __init__(
         self,
         visualizers: list[Visualizer],
+        n_uavs: int,
         terminals: bool = True,
         verbose: int = 1,
     ):
         self.visuals = visualizers
         self.terminals = terminals
-        self.n_uavs = self.visuals[0].n_uavs
+        self.n_uavs = n_uavs
         self.verbose = verbose
         self.port_offsets: list[int] = []
 
@@ -92,17 +91,15 @@ class Simulator:
 
     def _launch_uav(self, i: int, j: int):
         sysid = i + 1
-        poses_str = ",".join(map(str, self.visuals[j].poses[i]))
         veh_cmd = (
             f"python3 {ARDUPILOT_VEHICLE_PATH}"
             f" -v ArduCopter -I{i} --sysid {sysid} --no-rebuild"
             f" --use-dir={LOGS_PATH} --add-param-file {VEH_PARAMS_PATH}"
             f" --no-mavproxy"
             f" --port-offset={self.port_offsets[i]}"
-            f" --console --custom-location={poses_str}"
             + (" --terminal" if self.terminals else "")
         )
-        veh_cmd += self.visuals[j].add_vehicle_cmd()
+        veh_cmd += self.visuals[j].add_vehicle_cmd(i)
         p = Simulator.create_process(
             veh_cmd,
             after="exec bash",

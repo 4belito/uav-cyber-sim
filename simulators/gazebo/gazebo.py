@@ -37,16 +37,18 @@ class Gazebo(Visualizer):
 
     def __init__(
         self,
-        origin: GRAPose,
-        enu_poses: ENUPoses,
+        gra_origin: GRAPose,
+        enu_homes: ENUPoses,
         config: ConfigGazebo,
     ):
-        super().__init__(origin, enu_poses)
+        self.origin_str = ",".join(map(str, gra_origin))
         self.config = config
+        self.enu_homes = enu_homes
+        self.n_uavs = len(config.models)
 
-    def add_vehicle_cmd(self) -> str:
+    def add_vehicle_cmd(self, i: int) -> str:
         """Add gazebo model (only iris TODO: add others)."""
-        return " -f gazebo-iris"
+        return f" -f gazebo-iris --custom-location={self.origin_str}"
 
     def launch(self, port_offsets: list[int], verbose: int = 1):
         """Launch the Gazebo simulator with the specified UAV and waypoints."""
@@ -132,7 +134,7 @@ class Gazebo(Visualizer):
                 world_elem.append(marker_elem)
 
     def _add_drone_elements(self, world_elem: ET.Element) -> None:
-        for i, (x, y, z, heading) in enumerate(self.enu_poses):
+        for i, (x, y, z, heading) in enumerate(self.enu_homes):
             pose = XYZRPY(x, y, z, 0, 0, heading_to_yaw(heading))
             drone_elem = self._generate_drone_element(f"drone{i + 1}", pose)
             world_elem.append(drone_elem)

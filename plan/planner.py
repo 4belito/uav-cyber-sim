@@ -6,7 +6,7 @@ Supports static and dynamic waypoint modes and includes predefined plans.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Literal, overload
+from typing import overload
 
 from mavlink.customtypes.location import (
     ENU,
@@ -71,27 +71,27 @@ class Plan(Action[Action[Step]]):
         xlen: float,
         ylen: float,
         alt: float,
-        clockwise: bool,
         heading: int,
+        clockwise: bool = ...,
     ) -> ENUPoses: ...
 
     @staticmethod
     @overload
     def create_rectangle_path(
-        xlen: float = ...,
-        ylen: float = ...,
-        alt: float = ...,
+        xlen: float,
+        ylen: float,
+        alt: float,
+        heading: None = ...,
         clockwise: bool = ...,
-        heading: Literal[None] = None,
     ) -> ENUs: ...
 
     @staticmethod
     def create_rectangle_path(
-        xlen: float = 10,
-        ylen: float = 10,
-        alt: float = 5,
-        clockwise: bool = True,
+        xlen: float,
+        ylen: float,
+        alt: float,
         heading: None | int = None,
+        clockwise: bool = True,
     ) -> ENUs | ENUPoses:
         """Create a rectangle path as a list of ENU positions or poses."""
         coords = Plan.create_rectangle_xypath(xlen, ylen, clockwise)
@@ -102,30 +102,30 @@ class Plan(Action[Action[Step]]):
     @staticmethod
     @overload
     def create_square_path(
-        side_len: float,
-        alt: float,
-        clockwise: bool,
         heading: int,
+        side_len: float = ...,
+        alt: float = ...,
+        clockwise: bool = ...,
     ) -> ENUPoses: ...
 
     @staticmethod
     @overload
     def create_square_path(
+        heading: None = ...,
         side_len: float = ...,
         alt: float = ...,
         clockwise: bool = ...,
-        heading: Literal[None] = None,
     ) -> ENUs: ...
 
     @staticmethod
     def create_square_path(
+        heading: int | None = None,
         side_len: float = 10,
         alt: float = 5,
         clockwise: bool = True,
-        heading: int | None = None,
     ) -> ENUs | ENUPoses:
         """Create a square path as a list of ENU positions or poses."""
-        return Plan.create_rectangle_path(side_len, side_len, alt, clockwise, heading)
+        return Plan.create_rectangle_path(side_len, side_len, alt, heading, clockwise)
 
     @staticmethod
     def create_rectangle_xypath(
@@ -164,7 +164,7 @@ class Plan(Action[Action[Step]]):
         navegation_speed: float = 5,
     ):
         """Create a square-shaped trajectory with takeoff and landing."""
-        wps = cls.create_square_path(side_len, alt, clockwise)
+        wps = cls.create_square_path(side_len=side_len, alt=alt, clockwise=clockwise)
         return cls.basic(
             wps=wps,
             wp_margin=wp_margin,
@@ -233,7 +233,8 @@ class Plan(Action[Action[Step]]):
     ):
         """Create a plan to execute a mission in auto mode."""
         plan = cls(name)
-        plan.add(make_upload_mission(mission_name, from_scratch))
+        if mission_name:
+            plan.add(make_upload_mission(mission_name, from_scratch))
         plan.add(make_pre_arm())
         plan.add(make_set_mode(CopterMode.GUIDED))
         plan.add(make_arm())

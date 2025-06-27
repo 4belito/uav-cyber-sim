@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 
 from config import Color
-from mavlink.customtypes.location import ENU, ENUs
+from mavlink.customtypes.location import ENU, ENUPose, ENUPoses, ENUs
 
 COLOR_MAP: dict[Color, str] = {
     Color.BLUE: "0.0 0.0 1.0 1",
@@ -58,7 +58,7 @@ class ConfigGazebo:
 
     @staticmethod
     def create_markertraj(
-        traj: ENUs,
+        traj: ENUs | ENUPoses,
         color: Color = Color.GREEN,
         radius: float = 0.2,
         alpha: float = 0.05,
@@ -69,6 +69,9 @@ class ConfigGazebo:
         """
         markertraj: MarkerTraj = []
         for pos in traj:
+            if isinstance(pos, ENUPose):
+                x, y, z, _ = pos
+                pos = ENU(x, y, z)
             markertraj.append(
                 WPMarker(
                     pos=pos,

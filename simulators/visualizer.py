@@ -2,29 +2,17 @@
 
 from abc import ABC, abstractmethod
 
-from helpers.change_coordinates import ENUs_to_GRAs
-from mavlink.customtypes.location import ENUPoses, GRAPose
-
 
 class Visualizer(ABC):
     """Abstract base class for UAV simulation visualizers."""
 
     name: str
 
-    def __init__(
-        self,
-        origin: GRAPose,
-        enu_poses: ENUPoses,
-    ):
-        self.enu_poses = enu_poses
-        self.poses = ENUs_to_GRAs(origin, enu_poses)
-        self.n_uavs = len(enu_poses)
-
     def __str__(self):
         return self.name
 
-    def add_vehicle_cmd(self) -> str:
-        """Add optional command-line for vehicle i."""
+    def add_vehicle_cmd(self, i: int) -> str:
+        """Add optional command-line for the ith vehicle."""
         return ""
 
     @abstractmethod

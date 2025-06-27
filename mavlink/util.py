@@ -52,7 +52,7 @@ def ask_msg(
         0,
         0,
     )
-    if verbose == 2:
+    if verbose > 2:
         print(f"📡 Requested message {MsgID(msg_id).name} at {1e6 / interval:.2f} Hz")
 
 

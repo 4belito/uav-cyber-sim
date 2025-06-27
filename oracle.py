@@ -7,7 +7,7 @@ Currently provides basic global position tracking and mission completion detecti
 
 from pymavlink.dialects.v20 import common as mavlink2  # type: ignore
 
-from helpers.change_coordinates import rel_to_abs  # ,global2local
+from helpers.change_coordinates import pose  # ,global2local
 from mavlink.customtypes.connection import MAVConnection
 from mavlink.customtypes.location import ENU, ENUPose
 from mavlink.util import CustomCmd, get_ENU_position
@@ -81,7 +81,7 @@ class Oracle:
         """Get the current global position of the specified vehicle."""
         pos = get_ENU_position(self.conns[sysid])
         if pos is not None:
-            pos = rel_to_abs(pos, homes[sysid - 1], cls=ENU)
+            pos = pose(pos, homes[sysid - 1])
         return pos
 
     # def update_neighbors(self, sysid: int):
