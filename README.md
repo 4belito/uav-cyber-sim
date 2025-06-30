@@ -13,7 +13,7 @@ UAV-CYBER-SIM is a modular, distributed simulator for evaluating coordinated mul
 Unmanned aerial vehicles (UAVs) are expected to play an essential role in the future of air mobility. Small UAVs are already being deployed for tasks such as package delivery, surveillance, and disaster response. These missions increasingly involve complex requirements, including dynamic flight planning, multi-operator coordination, networked communications, and secure operations.
 
 <p align="center">
-  <img src="readme_media/scenario.png" alt="Simulation Scenario" width="600"/>
+  <img src="readme_media/scenario.png" alt="Simulation Scenario" style="width:100%; max-width:900px;"/>
   <br/>
   <em>Example multi-UAV simulation scenario: eight UAVs operated by four private ground stations using MAVLink over 5G. Each UAV broadcasts Remote ID locally and submits its flight plan for external approval and deconfliction.</em>
 </p>
@@ -27,7 +27,7 @@ To support this evolving ecosystem, UAV-CYBER-SIM offers a comprehensive testbed
 ## Architecture Diagram
 
 <p align="center">
-  <img src="readme_media/architecture.png" alt="Simulation Scenario" width="600"/>
+  <img src="readme_media/architecture.png" alt="Simulation Scenario" style="width:100%; max-width:900px;"/>
   <br/>
   <em>System architecture overview: distributed multi-UAV simulation with separate processes connected via UDP/TCP. Shown for two operators, each managing two UAVs from remote ground control stations.</em>
 </p>
