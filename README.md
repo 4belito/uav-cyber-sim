@@ -37,19 +37,17 @@ To support this evolving ecosystem, UAV-CYBER-SIM offers a comprehensive testbed
 ## Demo Simulation Videos
 
 
-<table>
-  <tr>
-    <td>
-      <img src="https://raw.githubusercontent.com/4belito/uav-cyber-sim/main/readme_media/qgc.gif" width="400"/>
-      <p align="center"><em>QGroundControl</em></p>
-    </td>
-    <td>
-      <img src="https://raw.githubusercontent.com/4belito/uav-cyber-sim/main/readme_media/gazebo.gif" width="400"/>
-      <p align="center"><em>Gazebo</em></p>
-    </td>
-  </tr>
-</table>
+<div align="center">
+  <img src="https://github.com/4belito/uav-cyber-sim/blob/auto-mode/readme_media/qgc.gif?raw=true" style="width:100%; max-width:900px;" />
+  <p><em>QGroundControl</em></p>
+</div>
 
+<br>
+
+<div align="center">
+  <img src="https://github.com/4belito/uav-cyber-sim/blob/auto-mode/readme_media/gazebo.gif?raw=true" style="width:100%; max-width:900px;" />
+  <p><em>Gazebo</em></p>
+</div>
 
 
 ---
