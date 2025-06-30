@@ -1,19 +1,96 @@
-# uav-cyber-sim
+# UAV-CYBER-SIM
+
+## A Networked Multi-UAV Simulation Framework for Coordination and Cybersecurity Research
+
+UAV-CYBER-SIM is a modular, distributed simulator for evaluating coordinated multi-UAV operations, ground control logic, and cybersecurity vulnerabilities. It integrates ArduPilot, Gazebo, QGroundControl, and PyMAVLink to enable realistic mission execution, MAVLink communication, plan approval, and testing of system-level resilience.
+
+---
+
+## About
 
 
-## Installation
 
-1. [Install ArduPilot](installation/Installing_Ardupilot_20_04.md)
-2. [Install QGroundControl](installation/installing_qgc.md)  
-2. [Install Gazebo](installation/installing_gazebo_arduplugin.md)
-4. If the installation was not done in the home directory, modify `config.py` accordingly.  
-5. Install Python dependencies:
+Unmanned aerial vehicles (UAVs) are expected to play an essential role in the future of air mobility. Small UAVs are already being deployed for tasks such as package delivery, surveillance, and disaster response. These missions increasingly involve complex requirements, including dynamic flight planning, multi-operator coordination, networked communications, and secure operations.
+
+<p align="center">
+  <img src="readme_media/scenario.png" alt="Simulation Scenario" width="600"/>
+  <br/>
+  <em>Example multi-UAV simulation scenario: eight UAVs operated by four private ground stations using MAVLink over 5G. Each UAV broadcasts Remote ID locally and submits its flight plan for external approval and deconfliction.</em>
+</p>
+
+To support this evolving ecosystem, UAV-CYBER-SIM offers a comprehensive testbed for simulating and analyzing multi-UAV operations. Each UAV is managed by its own ground control station and follows a pre-approved mission plan, reflecting realistic operator behavior. The simulator also supports remote identification broadcasting, MAVLink message exchange, plan validation workflows, and adversarial testing through cyberattack simulation. This makes it well suited for research in autonomy, communication infrastructure, and secure operations across a wide range of application domains.
+
+
+---
+
+
+## Architecture Diagram
+
+<p align="center">
+  <img src="readme_media/architecture.png" alt="Simulation Scenario" width="600"/>
+  <br/>
+  <em>System architecture overview: distributed multi-UAV simulation with separate processes connected via UDP/TCP. Shown for two operators, each managing two UAVs from remote ground control stations.</em>
+</p>
+
+---
+
+## Demo Simulation Videos (provisional examples)
+
+
+<table>
+  <tr>
+    <td>
+      <video width="400" controls>
+        <source src="readme_media/qgc.mp4" type="video/mp4">
+        Your browser does not support the video tag.
+      </video>
+      <p style="text-align:center;"><em>QGroundControl</em></p>
+    </td>
+    <td>
+      <video width="400" controls>
+        <source src="readme_media/gazebo.mp4" type="video/mp4">
+        Your browser does not support the video tag.
+      </video>
+      <p style="text-align:center;"><em>Gazebo</em></p>
+    </td>
+  </tr>
+</table>
+
+
+
+---
+
+## Installation Instructions
+
+### 1. Requirements
+- Ubuntu 20.04 or later
+- Python 3.11 (via Conda)
+- ArduPilot SITL
+- QGroundControl
+- Gazebo with ardupilot_gazebo plugin
+
+### 2. Setup Steps
+
+1. Clone this repository:
    ```bash
-   conda create -n uav-cyber-sim python=3.11
-   conda activate uav-cyber-sim
-   pip install numpy pymavlink plotly nbformat
+   git clone https://github.com/4belito/uav-cyber-sim.git
+   cd uav-cyber-sim
+   ```
 
-## Docker Image
+2. Install [ArduPilot](installation/Installing_Ardupilot_20_04.md)
+3. Install [QGroundControl](installation/installing_qgc.md)
+4. Install [Gazebo with plugin](installation/installing_gazebo_arduplugin.md)
+5. If installed outside `$HOME`, modify `config.py` with correct paths.
+6. Create and activate the Python environment:
+   ```bash
+   conda create -n uav-cyber-sim11 python=3.11
+   conda activate uav-cyber-sim11
+   pip install numpy pymavlink plotly nbformat
+   ```
+
+---
+
+## Docker Option
 
 A Docker image with preinstalled dependencies is available on Docker Hub as [dalbick/uav-cyber-sim](https://hub.docker.com/r/dalbick/uav-cyber-sim).
 
@@ -33,3 +110,24 @@ VS Code's 'Dev Containers' extension can be used to attach to a running containe
 ```shell
 xhost +local:root
 ```
+
+<!-- ---
+
+## Citation
+If you use this simulator, please cite the original paper:
+
+```
+@inproceedings{diaz2026uavsim,
+  title={Networked Simulation for Cybersecurity Evaluation of Small Unmanned Aircraft Systems in Dense Urban Environments},
+  author={Diaz-Gonzalez, Abel and others},
+  booktitle={AIAA SciTech 2026},
+  year={2026}
+}
+``` -->
+
+---
+
+## Contact
+For questions or collaborations, email [abel.diaz.gonzalez@vanderbilt.edu](mailto:abel.diaz.gonzalez@vanderbilt.edu).
+
+---

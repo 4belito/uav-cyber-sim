@@ -70,7 +70,7 @@ from vehicle_logic import VehicleLogic
 plans = [
     Plan.auto(name="square_auto", mission_name=f"square_{i + 1}") for i in range(5)
 ]
-# plans = [Plan.auto(name="square_auto", mission_name="square")]
+# plans = [Plan.auto(name="square_auto", mission_name="square_1")]
 ########################################
 # TODO: Refactor this module
 

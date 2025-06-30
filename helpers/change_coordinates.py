@@ -1,26 +1,24 @@
 """Utility functions for coordinate transformations."""
 
 import math
+from math import cos, radians, sin
 from typing import TypeVar
 
+import folium
+from matplotlib.axes import Axes
 from pymavlink import mavextra  # type: ignore
 
+from config import Color
 from helpers.math import rotate_mapcoord
 from mavlink.customtypes.location import (
     ENU,
     GRA,
-    LLA,
     NED,
     XY,
-    XYZ,
-    XYZRPY,
     ENUPose,
     ENUPoses,
     ENUs,
     GRAPose,
-    NEDPose,
-    PoseLLA,
-    PoseXYZ,
 )
 
 T = TypeVar("T", ENU, ENUPose, GRAPose)
@@ -86,18 +84,30 @@ def NED_to_ENU(pos: NED) -> ENU:
     return ENU(y, x, -z)
 
 
-Vect = TypeVar(
-    "Vect",
-    XY,
-    XYZ,
-    LLA,
-    PoseXYZ,
-    PoseLLA,
-    XYZRPY,
-    ENU,
-    NED,
-    GRA,
-    ENUPose,
-    NEDPose,
-    GRAPose,
-)
+def draw_enupose(ax: Axes, pose: ENUPose, label: str, color: str, alpha: float = 1.0):
+    """Draws an ENUPose on a matplotlib Axes with an arrow and label."""
+    x, y, _, h = pose
+    arrow_scale = 2  # in meters
+
+    dx = cos(radians(h)) * arrow_scale
+    dy = sin(radians(h)) * arrow_scale
+
+    ax.arrow(  # type: ignore
+        x,
+        y,
+        dx,
+        dy,
+        head_width=arrow_scale * 0.5,
+        color=color,
+        alpha=alpha,
+        length_includes_head=True,
+    )
+    ax.text(x, y, label, color=color, alpha=alpha)  # type: ignore
+
+
+def draw_grapose(map_obj: folium.Map, pose: GRA | GRAPose, label: str, color: Color):
+    """Draws a GRAPose as a marker on a folium map."""
+    lat, lon = pose[:2]
+    folium.Marker(
+        location=[lat, lon], popup=label, icon=folium.Icon(color=color)
+    ).add_to(map_obj)

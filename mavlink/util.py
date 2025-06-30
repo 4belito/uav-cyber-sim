@@ -14,7 +14,7 @@ from pymavlink import mavutil
 
 from helpers.change_coordinates import NED_to_ENU
 from mavlink.customtypes.connection import MAVConnection
-from mavlink.customtypes.location import ENU, NED, GRAPoses
+from mavlink.customtypes.location import ENU, NED, GRAs
 from mavlink.enums import CmdNav, CmdSet, Frame, MsgID
 
 
@@ -53,7 +53,10 @@ def ask_msg(
         0,
     )
     if verbose > 2:
-        print(f"📡 Requested message {MsgID(msg_id).name} at {1e6 / interval:.2f} Hz")
+        print(
+            f"Vehicle {conn.target_system}: 📡 Requested message "
+            f"{MsgID(msg_id).name} at {1e6 / interval:.2f} Hz"
+        )
 
 
 def stop_msg(conn: MAVConnection, msg_id: int) -> None:
@@ -84,7 +87,7 @@ def get_ENU_position(conn: MAVConnection) -> ENU | None:
     return None
 
 
-def save_mission(name: str, poses: GRAPoses) -> None:
+def save_mission(name: str, poses: GRAs) -> None:
     """
     Save a .waypoints file from a sequence of GRAPose ppositions.
     The file will include:

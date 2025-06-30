@@ -93,7 +93,10 @@ def check_ekf_status(
     missing = [flag.name for flag in required_flags if not msg.flags & flag]
     if missing:
         if verbose == 2:
-            print(f"⌛ Waiting for EKF to be ready... Pending: {', '.join(missing)}")
+            print(
+                f"Vehicle {conn.target_system}: ⌛ Waiting for EKF to be ready... "
+                f"Pending: {', '.join(missing)}"
+            )
         return False, None
     stop_msg(conn, msg_id=MsgID.EKF_STATUS_REPORT)
     return True, None
@@ -107,8 +110,8 @@ def check_gps_status(conn: MAVConnection, verbose: int) -> tuple[bool, None]:
     if msg.fix_type < 3:
         if verbose:
             print(
-                f"📡 GPS fix too weak — fix_type = {msg.fix_type} "
-                f"(need at least 3 for 3D fix)"
+                f"Vehicle {conn.target_system}: 📡 GPS fix too weak —"
+                f" fix_type = {msg.fix_type} (need at least 3 for 3D fix)"
             )
             return False, None
         # raise StepFailed(f"GPS fix too weak (fix_type = {msg.fix_type})")
@@ -124,13 +127,18 @@ def check_sys_status(
     if not msg:
         return False, None
     if msg.battery_remaining < 20:
-        raise StepFailed(f"Battery too low ({msg.battery_remaining}%)")
+        raise StepFailed(
+            f"Vehicle {conn.target_system}: Battery too low ({msg.battery_remaining}%)"
+        )
     missing = [
         sensor.name
         for sensor in required_sensors
         if not msg.onboard_control_sensors_health & sensor
     ]
     if missing:
-        raise StepFailed(f"Missing or unhealthy sensors: {', '.join(missing)}")
+        raise StepFailed(
+            f"Vehicle {conn.target_system}: Missing or unhealthy sensors: "
+            f"{', '.join(missing)}"
+        )
     stop_msg(conn, msg_id=MsgID.SYS_STATUS)
     return True, None

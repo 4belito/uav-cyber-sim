@@ -63,6 +63,8 @@ class Color(StrEnum):
     RED = "red"
     ORANGE = "orange"
     YELLOW = "yellow"
+    BLACK = "black"
+    WHITE = "white"
 
     def __str__(self) -> str:
         return self.value
