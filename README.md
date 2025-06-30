@@ -40,18 +40,12 @@ To support this evolving ecosystem, UAV-CYBER-SIM offers a comprehensive testbed
 <table>
   <tr>
     <td>
-      <iframe width="400" height="225"
-        src="https://www.youtube.com/embed/mi5OOtmfjxw"
-        frameborder="0"
-        allowfullscreen></iframe>
-      <p style="text-align:center;"><em>QGroundControl</em></p>
+      <img src="https://raw.githubusercontent.com/4belito/uav-cyber-sim/main/readme_media/qgc.gif" width="400"/>
+      <p align="center"><em>QGroundControl</em></p>
     </td>
     <td>
-      <iframe width="400" height="225"
-        src="https://www.youtube.com/embed/_yW5P9PT3tI"
-        frameborder="0"
-        allowfullscreen></iframe>
-      <p style="text-align:center;"><em>Gazebo</em></p>
+      <img src="https://raw.githubusercontent.com/4belito/uav-cyber-sim/main/readme_media/gazebo.gif" width="400"/>
+      <p align="center"><em>Gazebo</em></p>
     </td>
   </tr>
 </table>
