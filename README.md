@@ -34,23 +34,23 @@ To support this evolving ecosystem, UAV-CYBER-SIM offers a comprehensive testbed
 
 ---
 
-## Demo Simulation Videos (provisional examples)
+## Demo Simulation Videos
 
 
 <table>
   <tr>
     <td>
-      <video width="400" controls>
-        <source src="readme_media/qgc.mp4" type="video/mp4">
-        Your browser does not support the video tag.
-      </video>
+      <iframe width="400" height="225"
+        src="https://www.youtube.com/embed/mi5OOtmfjxw"
+        frameborder="0"
+        allowfullscreen></iframe>
       <p style="text-align:center;"><em>QGroundControl</em></p>
     </td>
     <td>
-      <video width="400" controls>
-        <source src="readme_media/gazebo.mp4" type="video/mp4">
-        Your browser does not support the video tag.
-      </video>
+      <iframe width="400" height="225"
+        src="https://www.youtube.com/embed/_yW5P9PT3tI"
+        frameborder="0"
+        allowfullscreen></iframe>
       <p style="text-align:center;"><em>Gazebo</em></p>
     </td>
   </tr>
