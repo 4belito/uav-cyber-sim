@@ -66,6 +66,9 @@ from vehicle_logic import VehicleLogic
 # homes = [ENU(*offset[:3])]  # we dont need this
 
 
+# NOTE: The plans have to only be hardcoded when using the GUIDED mode.
+# Otherwise, the mission_names argument should be passed to the Simulator constructor.
+
 ######################################################################
 plans = [
     Plan.auto(name="square_auto", mission_name=f"square_{i + 1}") for i in range(5)
@@ -79,12 +82,12 @@ heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
 
 def main():
     """Entry point for the Multi-UAV MAVLink Proxy."""
-    system_id, port_offset, verbose = parse_arguments()
+    system_id, port_offset, verbose, mission_name = parse_arguments()
     print(f"System id: {system_id}")
-    start_proxy(system_id, port_offset, verbose=verbose or 1)
+    start_proxy(system_id, port_offset, mission_name=mission_name, verbose=verbose or 1)
 
 
-def parse_arguments() -> tuple[int, int, int]:
+def parse_arguments() -> tuple[int, int, int, str | None]:
     """Parse a single system ID."""
     parser = argparse.ArgumentParser(description="Single UAV MAVLink Proxy")
     parser.add_argument(
@@ -102,8 +105,13 @@ def parse_arguments() -> tuple[int, int, int]:
     parser.add_argument(
         "--port-offset", type=int, required=True, help="Port offset to use (e.g. 10)"
     )
+    parser.add_argument(
+        "--mission-name",
+        type=str,
+        help="Name of the mission (e.g., 'square_1')",
+    )
     args = parser.parse_args()
-    return (args.sysid, args.port_offset, args.verbose)
+    return (args.sysid, args.port_offset, args.verbose, args.mission_name)
 
 
 # taken from mavproxy
@@ -122,7 +130,9 @@ def create_connection_tcp(base_port: int, offset: int) -> MAVConnection:
     return conn
 
 
-def start_proxy(sysid: int, port_offset: int, verbose: int = 1):
+def start_proxy(
+    sysid: int, port_offset: int, mission_name: str | None, verbose: int = 1
+):
     """Start bidirectional proxy for a given UAV system_id."""
     i = sysid - 1
     ap_conn = create_connection_tcp(base_port=BasePort.VEH, offset=port_offset)
@@ -130,7 +140,15 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1):
     oc_conn = create_connection_udp(base_port=BasePort.ORC, offset=port_offset)
 
     print(f"\n🚀 Starting Vehicle {sysid} logic")
-    logic = VehicleLogic(ap_conn, plan=plans[i], verbose=verbose)
+    logic = VehicleLogic(
+        ap_conn,
+        plan=(
+            Plan.auto(name="auto", mission_name=mission_name)
+            if mission_name
+            else plans[i]
+        ),
+        verbose=verbose,
+    )
 
     try:
         while True:

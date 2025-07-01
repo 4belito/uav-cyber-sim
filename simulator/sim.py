@@ -43,13 +43,14 @@ class Simulator:
     def __init__(
         self,
         visualizers: list[Visualizer],
-        n_uavs: int,
+        mission_names: list[str | None],
         terminals: bool = True,
         verbose: int = 1,
     ):
         self.visuals = visualizers
         self.terminals = terminals
-        self.n_uavs = n_uavs
+        self.n_uavs = len(mission_names)
+        self.mission_names = mission_names
         self.verbose = verbose
         self.port_offsets: list[int] = []
 
@@ -112,7 +113,12 @@ class Simulator:
         logic_cmd = (
             f"python3 logic.py --sysid {sysid} "
             f"--port-offset={self.port_offsets[i]} "
-            f"--verbose {self.verbose}"
+            + (
+                f"--mission-name {self.mission_names[i]} "
+                if self.mission_names[i]
+                else ""
+            )
+            + f"--verbose {self.verbose}"
         )
         p = Simulator.create_process(
             logic_cmd,
