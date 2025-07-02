@@ -32,6 +32,9 @@ class XYZ(NamedTuple):
         """Create a list of XYZ instances from a list of (x, y, z) tuples."""
         return [cls(*pair) for pair in data]
 
+    def __repr__(self) -> str:
+        return f"({self.x}, {self.y}, {self.z})"
+
 
 class LLA(NamedTuple):
     """Geographic position: latitude, longitude, altitude (WGS84, meters)."""

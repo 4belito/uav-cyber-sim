@@ -22,6 +22,7 @@ from config import (
     BasePort,
 )
 from mavlink.customtypes.connection import MAVConnection
+from mavlink.customtypes.location import ENU
 from oracle import Oracle
 from simulator.visualizer import Visualizer
 
@@ -44,6 +45,7 @@ class Simulator:
         self,
         visualizers: list[Visualizer],
         mission_names: list[str | None],
+        homes: list[ENU],
         terminals: bool = True,
         verbose: int = 1,
     ):
@@ -51,6 +53,7 @@ class Simulator:
         self.terminals = terminals
         self.n_uavs = len(mission_names)
         self.mission_names = mission_names
+        self.homes = homes
         self.verbose = verbose
         self.port_offsets: list[int] = []
 
@@ -73,12 +76,13 @@ class Simulator:
             futures_list = [executor.submit(self._launch_uav, i, j) for i, j in args]
             orc_conns = [f.result() for f in futures_list]
 
-        oracle = Oracle(orc_conns, name=self.oracle_name)
+        oracle = Oracle(orc_conns, self.homes, name=self.oracle_name)
         for gcs_name, sysids in gcs_sysids.items():
             gcs_cmd = (
                 f'python3 gcs.py --name "{gcs_name}" '
                 f'--sysid "{sysids}" '
-                f'--port-offsets "{[self.port_offsets[sysid - 1] for sysid in sysids]}"'
+                f'--port-offsets "{[self.port_offsets[sysid - 1] for sysid in sysids]}" '
+                f'--homes "{[self.homes[sysid - 1] for sysid in sysids]}"'
             )
             p = Simulator.create_process(
                 gcs_cmd,

@@ -9,48 +9,8 @@ from pymavlink.dialects.v20 import common as mavlink2  # type: ignore
 
 from helpers.change_coordinates import pose  # ,global2local
 from mavlink.customtypes.connection import MAVConnection
-from mavlink.customtypes.location import ENU, ENUPose
+from mavlink.customtypes.location import ENU
 from mavlink.util import CustomCmd, get_ENU_position
-
-# from vehicle_logic import Neighbors, VehicleLogic
-
-### Hardcoded for now as part of a step-by-step development process
-########## 5 UAVs ####################
-# gcses = [
-#     ("blue 🟦", Color.BLUE),
-#     ("green 🟩", Color.GREEN),
-#     ("yellow 🟨", Color.YELLOW),
-#     # ("orange 🟧", Color.ORANGE),
-#     # ("red 🟥", Color.RED),
-# ]
-# n_uavs_per_gcs = 5
-# side_len = 5
-# altitude = 5
-
-# n_gcs = len(gcses)
-# n_vehicles = n_gcs * n_uavs_per_gcs
-# offsets = [
-#     (i * 10 * side_len, j * 3 * side_len, 0, 0)
-#     for i in range(n_gcs)
-#     for j in range(n_uavs_per_gcs)
-# ]
-
-
-# homes = [offset[:3] for offset in offsets]
-
-# offset = (0, 0, 0, 0)  # east, north, up, heading
-# local_path = Plan.create_square_path(side_len=5, alt=5)
-# plans = [Plan.basic(wps=local_path, wp_margin=0.5)]
-# homes = [offset[:3]]
-
-
-offset = ENUPose(0, 0, 0, 0)  # east, north, up, heading
-# local_path = Plan.create_square_path(side_len=5, alt=5)
-# plans = [Plan.basic(wps=local_path, wp_margin=0.5)]
-# plans = [Plan.auto(mission_name="simple_mission")]
-homes = [ENU(*offset[:3])]
-
-##################################
 
 
 class Oracle:
@@ -61,9 +21,12 @@ class Oracle:
     positions, and listens for plan-completion signals.
     """
 
-    def __init__(self, conns: list[MAVConnection], name: str = "Oracle ⚪") -> None:
+    def __init__(
+        self, conns: list[MAVConnection], homes: list[ENU], name: str = "Oracle ⚪"
+    ) -> None:
         self.pos: dict[int, ENU] = {}
         self.conns = {conn.target_system: conn for conn in conns}
+        self.homes = homes
         self.name = name
 
     def remove(self, sysid: int):
@@ -81,7 +44,7 @@ class Oracle:
         """Get the current global position of the specified vehicle."""
         pos = get_ENU_position(self.conns[sysid])
         if pos is not None:
-            pos = pose(pos, homes[sysid - 1])
+            pos = pose(pos, self.homes[sysid - 1])
         return pos
 
     # def update_neighbors(self, sysid: int):
