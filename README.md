@@ -121,5 +121,3 @@ If you use this simulator, please cite the original paper:
 
 ## Contact
 For questions or collaborations, email [abel.diaz.gonzalez@vanderbilt.edu](mailto:abel.diaz.gonzalez@vanderbilt.edu).
-
----
