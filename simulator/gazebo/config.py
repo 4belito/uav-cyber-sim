@@ -96,7 +96,7 @@ class ConfigGazebo:
 
     def show(
         self,
-        title: str = "Gazebo GazVehicle Trajectories",
+        title: str = "Trajectories",
         origin_color: Color = Color.WHITE,
         frames: tuple[float, float, float] = (0.2, 0.2, 0.2),
         ground: float | None = 0,

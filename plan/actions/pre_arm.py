@@ -92,7 +92,7 @@ def check_ekf_status(
         return False, None
     missing = [flag.name for flag in required_flags if not msg.flags & flag]
     if missing:
-        if verbose == 2:
+        if verbose > 2:
             print(
                 f"Vehicle {conn.target_system}: ⌛ Waiting for EKF to be ready... "
                 f"Pending: {', '.join(missing)}"
