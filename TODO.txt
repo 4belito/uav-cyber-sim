@@ -1,15 +1,16 @@
 TODO:
-
-- Check and possibly improve scalability.
-- Send plans through MAVLink (avoid hardcoding in oracle.py and proxy.py):
+- Improve scalability.
 
 - Fix: [Errno 111] Connection refused — sleeping.
 - Completely remove the sim_vehicle.py script from the simulator; move necessary code to custom scripts (proxy.py, sim.py, oracle.py).
 - Update simulator logic: launch GCSs first, then have each GCS launch its associated vehicles.
-- Make it work with both Gazebo and QGC at the same time (simultaneously)?
 - Add a parameter for waypoint reach distance, similar to Guided mode.
 - Issue: When the notebook is stopped before QGC finishes, the mission does not appear the next time QGC runs. (Check QGC initialization to fix this.)
 
 - Add collision avoidance and dynamic planning capabilities (some old code is commented out in vehicle_logic.py and oracle.py).
 - Improve collision avoidance — ideally, use ArduPilot’s built-in algorithm or implement a state-of-the-art alternative.
-- Add support for dynamically spawning different UAV models.
+- Add support to use different UAV models.
+
+
+-List of posible cyber attacks
+-data recording

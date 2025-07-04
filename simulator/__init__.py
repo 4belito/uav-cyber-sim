@@ -10,7 +10,7 @@ from .gazebo.gazebo import Gazebo
 from .QGroundControl.config import ConfigQGC
 from .QGroundControl.qgc import QGC
 from .sim import Simulator
-from .visualizer import NoneVisualizer, Visualizer
+from .visualizer import ConfigVis, NoneVisualizer, Visualizer
 
 __all__ = [
     "Simulator",
@@ -23,4 +23,5 @@ __all__ = [
     "NoneVisualizer",
     "ConfigQGC",
     "GazVehicle",
+    "ConfigVis",
 ]

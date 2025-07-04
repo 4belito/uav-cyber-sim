@@ -51,7 +51,7 @@ class Simulator:
     ):
         self.visuals = visualizers
         self.terminals = terminals
-        self.n_uavs = len(mission_names)
+        self.n_vehs = visualizers[0].config.n_vehicles
         self.mission_names = mission_names
         self.homes = homes
         self.verbose = verbose
@@ -68,9 +68,9 @@ class Simulator:
     def _launch_vehicles(self, gcs_sysids: dict[str, list[int]]) -> Oracle:
         """Launch ArduPilot and logic processes for each UAV."""
         # with futures.ThreadPoolExecutor() as executor:
-        #     orc_conns = list(executor.map(self._launch_uav, range(self.n_uavs)))
+        #     orc_conns = list(executor.map(self._launch_uav, range(self.n_vehs)))
 
-        args = list(product(range(self.n_uavs), range(len(self.visuals))))
+        args = list(product(range(self.n_vehs), range(len(self.visuals))))
 
         with futures.ThreadPoolExecutor() as executor:
             futures_list = [executor.submit(self._launch_uav, i, j) for i, j in args]
@@ -168,7 +168,7 @@ class Simulator:
         offsets = list[int]()
 
         cur_offset = 0
-        while len(offsets) < self.n_uavs:
+        while len(offsets) < self.n_vehs:
             for base_port in base_ports:
                 port = base_port + cur_offset
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

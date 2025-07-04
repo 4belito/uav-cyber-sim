@@ -7,6 +7,7 @@ import plotly.graph_objects as go  # type: ignore
 from config import Color
 from helpers.change_coordinates import pose, poses
 from mavlink.customtypes.location import ENU, ENUPose, ENUPoses, ENUs
+from simulator.visualizer import ConfigVis
 
 COLOR_MAP: dict[Color, str] = {
     Color.BLUE: "0.0 0.0 1.0 1",
@@ -44,7 +45,7 @@ class GazVehicle:
 GazVehicles = list[GazVehicle]
 
 
-class ConfigGazebo:
+class ConfigGazebo(ConfigVis[GazVehicle]):
     """Gazebo configuration and marker visualization manager."""
 
     def __init__(
@@ -52,26 +53,9 @@ class ConfigGazebo:
         origin: ENUPose,
         world_path: str,
     ) -> None:
+        super().__init__()
         self.origin = origin
         self.world_path = world_path
-        self.vehicles: GazVehicles = []
-
-    def add_vehicle(
-        self,
-        mtraj: GazTraj,
-        home: ENUPose,
-        color: Color = Color.BLUE,
-        model: str = "iris",
-    ) -> None:
-        """Add a vehicle to the Gazebo configuration."""
-        self.vehicles.append(
-            GazVehicle(
-                model=model,
-                color=color,
-                home=home,
-                mtraj=mtraj,
-            )
-        )
 
     def add(
         self,
@@ -85,14 +69,14 @@ class ConfigGazebo:
         path = poses(self.origin, home_path)
         home = pose(self.origin, base_home)
         mtraj = ConfigGazebo.create_mtraj(traj=path, color=color)
-        self.add_vehicle(mtraj=mtraj, color=color, model=model, home=home)
-
-    def remove_vehicle_at(self, index: int) -> bool:
-        """Remove a vehicle by index."""
-        if 0 <= index < len(self.vehicles):
-            del self.vehicles[index]
-            return True
-        return False
+        self.add_vehicle(
+            GazVehicle(
+                model=model,
+                color=color,
+                home=home,
+                mtraj=mtraj,
+            )
+        )
 
     def show(
         self,

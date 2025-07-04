@@ -16,6 +16,7 @@ from mavlink.customtypes.location import (
     GRAs,
 )
 from mavlink.util import save_mission
+from simulator.visualizer import ConfigVis
 
 
 @dataclass
@@ -40,7 +41,7 @@ class QGCVehicle:
 QGCVehicles = list[QGCVehicle]
 
 
-class ConfigQGC:
+class ConfigQGC(ConfigVis[QGCVehicle]):
     """
     Creates a trajectory from an (N, 3) array of waypoints as WaypointMarker
     objects.
@@ -50,16 +51,8 @@ class ConfigQGC:
         self,
         origin: GRAPose,
     ) -> None:
+        super().__init__()
         self.origin = origin
-        self.vehicles: QGCVehicles = []
-
-    def add_vehicle(
-        self,
-        mtraj: QGCTraj,
-        home: GRAPose = GRAPose(0, 0, 0, 0),
-    ) -> None:
-        """Add a vehicle to the QGC configuration."""
-        self.vehicles.append(QGCVehicle(home=home, mtraj=mtraj))
 
     def add(
         self,
@@ -72,14 +65,7 @@ class ConfigQGC:
         path = poses(self.origin, home_path)
         home = pose(self.origin, base_home)
         mtraj = ConfigQGC.create_mtraj(traj=path, color=color)
-        self.add_vehicle(mtraj=mtraj, home=home)
-
-    def remove_vehicle_at(self, index: int) -> bool:
-        """Remove a vehicle by index."""
-        if 0 <= index < len(self.vehicles):
-            del self.vehicles[index]
-            return True
-        return False
+        self.add_vehicle(QGCVehicle(home=home, mtraj=mtraj))
 
     def __str__(self) -> str:
         lines = [
@@ -107,7 +93,7 @@ class ConfigQGC:
         draw_grapose(m, self.origin, "Origin", origin_color)
         return m
 
-    def save_missions(self, missions_name: str):
+    def save_missions(self, missions_name: str = "mission"):
         """Save the missions for all the vehicles."""
         for i, veh in enumerate(self.vehicles):
             traj = [wp.pos for wp in veh.mtraj]
@@ -122,7 +108,7 @@ class ConfigQGC:
         Create a trajectory from an (N, 3) array of waypoints as
         WaypointMarker objects.
         """
-        markertraj: QGCTraj = []
+        mtraj: QGCTraj = []
         for pos in traj:
-            markertraj.append(QGCWP(pos=GRA(*pos[:3]), color=color))
-        return markertraj
+            mtraj.append(QGCWP(pos=GRA(*pos[:3]), color=color))
+        return mtraj

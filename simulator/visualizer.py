@@ -1,12 +1,39 @@
 """Visualizer module."""
 
 from abc import ABC, abstractmethod
+from typing import Any, Generic, TypeVar
+
+V = TypeVar("V")  # Vehicle type
+
+
+class ConfigVis(ABC, Generic[V]):
+    """Base class for visualizer configurations that manage a list of vehicles."""
+
+    def __init__(self) -> None:
+        self.vehicles: list[V] = []
+        self.n_vehicles: int = 0
+
+    def add_vehicle(self, vehicle: V) -> None:
+        """Add a vehicle to the configuration."""
+        self.vehicles.append(vehicle)
+        self.n_vehicles += 1
+
+    def remove_vehicle_at(self, index: int) -> bool:
+        """Remove a vehicle by index."""
+        if 0 <= index < len(self.vehicles):
+            del self.vehicles[index]
+            self.n_vehicles -= 1
+            return True
+        return False
 
 
 class Visualizer(ABC):
     """Abstract base class for UAV simulation visualizers."""
 
     name: str
+
+    def __init__(self, config: ConfigVis[Any]) -> None:
+        self.config = config
 
     def __str__(self):
         return self.name
@@ -25,6 +52,12 @@ class NoneVisualizer(Visualizer):
     """No-op visualizer for headless simulation."""
 
     name = "none"
+
+    def __init__(
+        self,
+        config: ConfigVis[int],
+    ):
+        self.config = config
 
     def launch(self, port_offsets: list[int], verbose: int = 1) -> None:
         """Print a message indicating that no visualizer will be launched."""
