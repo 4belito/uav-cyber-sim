@@ -22,12 +22,12 @@ from pathlib import Path
 from config import ARDUPILOT_GAZEBO_MODELS, ENV_CMD_GAZ
 from helpers.change_coordinates import heading_to_yaw
 from mavlink.customtypes.location import XYZRPY, GRAPose
-from simulator.gazebo.config import COLOR_MAP, ConfigGazebo, GazWP
+from simulator.gazebo.config import COLOR_MAP, ConfigGazebo, GazVehicle, GazWP
 from simulator.sim import Simulator
 from simulator.visualizer import Visualizer
 
 
-class Gazebo(Visualizer):
+class Gazebo(Visualizer[GazVehicle]):
     """
     Gazebo-specific simulator that launches UAVs in a Gazebo world.
     It configures drone models, world markers, and coordinates with ArduPilot logic.
@@ -38,9 +38,9 @@ class Gazebo(Visualizer):
         config: ConfigGazebo,
         gra_origin: GRAPose,
     ):
+        super().__init__(config)
         self.origin_str = ",".join(map(str, gra_origin))
-        self.config = config
-        self.n_uavs = len(config.vehicles)
+        self.config: ConfigGazebo = config
 
     def add_vehicle_cmd(self, i: int) -> str:
         """Add gazebo model (only iris TODO: add others)."""
@@ -66,7 +66,7 @@ class Gazebo(Visualizer):
         output_dir = Path(ARDUPILOT_GAZEBO_MODELS)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        for i in range(self.n_uavs):
+        for i in range(self.config.n_vehicles):
             name = f"drone{i + 1}"
             new_model_path = output_dir / name
             if new_model_path.exists():

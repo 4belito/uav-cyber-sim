@@ -13,11 +13,11 @@ from config import QGC_INI_PATH, QGC_PATH, BasePort
 
 # find_spawns
 from params.simulation import CONNECT_GCS_TO_ARP
-from simulator.QGroundControl.config import ConfigQGC
+from simulator.QGroundControl.config import ConfigQGC, QGCVehicle
 from simulator.visualizer import Visualizer
 
 
-class QGC(Visualizer):
+class QGC(Visualizer[QGCVehicle]):
     """
     QGroundControl visualizer class.
 
@@ -33,7 +33,7 @@ class QGC(Visualizer):
         self,
         config: ConfigQGC,
     ):
-        self.config = config
+        super().__init__(config)
 
     def add_vehicle_cmd(self, i: int):
         """Add GRA location to the vhecle comand."""

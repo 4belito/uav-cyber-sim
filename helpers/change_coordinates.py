@@ -2,10 +2,11 @@
 
 import math
 from math import cos, radians, sin
-from typing import TypeVar
+from typing import TypeVar, overload
 
 import folium
 from matplotlib.axes import Axes
+from pymap3d import geodetic2enu  # type: ignore
 from pymavlink import mavextra  # type: ignore
 
 from config import Color
@@ -19,9 +20,12 @@ from mavlink.customtypes.location import (
     ENUPoses,
     ENUs,
     GRAPose,
+    GRAPoses,
+    GRAs,
 )
 
 T = TypeVar("T", ENU, ENUPose, GRAPose)
+G = TypeVar("G", GRA, GRAPose)
 
 
 def poses(origin: T, points: ENUs | ENUPoses) -> list[T]:
@@ -65,6 +69,48 @@ def pose(origin: T, point: ENU | ENUPose) -> T:
         return ENU(x_abs, y_abs, z_abs)
     else:
         return origin.__class__(x_abs, y_abs, z_abs, h_abs)
+
+
+def GRAs_to_ENUs(origin: GRA, points: GRAs) -> ENUs:
+    """
+    Convert a list of GRA points to ENU points relative to a
+    GRA origin.
+    """
+    return [GRA_to_ENU(origin, point) for point in points]
+
+
+def GRAPoses_to_ENUPoses(origin: GRAPose, points: GRAPoses) -> ENUPoses:
+    """
+    Convert a list of GRAPose points to ENUPose relative to a
+    GRAPose origin.
+    """
+    return [GRA_to_ENU(origin, point) for point in points]
+
+
+@overload
+def GRA_to_ENU(origin: GRA, point: GRA) -> ENU: ...
+@overload
+def GRA_to_ENU(origin: GRAPose, point: GRAPose) -> ENUPose: ...
+
+
+# Implementation (no decorator here)
+def GRA_to_ENU(origin: GRA | GRAPose, point: GRA | GRAPose) -> ENU | ENUPose:
+    """
+    Convert a point from GRA or GRAPose to ENU or ENUPose relative to a
+    GRA/GRAPose origin.
+    """
+    # Unpack coordinates
+    lat, lon, alt = point[:3]
+    lat0, lon0, alt0 = origin[:3]
+    x, y, z = map(float, geodetic2enu(lat, lon, alt, lat0, lon0, alt0))  # type: ignore
+
+    # Return appropriate pose
+    if isinstance(origin, GRAPose) and isinstance(point, GRAPose):
+        heading = (point[3] - origin[3]) % 360  # type: ignore
+        return ENUPose(x, y, z, heading)
+    if isinstance(origin, GRA) and isinstance(point, GRA):
+        return ENU(x, y, z)
+    raise TypeError("Origin and point must both be GRA or both GRAPose")
 
 
 def heading_to_yaw(heading_deg: float) -> float:

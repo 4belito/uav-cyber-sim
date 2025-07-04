@@ -55,6 +55,8 @@ class BasePort(IntEnum):
 
 
 # --- UAV Visualization Colors ---
+
+
 class Color(StrEnum):
     """Enum for supported UAV marker colors in visualizations."""
 
@@ -71,6 +73,19 @@ class Color(StrEnum):
 
     def __repr__(self) -> str:
         return self.value
+
+    @property
+    def emoji(self) -> str:
+        """Return the emoji representation of the color."""
+        return {
+            Color.BLUE: "🟦",
+            Color.GREEN: "🟩",
+            Color.RED: "🟥",
+            Color.ORANGE: "🟧",
+            Color.YELLOW: "🟨",
+            Color.BLACK: "⬛",
+            Color.WHITE: "⬜",
+        }[self]
 
 
 # --- Environment Setup Commands ---

@@ -121,7 +121,7 @@ class ConfigGazebo(ConfigVis[GazVehicle]):
         for i, veh in enumerate(self.vehicles):
             if not veh.mtraj:
                 continue
-            pos_color = ((w.pos[0], w.pos[1], w.pos[2], w.color) for w in veh.mtraj)
+            pos_color = ((w.pos.x, w.pos.y, w.pos.z, w.color) for w in veh.mtraj)
             xs, ys, zs, colors = map(list, zip(*pos_color))
             trace = self._make_traj(xs, ys, zs, colors, name=f"trajectory {i}")
             data.append(trace)

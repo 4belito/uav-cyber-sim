@@ -1,7 +1,7 @@
 """Visualizer module."""
 
 from abc import ABC, abstractmethod
-from typing import Any, Generic, TypeVar
+from typing import Generic, TypeVar
 
 V = TypeVar("V")  # Vehicle type
 
@@ -27,12 +27,12 @@ class ConfigVis(ABC, Generic[V]):
         return False
 
 
-class Visualizer(ABC):
+class Visualizer(ABC, Generic[V]):
     """Abstract base class for UAV simulation visualizers."""
 
     name: str
 
-    def __init__(self, config: ConfigVis[Any]) -> None:
+    def __init__(self, config: ConfigVis[V]) -> None:
         self.config = config
 
     def __str__(self):
@@ -48,16 +48,10 @@ class Visualizer(ABC):
         pass
 
 
-class NoneVisualizer(Visualizer):
+class NoneVisualizer(Visualizer[int]):
     """No-op visualizer for headless simulation."""
 
     name = "none"
-
-    def __init__(
-        self,
-        config: ConfigVis[int],
-    ):
-        self.config = config
 
     def launch(self, port_offsets: list[int], verbose: int = 1) -> None:
         """Print a message indicating that no visualizer will be launched."""

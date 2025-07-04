@@ -10,6 +10,7 @@ import socket
 from concurrent import futures
 from itertools import product
 from subprocess import Popen
+from typing import Literal, TypeVar
 
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
@@ -22,9 +23,12 @@ from config import (
     BasePort,
 )
 from mavlink.customtypes.connection import MAVConnection
-from mavlink.customtypes.location import ENU
 from oracle import Oracle
 from simulator.visualizer import Visualizer
+
+Terminals = Literal["launcher", "veh", "logic", "proxy", "gcs"]
+
+V = TypeVar("V")  # Vehicle type
 
 
 class Simulator:
@@ -43,17 +47,13 @@ class Simulator:
 
     def __init__(
         self,
-        visualizers: list[Visualizer],
-        mission_names: list[str | None],
-        homes: list[ENU],
-        terminals: bool = True,
+        visualizers: list[Visualizer[V]],
+        terminals: list[Terminals] = [],
         verbose: int = 1,
     ):
         self.visuals = visualizers
-        self.terminals = terminals
+        self.terminals: dict[Terminals, bool] = dict.fromkeys(terminals, True)
         self.n_vehs = visualizers[0].config.n_vehicles
-        self.mission_names = mission_names
-        self.homes = homes
         self.verbose = verbose
         self.port_offsets: list[int] = []
 
@@ -76,18 +76,18 @@ class Simulator:
             futures_list = [executor.submit(self._launch_uav, i, j) for i, j in args]
             orc_conns = [f.result() for f in futures_list]
 
-        oracle = Oracle(orc_conns, self.homes, name=self.oracle_name)
+        oracle = Oracle(orc_conns, name=self.oracle_name)
         for gcs_name, sysids in gcs_sysids.items():
             gcs_cmd = (
                 f'python3 gcs.py --name "{gcs_name}" '
                 f'--sysid "{sysids}" '
-                f'--port-offsets "{[self.port_offsets[sysid - 1] for sysid in sysids]}" '
-                f'--homes "{[self.homes[sysid - 1] for sysid in sysids]}"'
+                f'--port-offsets "'
+                f'{[self.port_offsets[sysid - 1] for sysid in sysids]}" '
             )
             p = Simulator.create_process(
                 gcs_cmd,
                 after="exec bash",
-                visible=self.terminals,
+                visible=self.terminals.get("gcs", False),
                 title=f"GCS: {gcs_name}",
                 env_cmd=ENV_CMD_PYT,
             )  # "exit"
@@ -102,13 +102,13 @@ class Simulator:
             f" --use-dir={LOGS_PATH} --add-param-file {VEH_PARAMS_PATH}"
             f" --no-mavproxy"
             f" --port-offset={self.port_offsets[i]}"
-            + (" --terminal" if self.terminals else "")
+            + (" --terminal" if self.terminals.get("veh", False) else "")
         )
         veh_cmd += self.visuals[j].add_vehicle_cmd(i)
         p = Simulator.create_process(
             veh_cmd,
             after="exec bash",
-            visible=self.terminals,
+            visible=self.terminals.get("launcher", False),
             title=f"ArduPilot SITL Launcher: Vehicle {sysid}",
             env_cmd=ENV_CMD_ARP,
         )  # "exit"
@@ -117,17 +117,12 @@ class Simulator:
         logic_cmd = (
             f"python3 logic.py --sysid {sysid} "
             f"--port-offset={self.port_offsets[i]} "
-            + (
-                f"--mission-name {self.mission_names[i]} "
-                if self.mission_names[i]
-                else ""
-            )
-            + f"--verbose {self.verbose}"
+            f"--verbose {self.verbose} "
         )
         p = Simulator.create_process(
             logic_cmd,
             after="exec bash",
-            visible=self.terminals,
+            visible=self.terminals.get("logic", False),
             title=f"UAV logic: Vehicle {sysid}",
             env_cmd=ENV_CMD_PYT,
         )  # "exit"
@@ -141,7 +136,7 @@ class Simulator:
         p = Simulator.create_process(
             proxy_cmd,
             after="exec bash",
-            visible=self.terminals,
+            visible=self.terminals.get("proxy", False),
             title=f"Proxy: Vehicle {sysid}",
             env_cmd=ENV_CMD_PYT,
         )  # "exit"

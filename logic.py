@@ -17,63 +17,13 @@ from plan import Plan, State
 from proxy import create_connection_udp
 from vehicle_logic import VehicleLogic
 
-### Hardcoded for now as part of a step-by-step development process
-########## 5 UAVs ####################
-# offsets = [  # east, north, up, heading
-#     (0.0, 0.0, 0.0, 0.0),
-#     (10.0, 0.0, 0.0, 45.0),
-#     (-5.0, -10.0, 0.0, 225.0),
-#     (-15.0, 0.0, 0.0, 0.0),
-#     (0.0, -20.0, 0.0, 0.0),
-# ]
-# n_vehicles = len(offsets)
-# local_paths = [Plan.create_square_path(side_len=5, alt=5) for _ in range(n_vehicles)]
-# plans = [Plan.basic(wps=path, wp_margin=0.5) for path in local_paths]
-
-
-# gcses = [
-#     ("blue 🟦", Color.BLUE),
-#     ("green 🟩", Color.GREEN),
-#     ("yellow 🟨", Color.YELLOW),
-#     ("orange 🟧", Color.ORANGE),
-#     ("red 🟥", Color.RED),
-# ]
-# n_uavs_per_gcs = 12
-# side_len = 5
-# altitude = 5
-
-# n_gcs = len(gcses)
-# n_vehicles = n_gcs * n_uavs_per_gcs
-# offsets = [
-#     (i * 10 * side_len, j * 3 * side_len, 0, 0)
-#     for i in range(n_gcs)
-#     for j in range(n_uavs_per_gcs)
-# ]
-
-# local_paths = [
-#     Plan.create_square_path(side_len=side_len, alt=altitude)
-#       for _ in range(n_vehicles)
-# ]
-# plans = [Plan.basic(wps=path, wp_margin=0.5) for path in local_paths]
-
-
-# homes = [offset[:3] for offset in offsets]
-
-
-# offset = ENUPose(0, 0, 0, 0)  # east, north, up, heading
-# # rel_path = Plan.create_square_path(side_len=5, alt=5)
-# # plans = [Plan.basic(wps=rel_path, wp_margin=0.5)]
-# homes = [ENU(*offset[:3])]  # we dont need this
-
-
-# NOTE: The plans have to only be hardcoded when using the GUIDED mode.
-# Otherwise, the mission_names argument should be passed to the Simulator constructor.
-
 ######################################################################
-plans = [
-    Plan.auto(name="square_auto", mission_name=f"square_{i + 1}") for i in range(5)
-]
-# plans = [Plan.auto(name="square_auto", mission_name="square_1")]
+# NOTE: The plans have to only be hardcoded when using the GUIDED mode.
+mission = True
+if not mission:
+    plans = [
+        Plan.auto(name="square_auto", mission_name=f"square_{i + 1}") for i in range(5)
+    ]
 ########################################
 # TODO: Refactor this module
 
@@ -82,12 +32,12 @@ heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
 
 def main():
     """Entry point for the Multi-UAV MAVLink Proxy."""
-    system_id, port_offset, verbose, mission_name = parse_arguments()
+    system_id, port_offset, verbose = parse_arguments()
     print(f"System id: {system_id}")
-    start_proxy(system_id, port_offset, mission_name=mission_name, verbose=verbose or 1)
+    start_proxy(system_id, port_offset, verbose=verbose or 1)
 
 
-def parse_arguments() -> tuple[int, int, int, str | None]:
+def parse_arguments() -> tuple[int, int, int | None]:
     """Parse a single system ID."""
     parser = argparse.ArgumentParser(description="Single UAV MAVLink Proxy")
     parser.add_argument(
@@ -105,13 +55,8 @@ def parse_arguments() -> tuple[int, int, int, str | None]:
     parser.add_argument(
         "--port-offset", type=int, required=True, help="Port offset to use (e.g. 10)"
     )
-    parser.add_argument(
-        "--mission-name",
-        type=str,
-        help="Name of the mission (e.g., 'square_1')",
-    )
     args = parser.parse_args()
-    return (args.sysid, args.port_offset, args.verbose, args.mission_name)
+    return (args.sysid, args.port_offset, args.verbose)
 
 
 # taken from mavproxy
@@ -130,9 +75,7 @@ def create_connection_tcp(base_port: int, offset: int) -> MAVConnection:
     return conn
 
 
-def start_proxy(
-    sysid: int, port_offset: int, mission_name: str | None, verbose: int = 1
-):
+def start_proxy(sysid: int, port_offset: int, verbose: int = 1):
     """Start bidirectional proxy for a given UAV system_id."""
     i = sysid - 1
     ap_conn = create_connection_tcp(base_port=BasePort.VEH, offset=port_offset)
@@ -143,8 +86,8 @@ def start_proxy(
     logic = VehicleLogic(
         ap_conn,
         plan=(
-            Plan.auto(name="auto", mission_name=mission_name)
-            if mission_name
+            Plan.auto(name="auto", mission_name=f"mission_{sysid}")
+            if mission
             else plans[i]
         ),
         verbose=verbose,

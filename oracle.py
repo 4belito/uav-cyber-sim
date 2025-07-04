@@ -7,10 +7,9 @@ Currently provides basic global position tracking and mission completion detecti
 
 from pymavlink.dialects.v20 import common as mavlink2  # type: ignore
 
-from helpers.change_coordinates import pose  # ,global2local
+from helpers.change_coordinates import GRA  # ,global2local
 from mavlink.customtypes.connection import MAVConnection
-from mavlink.customtypes.location import ENU
-from mavlink.util import CustomCmd, get_ENU_position
+from mavlink.util import CustomCmd, get_GRA_position
 
 
 class Oracle:
@@ -21,12 +20,9 @@ class Oracle:
     positions, and listens for plan-completion signals.
     """
 
-    def __init__(
-        self, conns: list[MAVConnection], homes: list[ENU], name: str = "Oracle ⚪"
-    ) -> None:
-        self.pos: dict[int, ENU] = {}
+    def __init__(self, conns: list[MAVConnection], name: str = "Oracle ⚪") -> None:
+        self.pos: dict[int, GRA] = {}
         self.conns = {conn.target_system: conn for conn in conns}
-        self.homes = homes
         self.name = name
 
     def remove(self, sysid: int):
@@ -40,12 +36,9 @@ class Oracle:
             if pos is not None:
                 self.pos[sysid] = pos
 
-    def get_global_pos(self, sysid: int) -> ENU | None:
+    def get_global_pos(self, sysid: int) -> GRA | None:
         """Get the current global position of the specified vehicle."""
-        pos = get_ENU_position(self.conns[sysid])
-        if pos is not None:
-            pos = pose(pos, self.homes[sysid - 1])
-        return pos
+        return get_GRA_position(self.conns[sysid], verbose=2)
 
     # def update_neighbors(self, sysid: int):
     #     # update this tu use mavconnecions and probably custom mavlin messages

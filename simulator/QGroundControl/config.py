@@ -112,3 +112,15 @@ class ConfigQGC(ConfigVis[QGCVehicle]):
         for pos in traj:
             mtraj.append(QGCWP(pos=GRA(*pos[:3]), color=color))
         return mtraj
+
+    @staticmethod
+    def show_trajs(mtrajs: list[QGCTraj]):
+        """Display the vehicles trajectories and origin in GRA coordinates."""
+        m = folium.Map(zoom_start=18)
+
+        # Plot each traj
+        for mtraj in mtrajs:  # add more colors if needed
+            for i, wp in enumerate(mtraj):
+                draw_grapose(m, wp.pos, f"pos_{i}", wp.color)
+
+        return m
