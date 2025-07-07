@@ -90,7 +90,7 @@ class MessageRouter(threading.Thread):
     def __init__(
         self,
         source: MAVConnection,
-        targets: list[Queue[tuple[str, mavlink.MAVLink_message]]],
+        targets: list[Queue[tuple[str, float, mavlink.MAVLink_message]]],
         labels: list[str],
         sender: str,
         sysid: int,
@@ -116,23 +116,32 @@ class MessageRouter(threading.Thread):
                 self.stop_event.set()
 
     def dispatch_message(self, msg: mavlink.MAVLink_message):
+        time_received = time.time()
         for q, label in zip(self.targets, self.labels):
             if self.verbose == 3:
                 print(f"{label} {self.sysid}: {msg.get_type()}")
-            q.put((self.sender, msg))
+            q.put((self.sender, time_received, msg))
 
 
 def write_and_log_message(
-    q: Queue[tuple[str, mavlink.MAVLink_message]],
+    q: Queue[tuple[str, float, mavlink.MAVLink_message]],
     conn: MAVConnection,
     log_writer: _csv.Writer,
     recipient: str,
 ):
     """Write the next message from a queue to the connection and log it."""
-    sender, msg = q.get()
+    sender, time_received, msg = q.get()
     conn.write(bytes(msg.get_msgbuf()))
     if msg.get_type() != "BAD_DATA":
-        log_writer.writerow([sender, recipient, time.time(), msg.to_json()])
+        log_writer.writerow(
+            [
+                sender,
+                recipient,
+                time_received,
+                time.time(),
+                msg.to_json(),
+            ]
+        )
 
 
 def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
@@ -142,10 +151,10 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
     oc_conn = create_connection_udp(base_port=BasePort.ORC, offset=port_offset)
     vh_conn = create_connection_tcp(base_port=BasePort.VEH, offset=port_offset)
 
-    ap_queue = Queue[tuple[str, mavlink.MAVLink_message]]()
-    cs_queue = Queue[tuple[str, mavlink.MAVLink_message]]()
-    oc_queue = Queue[tuple[str, mavlink.MAVLink_message]]()
-    vh_queue = Queue[tuple[str, mavlink.MAVLink_message]]()
+    ap_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
+    cs_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
+    oc_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
+    vh_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
     print(f"\n🚀 Starting Proxy {sysid}")
 
     stop_event = threading.Event()
@@ -196,7 +205,9 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
 
     log_file = open(f"proxy_{sysid}.log", "w")
     log_writer = csv.writer(log_file)
-    log_writer.writerow(["sender", "recipient", "timestamp", "message"])
+    log_writer.writerow(
+        ["sender", "recipient", "time_received", "time_sent", "message"]
+    )
 
     try:
         router1.start()
