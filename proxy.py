@@ -4,6 +4,7 @@ import argparse
 import threading
 import time
 from queue import Queue
+import csv, _csv
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 from pymavlink import mavutil
@@ -89,8 +90,9 @@ class MessageRouter(threading.Thread):
     def __init__(
         self,
         source: MAVConnection,
-        targets: list[Queue[bytes]],
+        targets: list[Queue[tuple[str, mavlink.MAVLink_message]]],
         labels: list[str],
+        sender: str,
         sysid: int,
         stop_event: threading.Event,
         verbose: int = 1,
@@ -99,6 +101,7 @@ class MessageRouter(threading.Thread):
         self.source = source
         self.targets = targets
         self.labels = labels
+        self.sender = sender
         self.sysid = sysid
         self.stop_event = stop_event
         self.verbose = verbose
@@ -113,12 +116,23 @@ class MessageRouter(threading.Thread):
                 self.stop_event.set()
 
     def dispatch_message(self, msg: mavlink.MAVLink_message):
-        msg_type = msg.get_type()
-        msg_buff = msg.get_msgbuf()
         for q, label in zip(self.targets, self.labels):
             if self.verbose == 3:
-                print(f"{label} {self.sysid}: {msg_type}")
-            q.put(msg_buff)
+                print(f"{label} {self.sysid}: {msg.get_type()}")
+            q.put((self.sender, msg))
+
+
+def write_and_log_message(
+    q: Queue[tuple[str, mavlink.MAVLink_message]],
+    conn: MAVConnection,
+    log_writer: _csv.Writer,
+    recipient: str,
+):
+    """Write the next message from a queue to the connection and log it."""
+    sender, msg = q.get()
+    conn.write(bytes(msg.get_msgbuf()))
+    if msg.get_type() != "BAD_DATA":
+        log_writer.writerow([sender, recipient, time.time(), msg.to_json()])
 
 
 def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
@@ -128,10 +142,10 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
     oc_conn = create_connection_udp(base_port=BasePort.ORC, offset=port_offset)
     vh_conn = create_connection_tcp(base_port=BasePort.VEH, offset=port_offset)
 
-    ap_queue = Queue[bytes]()
-    cs_queue = Queue[bytes]()
-    oc_queue = Queue[bytes]()
-    vh_queue = Queue[bytes]()
+    ap_queue = Queue[tuple[str, mavlink.MAVLink_message]]()
+    cs_queue = Queue[tuple[str, mavlink.MAVLink_message]]()
+    oc_queue = Queue[tuple[str, mavlink.MAVLink_message]]()
+    vh_queue = Queue[tuple[str, mavlink.MAVLink_message]]()
     print(f"\n🚀 Starting Proxy {sysid}")
 
     stop_event = threading.Event()
@@ -142,6 +156,7 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
         targets=[cs_queue, oc_queue, vh_queue],
         labels=["⬅️ GCS ← ARP", "⬅️ ORC ← ARP", "⬅️ VEH ← ARP"],
         sysid=sysid,
+        sender="ARP",
         stop_event=stop_event,
         verbose=verbose,
     )
@@ -152,6 +167,7 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
         targets=[ap_queue],
         labels=["➡️ GCS → ARP"],
         sysid=sysid,
+        sender="GCS",
         stop_event=stop_event,
         verbose=verbose,
     )
@@ -162,6 +178,7 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
         targets=[ap_queue],
         labels=["➡️ ORC → ARP"],
         sysid=sysid,
+        sender="ORC",
         stop_event=stop_event,
         verbose=verbose,
     )
@@ -172,9 +189,14 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
         targets=[ap_queue],
         labels=["➡️ VEH → ARP"],
         sysid=sysid,
+        sender="VEH",
         stop_event=stop_event,
         verbose=verbose,
     )
+
+    log_file = open(f"proxy_{sysid}.log", "w")
+    log_writer = csv.writer(log_file)
+    log_writer.writerow(["sender", "recipient", "timestamp", "message"])
 
     try:
         router1.start()
@@ -184,16 +206,16 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
 
         while not stop_event.is_set():
             while not oc_queue.empty():
-                oc_conn.write(oc_queue.get())
+                write_and_log_message(oc_queue, oc_conn, log_writer, "ORC")
 
             while not cs_queue.empty():
-                cs_conn.write(cs_queue.get())
+                write_and_log_message(cs_queue, cs_conn, log_writer, "GCS")
 
             while not ap_queue.empty():
-                ap_conn.write(ap_queue.get())
+                write_and_log_message(ap_queue, ap_conn, log_writer, "ARP")
 
             while not vh_queue.empty():
-                vh_conn.write(vh_queue.get())
+                write_and_log_message(vh_queue, vh_conn, log_writer, "VEH")
 
             time.sleep(0.01)
     finally:
@@ -206,6 +228,9 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
         ap_conn.close()
         oc_conn.close()
         vh_conn.close()
+
+        log_file.close()
+
         print(f"❎ Proxy {sysid} stopped.")
 
 
