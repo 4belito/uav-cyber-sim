@@ -27,8 +27,16 @@ def kill_processes(victims: All | List[str] = "all"):
         os.system(f"pkill -9 -f {process}")
 
 
+def delete_logs():
+    """Delete all proxy log files."""
+    for file in os.listdir():
+        if file.startswith("proxy_") and file.endswith(".log"):
+            os.remove(file)
+
+
 def clean(victims: All | List[str] = "all", sim_out: bool = True):
     """End the simulation."""
     kill_processes(victims)
+    delete_logs()
     if sim_out and LOGS_PATH.exists():
         shutil.rmtree(LOGS_PATH)
