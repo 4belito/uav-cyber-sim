@@ -34,9 +34,18 @@ def delete_logs():
             os.remove(file)
 
 
+def delete_missions():
+    """Delete all mission files."""
+    mission_path = os.path.join("plan", "missions")
+    for file in os.listdir(mission_path):
+        if file.startswith("mission_") and file.endswith(".waypoints"):
+            os.remove(os.path.join(mission_path, file))
+
+
 def clean(victims: All | List[str] = "all", sim_out: bool = True):
     """End the simulation."""
     kill_processes(victims)
     delete_logs()
+    delete_missions()
     if sim_out and LOGS_PATH.exists():
         shutil.rmtree(LOGS_PATH)
