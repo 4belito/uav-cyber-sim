@@ -41,6 +41,7 @@ class ActionNames(StrEnum):
     CHANGE_NAVSPEED = "CHANGE_NAV_SPEED"
     START_MISSION = "START_MISSION"
     UPLOAD_MISSION = "UPLOAD_MISSION"
+    WAIT = "WAIT"
 
 
 class StepFailed(Exception):
@@ -164,6 +165,11 @@ class Step(MissionElement):
     def noop_exec(_conn: MAVConnection, _verbose: int) -> None:
         """No execution."""
         pass
+
+    @staticmethod
+    def noop_check(_conn: MAVConnection, _verbose: int) -> tuple[bool, None]:
+        """No checking."""
+        return True, None
 
 
 T = TypeVar("T", bound=MissionElement)

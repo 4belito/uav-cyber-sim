@@ -173,8 +173,6 @@ class Plan(Action[Action[Step]]):
         )
 
     @classmethod
-    # pylint: disable=too-many-arguments
-    # pylint: disable=too-many-positional-arguments
     def basic(
         cls,
         wps: ENUs = [ENU(0.0, 0.0, 5.0)],
@@ -200,8 +198,6 @@ class Plan(Action[Action[Step]]):
     # TODO Improve this for no repeating code
 
     @classmethod
-    # pylint: disable=too-many-arguments
-    # pylint: disable=too-many-positional-arguments
     def hover(
         cls,
         wps: ENUs | None = None,
@@ -221,13 +217,11 @@ class Plan(Action[Action[Step]]):
         plan.add(make_path(wps=wps, wp_margin=wp_margin))
         return plan
 
-    # TODO include here the mission somehow. Maybe by passing a name file argument
-
     @classmethod
     def auto(
         cls,
         name: str = "",
-        mission_name: str = "misison",
+        mission_name: str = "mission",
         from_scratch: bool = True,
         monitor: bool = True,
     ):

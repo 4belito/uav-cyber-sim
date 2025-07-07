@@ -36,6 +36,7 @@ class QGCVehicle:
 
     home: GRAPose
     mtraj: QGCTraj
+    mission_delay: int  # in sec
 
 
 QGCVehicles = list[QGCVehicle]
@@ -59,13 +60,16 @@ class ConfigQGC(ConfigVis[QGCVehicle]):
         base_path: ENUs | ENUPoses,
         base_home: ENUPose,
         color: Color = Color.BLUE,
+        mission_delay: int = 0,  # sec
     ) -> None:
         """Shortcut to add a vehicle from a raw path."""
         home_path = poses(base_home, base_path)
         path = poses(self.origin, home_path)
         home = pose(self.origin, base_home)
         mtraj = ConfigQGC.create_mtraj(traj=path, color=color)
-        self.add_vehicle(QGCVehicle(home=home, mtraj=mtraj))
+        self.add_vehicle(
+            QGCVehicle(home=home, mtraj=mtraj, mission_delay=mission_delay)
+        )
 
     def __str__(self) -> str:
         lines = [
@@ -97,7 +101,9 @@ class ConfigQGC(ConfigVis[QGCVehicle]):
         """Save the missions for all the vehicles."""
         for i, veh in enumerate(self.vehicles):
             traj = [wp.pos for wp in veh.mtraj]
-            save_mission(name=f"{missions_name}_{i + 1}", poses=traj)
+            save_mission(
+                name=f"{missions_name}_{i + 1}", poses=traj, delay=veh.mission_delay
+            )
 
     @staticmethod
     def create_mtraj(
