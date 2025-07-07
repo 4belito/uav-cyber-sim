@@ -2,3 +2,4 @@
 *.pkl
 ardupilot_logs/
 **/*.log
+plan/missions/mission_*.waypoints
