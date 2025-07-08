@@ -31,6 +31,7 @@ class Visualizer(ABC, Generic[V]):
     """Abstract base class for UAV simulation visualizers."""
 
     name: str
+    delay = False
 
     def __init__(self, config: ConfigVis[V]) -> None:
         self.config = config
@@ -52,6 +53,7 @@ class NoneVisualizer(Visualizer[int]):
     """No-op visualizer for headless simulation."""
 
     name = "none"
+    delay = True
 
     def launch(self, port_offsets: list[int], verbose: int = 1) -> None:
         """Print a message indicating that no visualizer will be launched."""

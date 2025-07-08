@@ -28,6 +28,7 @@ class QGC(Visualizer[QGCVehicle]):
     """
 
     name = "QGroundControl"
+    delay = True
 
     def __init__(
         self,

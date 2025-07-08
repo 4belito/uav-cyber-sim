@@ -1,10 +1,11 @@
 """Multi-UAV MAVLink Proxy."""
 
+import _csv
 import argparse
+import csv
 import threading
 import time
 from queue import Queue
-import csv, _csv
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 from pymavlink import mavutil

@@ -61,8 +61,13 @@ class Simulator:
         """Launch vehicle instances and the optional simulator."""
         self.port_offsets = self._find_port_offsets()
         for visual in self.visuals:
-            visual.launch(self.port_offsets, self.verbose)
+            if not visual.delay:
+                visual.launch(self.port_offsets, self.verbose)
         oracle = self._launch_vehicles(gcs_sysids)
+        for visual in self.visuals:
+            if visual.delay:
+                visual.launch(self.port_offsets, self.verbose)
+
         return oracle
 
     def _launch_vehicles(self, gcs_sysids: dict[str, list[int]]) -> Oracle:
@@ -208,6 +213,7 @@ class Simulator:
                         "gnome-terminal",
                         "--title",
                         title,
+                        "--geometry=71x10",  # width=100 cols, height=30 rows
                         "--",
                     ]
                     + bash_cmd

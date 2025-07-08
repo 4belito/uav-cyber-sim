@@ -111,15 +111,15 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1):
         print(f"❎ Vehicle {sysid} logic stopped.")
 
 
-def send_done_until_ack(conn: MAVConnection, idx: int, max_attempts: int = 100):
+def send_done_until_ack(conn: MAVConnection, idx: int, max_tries: float = float("inf")):
     """
     Send 'DONE' via STATUSTEXT repeatedly until receiving a COMMAND_ACK.
     Assumes `conn` is a dedicated MAVLink connection for one UAV.
     """
     msg = mavlink.MAVLink_statustext_message(severity=6, text=b"DONE")
-
-    for attempt in range(max_attempts):
-        print(f"📤 GCS ← UAV {idx}: Sending DONE (attempt {attempt + 1})")
+    i = 0
+    while i < max_tries:
+        print(f"📤 GCS ← UAV {idx}: Sending DONE (attempt {i + 1})")
         conn.mav.send(msg)
 
         start = time.time()
@@ -129,6 +129,7 @@ def send_done_until_ack(conn: MAVConnection, idx: int, max_attempts: int = 100):
                 print("✅ ACK received. DONE message acknowledged.")
                 return
             time.sleep(0.001)
+        i += 1
 
     print("⚠️ No ACK received after max attempts.")
 

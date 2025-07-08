@@ -33,6 +33,9 @@ class Gazebo(Visualizer[GazVehicle]):
     It configures drone models, world markers, and coordinates with ArduPilot logic.
     """
 
+    name = "Gazebo"
+    delay = False
+
     def __init__(
         self,
         config: ConfigGazebo,
