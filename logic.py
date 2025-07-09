@@ -3,26 +3,28 @@
 # Third Party imports
 import argparse
 import time
+from enum import StrEnum
 
 from pymavlink import mavutil
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
 # First Party imports
-from config import BasePort
+from config import DATA_PATH, BasePort
 from mavlink.customtypes.connection import MAVConnection
+from mavlink.customtypes.location import ENU
 from mavlink.enums import Autopilot, Type
 from mavlink.util import CustomCmd, connect
 from params.simulation import HEARTBEAT_PERIOD
-from plan import Plan, State
+from plan import Action, Plan, State, Step
 from proxy import create_connection_udp
-from vehicle_logic import VehicleLogic
 
 ######################################################################
 # NOTE: The plans have to only be hardcoded when using the GUIDED mode.
 mission = True
 if not mission:
     plans = [
-        Plan.auto(name="square_auto", mission_name=f"square_{i + 1}") for i in range(5)
+        Plan.auto(name="square_auto", mission_path=f"plan/missions/square_{i + 1}")
+        for i in range(5)
     ]
 ########################################
 # TODO: Refactor this module
@@ -33,30 +35,7 @@ heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
 def main():
     """Entry point for the Multi-UAV MAVLink Proxy."""
     system_id, port_offset, verbose = parse_arguments()
-    print(f"System id: {system_id}")
     start_proxy(system_id, port_offset, verbose=verbose or 1)
-
-
-def parse_arguments() -> tuple[int, int, int | None]:
-    """Parse a single system ID."""
-    parser = argparse.ArgumentParser(description="Single UAV MAVLink Proxy")
-    parser.add_argument(
-        "--sysid",
-        type=int,
-        required=True,
-        help="System ID of the UAV (e.g., 1)",
-    )
-    parser.add_argument(
-        "--verbose",
-        type=int,
-        required=False,
-        help="verbose value (0,1,2)",
-    )
-    parser.add_argument(
-        "--port-offset", type=int, required=True, help="Port offset to use (e.g. 10)"
-    )
-    args = parser.parse_args()
-    return (args.sysid, args.port_offset, args.verbose)
 
 
 # taken from mavproxy
@@ -78,15 +57,16 @@ def create_connection_tcp(base_port: int, offset: int) -> MAVConnection:
 def start_proxy(sysid: int, port_offset: int, verbose: int = 1):
     """Start bidirectional proxy for a given UAV system_id."""
     i = sysid - 1
-    ap_conn = create_connection_tcp(base_port=BasePort.VEH, offset=port_offset)
+    vh_conn = create_connection_tcp(base_port=BasePort.VEH, offset=port_offset)
     cs_conn = create_connection_udp(base_port=BasePort.GCS, offset=port_offset)
     oc_conn = create_connection_udp(base_port=BasePort.ORC, offset=port_offset)
 
-    print(f"\n🚀 Starting Vehicle {sysid} logic")
     logic = VehicleLogic(
-        ap_conn,
+        vh_conn,
         plan=(
-            Plan.auto(name="auto", mission_name=f"mission_{sysid}")
+            Plan.auto(
+                name="auto", mission_path=str(DATA_PATH / f"mission_{sysid}.waypoints")
+            )
             if mission
             else plans[i]
         ),
@@ -96,7 +76,7 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1):
     try:
         while True:
             if heartbeat_period.trigger():
-                send_heartbeat(ap_conn)
+                send_heartbeat(vh_conn)
 
             if logic.plan.state == State.DONE:
                 send_done_until_ack(oc_conn, sysid)
@@ -106,7 +86,7 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1):
             time.sleep(0.01)
     finally:
         cs_conn.close()
-        ap_conn.close()
+        vh_conn.close()
         oc_conn.close()
         print(f"❎ Vehicle {sysid} logic stopped.")
 
@@ -132,6 +112,106 @@ def send_done_until_ack(conn: MAVConnection, idx: int, max_tries: float = float(
         i += 1
 
     print("⚠️ No ACK received after max attempts.")
+
+
+class VehicleMode(StrEnum):
+    """Defines operational modes for the UAV."""
+
+    MISSION = "MISSION"  # or "MISSION", "WAYPOINT_NAV"
+    AVOIDANCE = "AVOIDANCE"  # or "COLLISION_AVOIDANCE"
+
+
+class VehicleLogic:
+    """Handles the logic for executing a UAV's mission plan."""
+
+    def __init__(
+        self,
+        connection: MAVConnection,
+        plan: Plan,
+        safety_radius: float = 5,
+        radar_radius: float = 10,
+        verbose: int = 1,
+    ):
+        # Vehicle Creation
+        self.conn = connection
+        self.sysid = connection.target_system
+        self.name = f"Logic 🧠 {self.sysid}"
+        self.verbose = verbose
+
+        # Mode Properties
+        self.mode = VehicleMode.MISSION
+        self.plan = plan
+        self.plan.bind(self.conn, verbose)
+        self.back_mode = VehicleMode.MISSION
+
+        # Communication properties (positions are local)
+        self.safety_radius: float = safety_radius
+        self.radar_radius: float = radar_radius
+
+        if verbose:
+            print(f"{self.name}: 🚀 lauching")
+
+    def act(self):
+        """Perform the next step in the mission plan."""
+        self.plan.act()
+
+    def set_mode(self, new_mode: VehicleMode) -> None:
+        """Switch the vehicle to a new operational mode."""
+        if new_mode != self.mode:
+            print(f"{self.name}: Vehicle {self.sysid} switched to mode: 🔁 {new_mode}")
+            self.mode = new_mode
+
+    @property
+    def current_action(self) -> Action[Step] | None:
+        """Return the current action being executed."""
+        return self.plan.current
+
+    @property
+    def current_step(self) -> Step | None:
+        """Return the current step within the current action."""
+        if self.current_action is not None:
+            return self.current_action.current
+        else:
+            return None
+
+    @property
+    def pos(self) -> ENU | None:
+        """Return the current estimated position of the UAV."""
+        return self.plan.curr_pos
+
+    def is_onair(self) -> bool | None:
+        """Return whether the UAV is currently airborne."""
+        return self.plan.onair
+
+    @property
+    def target_pos(self) -> ENU | None:
+        """Return the current step's target position, if any."""
+        if self.current_step:
+            return self.current_step.target_pos
+        else:
+            return None
+
+
+def parse_arguments() -> tuple[int, int, int | None]:
+    """Parse a single system ID."""
+    parser = argparse.ArgumentParser(description="Single UAV MAVLink Proxy")
+    parser.add_argument(
+        "--sysid",
+        type=int,
+        required=True,
+        help="System ID of the UAV (e.g., 1)",
+    )
+    parser.add_argument(
+        "--verbose",
+        type=int,
+        required=False,
+        help="verbosity level (e.g. 0,1,2,3)",
+    )
+    parser.add_argument(
+        "--port-offset", type=int, required=True, help="Port offset to use (e.g. 10)"
+    )
+    args = parser.parse_args()
+    return (args.sysid, args.port_offset, args.verbose)
 
 
 if __name__ == "__main__":

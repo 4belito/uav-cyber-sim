@@ -23,7 +23,6 @@ heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
 def main() -> None:
     """Parse arguments and launch the MAVLink proxy."""
     system_id, port_offset, verbose = parse_arguments()
-    print(f"System id: {system_id}")
     start_proxy(system_id, port_offset, verbose)
 
 
@@ -77,9 +76,6 @@ def create_connection_tcp(
     for attempt in range(retries):
         try:
             conn: MAVConnection = connect(f"tcp:127.0.0.1:{port}")  # type: ignore
-            # send_heartbeat(conn)
-            # conn.wait_heartbeat()
-            # print("✅ Heartbeat received")
             return conn
         except (ConnectionError, TimeoutError) as e:
             print(f"Retry {attempt + 1}/{retries} failed: {e}")
@@ -156,14 +152,14 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
     cs_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
     oc_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
     vh_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
-    print(f"\n🚀 Starting Proxy {sysid}")
+    print(f"🚀 Starting Proxy {sysid}")
 
     stop_event = threading.Event()
 
-    # ARP → GCS + ORC + VEH
+    # ARP → ORC + VEH  X(+GCS)
     router1 = MessageRouter(
         source=ap_conn,
-        targets=[cs_queue, oc_queue, vh_queue],
+        targets=[cs_queue, oc_queue, vh_queue],  #
         labels=["⬅️ GCS ← ARP", "⬅️ ORC ← ARP", "⬅️ VEH ← ARP"],
         sysid=sysid,
         sender="ARP",

@@ -10,7 +10,6 @@ format.
 import time
 from functools import partial
 
-from config import DATA_PATH
 from mavlink.customtypes.connection import MAVConnection
 from mavlink.customtypes.mission import MissionLoader
 from mavlink.enums import CmdNav, MissionResult
@@ -18,7 +17,7 @@ from plan import Action, ActionNames
 from plan.core import Step
 
 
-def make_upload_mission(mission_name: str, from_scratch: bool = True) -> Action[Step]:
+def make_upload_mission(mission_path: str, from_scratch: bool = True) -> Action[Step]:
     """Create an upload mission action."""
     upload_mission = Action[Step](name=ActionNames.UPLOAD_MISSION, emoji="📤")
     if from_scratch:
@@ -32,8 +31,8 @@ def make_upload_mission(mission_name: str, from_scratch: bool = True) -> Action[
         )
     upload_mission.add(
         Step(
-            f"load mission {mission_name}",
-            exec_fn=partial(exec_upload_mission, mission_name=mission_name),
+            f"load mission {mission_path}",
+            exec_fn=partial(exec_upload_mission, mission_path=mission_path),
             check_fn=partial(check_upload_mission),
             onair=False,
         )
@@ -45,12 +44,12 @@ def make_upload_mission(mission_name: str, from_scratch: bool = True) -> Action[
 def exec_upload_mission(
     conn: MAVConnection,
     verbose: int = 1,
-    mission_name: str = "mission",
+    mission_path: str = "plan/missions/simple_mission.waypoints",
 ):
     """Execute the upload of a mission to the UAV."""
     sysid, compid = conn.target_system, conn.target_component
     mission = MissionLoader(sysid, compid)
-    count = mission.load(str(DATA_PATH / f"{mission_name}.waypoints"))
+    count = mission.load(mission_path)
     if verbose:
         print(f"Vehicle {conn.target_system}: ✅ {count} waypoints read.")
     if verbose == 2:

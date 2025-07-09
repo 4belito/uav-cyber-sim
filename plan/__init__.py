@@ -11,4 +11,5 @@ __all__ = [
     "Plan",
     "Plans",
     "PlanMode",
+    "Step",
 ]

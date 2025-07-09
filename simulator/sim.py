@@ -31,7 +31,7 @@ from simulator.visualizer import Visualizer
 
 from .QGroundControl.config import Missions
 
-Terminals = Literal["launcher", "veh", "logic", "proxy", "gcs"]
+SimProcess = Literal["launcher", "veh", "logic", "proxy", "gcs"]
 
 V = TypeVar("V")  # Vehicle type
 
@@ -55,11 +55,13 @@ class Simulator:
         visualizers: list[Visualizer[V]],
         missions: Missions,
         gcs_sysids: dict[str, list[int]],
-        terminals: list[Terminals] = [],
+        terminals: list[SimProcess] = [],
+        supress_output: list[SimProcess] = ["launcher"],
         verbose: int = 1,
     ):
         self.visuals = visualizers
-        self.terminals: dict[Terminals, bool] = dict.fromkeys(terminals, True)
+        self.terminals: dict[SimProcess, bool] = dict.fromkeys(terminals, True)
+        self.supress: dict[SimProcess, bool] = dict.fromkeys(supress_output, True)
         self.n_vehs = visualizers[0].config.n_vehicles
         self.verbose = verbose
         self.port_offsets: list[int] = []
@@ -87,7 +89,11 @@ class Simulator:
         """Save the missions for all the vehicles."""
         for i, mission in enumerate(self.missions):
             traj = [wp.pos for wp in mission.traj]
-            save_mission(name=f"mission_{i + 1}", poses=traj, delay=mission.delay)
+            save_mission(
+                path=DATA_PATH / f"mission_{i + 1}.waypoints",
+                poses=traj,
+                delay=mission.delay,
+            )
 
     def _save_gcs_configs(self, folder_name: Path):
         for gcs_name, sysids in self.gcs_sysids.items():
@@ -116,17 +122,19 @@ class Simulator:
                 conn = f.result()
                 orc_conns[conn.target_system] = conn
 
-        oracle = Oracle(orc_conns, name=self.oracle_name)
+        oracle = Oracle(orc_conns, name=self.oracle_name, verbose=self.verbose)
         for gcs_name in self.gcs_sysids.keys():
-            gcs_cmd = f'python3 gcs.py --name "{gcs_name}" '
+            gcs_cmd = f'python3 gcs.py --name "{gcs_name}" --verbose {self.verbose}'
             p = create_process(
                 gcs_cmd,
                 after="exec bash",
                 visible=self.terminals.get("gcs", False),
+                suppress_output=self.supress.get("gcs", False),
                 title=f"GCS: {gcs_name}",
                 env_cmd=ENV_CMD_PYT,
             )  # "exit"
-            print(f"🚀 GCS {gcs_name} launched (PID {p.pid})")
+            if self.verbose:
+                print(f"🚀 GCS {gcs_name} launched (PID {p.pid})")
         return oracle
 
     def _launch_uav(self, i: int, j: int):
@@ -144,10 +152,12 @@ class Simulator:
             veh_cmd,
             after="exec bash",
             visible=self.terminals.get("launcher", False),
+            suppress_output=self.supress.get("launcher", False),
             title=f"ArduPilot SITL Launcher: Vehicle {sysid}",
             env_cmd=ENV_CMD_ARP,
         )  # "exit"
-        print(f"🚀 ArduPilot SITL vehicle {sysid} launched (PID {p.pid})")
+        if self.verbose:
+            print(f"🚀 ArduPilot SITL vehicle {sysid} launched (PID {p.pid})")
 
         logic_cmd = (
             f"python3 logic.py --sysid {sysid} "
@@ -158,10 +168,12 @@ class Simulator:
             logic_cmd,
             after="exec bash",
             visible=self.terminals.get("logic", False),
+            suppress_output=self.supress.get("logic", False),
             title=f"UAV logic: Vehicle {sysid}",
             env_cmd=ENV_CMD_PYT,
         )  # "exit"
-        print(f"🚀 UAV logic for vehicle {sysid} launched (PID {p.pid})")
+        if self.verbose:
+            print(f"🚀 UAV logic for vehicle {sysid} launched (PID {p.pid})")
 
         proxy_cmd = (
             f"python3 proxy.py --sysid {sysid} "
@@ -172,17 +184,19 @@ class Simulator:
             proxy_cmd,
             after="exec bash",
             visible=self.terminals.get("proxy", False),
+            suppress_output=self.supress.get("proxy", False),
             title=f"Proxy: Vehicle {sysid}",
             env_cmd=ENV_CMD_PYT,
         )  # "exit"
-        print(f"🚀 Proxy for vehicle {sysid} launched (PID {p.pid})")
-        print(f"🔗 UAV logic {sysid} is connected to Ardupilot SITL vehicle {sysid}")
+        if self.verbose:
+            print(f"🚀 Proxy for vehicle {sysid} launched (PID {p.pid})")
 
         ## Connect to oracle
         port = BasePort.ORC + self.port_offsets[i]
         conn: MAVConnection = connect(f"udp:127.0.0.1:{port}")  # type: ignore
         conn.wait_heartbeat()
-        print(f"🔗 UAV logic {sysid} is connected to {self.oracle_name}")
+        if self.verbose:
+            print(f"🔗 UAV logic {sysid} is connected to {self.oracle_name}")
         return conn
 
     def _find_port_offsets(self):
@@ -213,11 +227,3 @@ class Simulator:
                 # print(f"Found offset {len(offsets)} - {cur_offset}")
             cur_offset += unit_offset
         return offsets
-
-    def _add_vehicle_cmd_fn(self, _i: int) -> str:
-        """Add optional command-line arguments for the vehicle."""
-        return ""
-
-    def _launch_visualizer(self) -> None:
-        """Launch a visual simulator or GUI application if configured."""
-        print("🙈 Running without visualization.")

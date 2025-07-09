@@ -7,11 +7,11 @@ connections.
 """
 
 from enum import IntEnum
+from pathlib import Path
 from typing import cast
 
 from pymavlink import mavutil
 
-from config import DATA_PATH
 from helpers.change_coordinates import NED_to_ENU
 from mavlink.customtypes.connection import MAVConnection
 from mavlink.customtypes.location import ENU, GRA, NED, GRAs
@@ -104,7 +104,7 @@ def get_GRA_position(conn: MAVConnection, verbose: int = 1) -> GRA | None:
     return None
 
 
-def save_mission(name: str, poses: GRAs, delay: int = 0) -> None:
+def save_mission(path: Path, poses: GRAs, delay: int = 0) -> None:
     """
     Save a .waypoints file from a sequence of GRAPose ppositions.
     The file will include:
@@ -118,7 +118,6 @@ def save_mission(name: str, poses: GRAs, delay: int = 0) -> None:
     LAND = CmdNav.LAND.value
     REL_ALT = Frame.GLOBAL_RELATIVE_ALT.value
     DELAY = CmdNav.DELAY.value
-    path = DATA_PATH / f"{name}.waypoints"
     takeoff_idx = 1
     with path.open("w") as f:
         f.write("QGC WPL 110\n")

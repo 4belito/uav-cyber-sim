@@ -21,11 +21,12 @@ class Oracle:
     """
 
     def __init__(
-        self, conns: dict[int, MAVConnection], name: str = "Oracle ⚪"
+        self, conns: dict[int, MAVConnection], name: str = "Oracle ⚪", verbose: int = 1
     ) -> None:
         self.pos: dict[int, GRA] = {}
         self.conns = conns
         self.name = name
+        self.verbose = verbose
 
     def remove(self, sysid: int):
         """Remove vehicles from the environment."""
@@ -78,6 +79,7 @@ class Oracle:
             conn.mav.command_ack_send(
                 command=CustomCmd.PLAN_DONE, result=mavlink2.MAV_RESULT_ACCEPTED
             )
-            print(f"✅ Vehicle {sysid} completed its mission")
+            if self.verbose:
+                print(f"{self.name}: ✅ Vehicle {sysid} completed its mission")
             return True
         return False

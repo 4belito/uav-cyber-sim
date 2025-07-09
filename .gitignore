@@ -2,5 +2,6 @@
 # *.pkl
 ardupilot_logs/
 data/
+vehicle_logic.py
 # **/*.log
 # plan/missions/mission_*.waypoints

@@ -220,15 +220,14 @@ class Plan(Action[Action[Step]]):
     @classmethod
     def auto(
         cls,
-        name: str = "",
-        mission_name: str = "mission",
+        name: str,
+        mission_path: str,
         from_scratch: bool = True,
         monitor: bool = True,
     ):
         """Create a plan to execute a mission in auto mode."""
         plan = cls(name)
-        if mission_name:
-            plan.add(make_upload_mission(mission_name, from_scratch))
+        plan.add(make_upload_mission(mission_path, from_scratch))
         plan.add(make_pre_arm())
         plan.add(make_set_mode(CopterMode.GUIDED))
         plan.add(make_arm())
