@@ -59,6 +59,7 @@ class Simulator:
 
     def launch(self, gcs_sysids: dict[str, list[int]]) -> Oracle:
         """Launch vehicle instances and the optional simulator."""
+        # Simulator.save_gcs_sysids(gcs_sysids)
         self.port_offsets = self._find_port_offsets()
         for visual in self.visuals:
             if not visual.delay:
@@ -70,6 +71,12 @@ class Simulator:
 
         return oracle
 
+    # @staticmethod
+    # def save_gcs_sysids(gcs_sysids: dict[str, list[int]]):
+    #     for gcs_name, sysids in gcs_sysids.items():
+    #         with open(f"sysids_{gcs_name}.txt", "w") as f:
+    #             f.write(str(sysids))
+
     def _launch_vehicles(self, gcs_sysids: dict[str, list[int]]) -> Oracle:
         """Launch ArduPilot and logic processes for each UAV."""
         # with futures.ThreadPoolExecutor() as executor:
@@ -79,7 +86,10 @@ class Simulator:
 
         with futures.ThreadPoolExecutor() as executor:
             futures_list = [executor.submit(self._launch_uav, i, j) for i, j in args]
-            orc_conns = [f.result() for f in futures_list]
+            orc_conns: dict[int, MAVConnection] = {}
+            for f in futures_list:
+                conn = f.result()
+                orc_conns[conn.target_system] = conn
 
         oracle = Oracle(orc_conns, name=self.oracle_name)
         for gcs_name, sysids in gcs_sysids.items():

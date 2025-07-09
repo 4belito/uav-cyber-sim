@@ -18,13 +18,13 @@ from oracle import Oracle
 def main():
     """Run a GCS instance to monitor UAVs."""
     gcs_name, system_ids, port_offsets = parse_arguments()
-    conns: list[MAVConnection] = []
+    conns: dict[int, MAVConnection] = {}
     for sysid, port_offset in zip(system_ids, port_offsets):
         port = BasePort.GCS + port_offset
         conn: MAVConnection = connect(f"udp:127.0.0.1:{port}")  # type: ignore
         conn.wait_heartbeat()
         print(f"🔗 UAV logic {sysid} is connected")
-        conns.append(conn)
+        conns[sysid] = conn
     gcs = GCS(conns, gcs_name)
     while len(gcs.conns):
         gcs.gather_broadcasts()
@@ -43,7 +43,7 @@ def main():
 class GCS(Oracle):
     """Ground Control Station class extending Oracle with trajectory logging."""
 
-    def __init__(self, conns: list[MAVConnection], name: str = "blue 🟦"):
+    def __init__(self, conns: dict[int, MAVConnection], name: str = "blue 🟦"):
         self.name = name
         super().__init__(conns, name=f"GCS {name}")
         self.paths: dict[int, GRAs] = {sysid: [] for sysid in self.conns}

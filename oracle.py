@@ -20,9 +20,11 @@ class Oracle:
     positions, and listens for plan-completion signals.
     """
 
-    def __init__(self, conns: list[MAVConnection], name: str = "Oracle ⚪") -> None:
+    def __init__(
+        self, conns: dict[int, MAVConnection], name: str = "Oracle ⚪"
+    ) -> None:
         self.pos: dict[int, GRA] = {}
-        self.conns = {conn.target_system: conn for conn in conns}
+        self.conns = conns
         self.name = name
 
     def remove(self, sysid: int):
