@@ -15,7 +15,6 @@ from mavlink.customtypes.location import (
     GRAPoses,
     GRAs,
 )
-from mavlink.util import save_mission
 from simulator.visualizer import ConfigVis
 
 
@@ -31,15 +30,23 @@ QGCTraj = list[QGCWP]
 
 
 @dataclass
+class Mission:
+    """Represents a vehicle with a model and a trajectory."""
+
+    traj: QGCTraj
+    delay: int  # in sec
+
+
+@dataclass
 class QGCVehicle:
     """Represents a vehicle with a model and a trajectory."""
 
     home: GRAPose
-    mtraj: QGCTraj
-    mission_delay: int  # in sec
+    mission: Mission
 
 
 QGCVehicles = list[QGCVehicle]
+Missions = list[Mission]
 
 
 class ConfigQGC(ConfigVis[QGCVehicle]):
@@ -66,10 +73,9 @@ class ConfigQGC(ConfigVis[QGCVehicle]):
         home_path = poses(base_home, base_path)
         path = poses(self.origin, home_path)
         home = pose(self.origin, base_home)
-        mtraj = ConfigQGC.create_mtraj(traj=path, color=color)
-        self.add_vehicle(
-            QGCVehicle(home=home, mtraj=mtraj, mission_delay=mission_delay)
-        )
+        traj = ConfigQGC.create_mtraj(traj=path, color=color)
+        mission = Mission(traj=traj, delay=mission_delay)
+        self.add_vehicle(QGCVehicle(home=home, mission=mission))
 
     def __str__(self) -> str:
         lines = [
@@ -78,8 +84,8 @@ class ConfigQGC(ConfigVis[QGCVehicle]):
             f"  vehicles ({len(self.vehicles)}):",
         ]
         for v in self.vehicles:
-            lines.append(f"      trajectory ({len(v.mtraj)} waypoints):")
-            for wp in v.mtraj:
+            lines.append(f"      trajectory ({len(v.mission.traj)} waypoints):")
+            for wp in v.mission.traj:
                 lines.append(f"        {wp}")
         return "\n".join(lines)
 
@@ -90,20 +96,12 @@ class ConfigQGC(ConfigVis[QGCVehicle]):
 
         # Plot each UAV's path
         for veh in self.vehicles:  # add more colors if needed
-            for i, wp in enumerate(veh.mtraj):
+            for i, wp in enumerate(veh.mission.traj):
                 draw_grapose(m, wp.pos, f"pos_{i}", wp.color)
 
         # Plot origin
         draw_grapose(m, self.origin, "Origin", origin_color)
         return m
-
-    def save_missions(self, missions_name: str = "mission"):
-        """Save the missions for all the vehicles."""
-        for i, veh in enumerate(self.vehicles):
-            traj = [wp.pos for wp in veh.mtraj]
-            save_mission(
-                name=f"{missions_name}_{i + 1}", poses=traj, delay=veh.mission_delay
-            )
 
     @staticmethod
     def create_mtraj(

@@ -10,6 +10,7 @@ format.
 import time
 from functools import partial
 
+from config import DATA_PATH
 from mavlink.customtypes.connection import MAVConnection
 from mavlink.customtypes.mission import MissionLoader
 from mavlink.enums import CmdNav, MissionResult
@@ -49,7 +50,7 @@ def exec_upload_mission(
     """Execute the upload of a mission to the UAV."""
     sysid, compid = conn.target_system, conn.target_component
     mission = MissionLoader(sysid, compid)
-    count = mission.load(f"plan/missions/{mission_name}.waypoints")
+    count = mission.load(str(DATA_PATH / f"{mission_name}.waypoints"))
     if verbose:
         print(f"Vehicle {conn.target_system}: ✅ {count} waypoints read.")
     if verbose == 2:

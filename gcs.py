@@ -4,12 +4,13 @@ instances.
 """
 
 import argparse
-import ast
+import json
 import pickle
+from typing import TypedDict
 
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
-from config import BasePort
+from config import DATA_PATH, BasePort
 from mavlink.customtypes.connection import MAVConnection
 from mavlink.customtypes.location import GRAs
 from oracle import Oracle
@@ -17,9 +18,12 @@ from oracle import Oracle
 
 def main():
     """Run a GCS instance to monitor UAVs."""
-    gcs_name, system_ids, port_offsets = parse_arguments()
+    gcs_name = parse_arguments()
+    gcs_uavs = GCS.load_config(gcs_name)["uavs"]
     conns: dict[int, MAVConnection] = {}
-    for sysid, port_offset in zip(system_ids, port_offsets):
+    for uav in gcs_uavs:
+        sysid = uav["sysid"]
+        port_offset = uav["port_offset"]
         port = BasePort.GCS + port_offset
         conn: MAVConnection = connect(f"udp:127.0.0.1:{port}")  # type: ignore
         conn.wait_heartbeat()
@@ -33,11 +37,25 @@ def main():
             if gcs.is_plan_done(sysid):
                 gcs.remove(sysid)
     print(f"✅ All UAVs assigned to GCS {gcs_name} have completed their mission.")
-    trajectory_file = f"trajectories_{gcs_name}.pkl"
+    trajectory_file = DATA_PATH / f"trajectories_{gcs_name}.pkl"
     with open(trajectory_file, "wb") as file:
         pickle.dump(gcs.paths, file)
 
     print(f"💾 Trajectories saved to '{trajectory_file}'.")
+
+
+class UAVGCSConfig(TypedDict):
+    """TypedDict for UAV configuration in the GCS."""
+
+    sysid: int
+    port_offset: int
+
+
+class GCSConfig(TypedDict):
+    """Ground Control Station (GCS) Configuration."""
+
+    name: str
+    uavs: list[UAVGCSConfig]
 
 
 class GCS(Oracle):
@@ -53,34 +71,26 @@ class GCS(Oracle):
         for sysid, pos in self.pos.items():
             self.paths[sysid].append(pos)
 
+    @staticmethod
+    def load_config(name: str) -> GCSConfig:
+        """Load GCS configuration from a JSON file via command line argument."""
+        config_path = DATA_PATH / f"gcs_config_{name}.json"
+        with config_path.open() as f:
+            gcs_config: GCSConfig = json.load(f)
+        return gcs_config
 
-def parse_arguments() -> tuple[str, list[int], list[int]]:
+
+def parse_arguments() -> str:
     """Parse List of GCS system IDs and GCS name."""
     parser = argparse.ArgumentParser(description="Single GCS")
-    parser.add_argument(
-        "--sysids",
-        type=ast.literal_eval,  # convert test to python (list)
-        required=True,
-        help='ystem ID Lsit of the UAVs belonging to the GCS (e.g. "[1,3,4]")',
-    )
-    parser.add_argument(
-        "--port-offsets",
-        type=ast.literal_eval,
-        required=True,
-        help='Port offset list for the UAVs belonging to the GCS (e.g. "[0,10,30]")',
-    )
     parser.add_argument(
         "--name",
         type=str,
         required=True,
-        help="System ID Lsit of the UAVs belonging to the GCS (e.g., [1, 3,4])",
+        help="Ground Control Station(GCS) name",
     )
     args = parser.parse_args()
-    return (
-        args.name,
-        args.sysids,
-        args.port_offsets,
-    )
+    return args.name
 
 
 if __name__ == "__main__":

@@ -21,6 +21,7 @@ ROOT = Path(__file__).parent
 LOGS_PATH = (ROOT / "ardupilot_logs").resolve()
 VEH_PARAMS_PATH = (ROOT / "params/vehicle.parm").resolve()
 SIM_PARAMS_PATH = (ROOT / "params/simulation.py").resolve()
+DATA_PATH = (ROOT / "data").resolve()
 
 # Ensure logs directory exists (can be cleaned later)
 LOGS_PATH.mkdir(parents=True, exist_ok=True)

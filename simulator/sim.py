@@ -5,26 +5,31 @@ Simulation script that launches the full setup:
 3. Optionally a simulator (None, QGroundControl, or Gazebo).
 """
 
-import platform
+import json
 import socket
 from concurrent import futures
 from itertools import product
-from subprocess import Popen
+from pathlib import Path
 from typing import Literal, TypeVar
 
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
 from config import (
     ARDUPILOT_VEHICLE_PATH,
+    DATA_PATH,
     ENV_CMD_ARP,
     ENV_CMD_PYT,
     LOGS_PATH,
     VEH_PARAMS_PATH,
     BasePort,
 )
+from helpers import create_process, reset_folder
 from mavlink.customtypes.connection import MAVConnection
+from mavlink.util import save_mission
 from oracle import Oracle
 from simulator.visualizer import Visualizer
+
+from .QGroundControl.config import Missions
 
 Terminals = Literal["launcher", "veh", "logic", "proxy", "gcs"]
 
@@ -48,6 +53,8 @@ class Simulator:
     def __init__(
         self,
         visualizers: list[Visualizer[V]],
+        missions: Missions,
+        gcs_sysids: dict[str, list[int]],
         terminals: list[Terminals] = [],
         verbose: int = 1,
     ):
@@ -56,28 +63,46 @@ class Simulator:
         self.n_vehs = visualizers[0].config.n_vehicles
         self.verbose = verbose
         self.port_offsets: list[int] = []
+        self.gcs_sysids = gcs_sysids
+        self.missions = missions
 
-    def launch(self, gcs_sysids: dict[str, list[int]]) -> Oracle:
+    def launch(self) -> Oracle:
         """Launch vehicle instances and the optional simulator."""
         # Simulator.save_gcs_sysids(gcs_sysids)
+        reset_folder(DATA_PATH)
+        self.save_missions()
         self.port_offsets = self._find_port_offsets()
+        self._save_gcs_configs(DATA_PATH)
         for visual in self.visuals:
             if not visual.delay:
                 visual.launch(self.port_offsets, self.verbose)
-        oracle = self._launch_vehicles(gcs_sysids)
+        oracle = self._launch_vehicles()
         for visual in self.visuals:
             if visual.delay:
                 visual.launch(self.port_offsets, self.verbose)
 
         return oracle
 
-    # @staticmethod
-    # def save_gcs_sysids(gcs_sysids: dict[str, list[int]]):
-    #     for gcs_name, sysids in gcs_sysids.items():
-    #         with open(f"sysids_{gcs_name}.txt", "w") as f:
-    #             f.write(str(sysids))
+    def save_missions(self):
+        """Save the missions for all the vehicles."""
+        for i, mission in enumerate(self.missions):
+            traj = [wp.pos for wp in mission.traj]
+            save_mission(name=f"mission_{i + 1}", poses=traj, delay=mission.delay)
 
-    def _launch_vehicles(self, gcs_sysids: dict[str, list[int]]) -> Oracle:
+    def _save_gcs_configs(self, folder_name: Path):
+        for gcs_name, sysids in self.gcs_sysids.items():
+            gcs_config = {
+                "name": gcs_name,
+                "uavs": [
+                    {"sysid": sysid, "port_offset": self.port_offsets[sysid - 1]}
+                    for sysid in sysids
+                ],
+            }
+            config_path = folder_name / f"gcs_config_{gcs_name}.json"
+            with config_path.open("w") as f:
+                json.dump(gcs_config, f, indent=2)
+
+    def _launch_vehicles(self) -> Oracle:
         """Launch ArduPilot and logic processes for each UAV."""
         # with futures.ThreadPoolExecutor() as executor:
         #     orc_conns = list(executor.map(self._launch_uav, range(self.n_vehs)))
@@ -92,14 +117,9 @@ class Simulator:
                 orc_conns[conn.target_system] = conn
 
         oracle = Oracle(orc_conns, name=self.oracle_name)
-        for gcs_name, sysids in gcs_sysids.items():
-            gcs_cmd = (
-                f'python3 gcs.py --name "{gcs_name}" '
-                f'--sysid "{sysids}" '
-                f'--port-offsets "'
-                f'{[self.port_offsets[sysid - 1] for sysid in sysids]}" '
-            )
-            p = Simulator.create_process(
+        for gcs_name in self.gcs_sysids.keys():
+            gcs_cmd = f'python3 gcs.py --name "{gcs_name}" '
+            p = create_process(
                 gcs_cmd,
                 after="exec bash",
                 visible=self.terminals.get("gcs", False),
@@ -120,7 +140,7 @@ class Simulator:
             + (" --terminal" if self.terminals.get("veh", False) else "")
         )
         veh_cmd += self.visuals[j].add_vehicle_cmd(i)
-        p = Simulator.create_process(
+        p = create_process(
             veh_cmd,
             after="exec bash",
             visible=self.terminals.get("launcher", False),
@@ -134,7 +154,7 @@ class Simulator:
             f"--port-offset={self.port_offsets[i]} "
             f"--verbose {self.verbose} "
         )
-        p = Simulator.create_process(
+        p = create_process(
             logic_cmd,
             after="exec bash",
             visible=self.terminals.get("logic", False),
@@ -148,7 +168,7 @@ class Simulator:
             f"--port-offset={self.port_offsets[i]} "
             f"--verbose {self.verbose}"
         )
-        p = Simulator.create_process(
+        p = create_process(
             proxy_cmd,
             after="exec bash",
             visible=self.terminals.get("proxy", False),
@@ -201,32 +221,3 @@ class Simulator:
     def _launch_visualizer(self) -> None:
         """Launch a visual simulator or GUI application if configured."""
         print("🙈 Running without visualization.")
-
-    @staticmethod
-    def create_process(
-        cmd: str,
-        after: str = "exit",
-        visible: bool = True,
-        title: str = "Terminal",
-        env_cmd: str | None = None,
-    ) -> Popen[bytes]:
-        """Launch a subprocess, optionally in a visible terminal."""
-        bash_cmd = [
-            "bash",
-            "-c",
-            (f"{env_cmd}; " if env_cmd else "") + f"{cmd}; {after}",
-        ]
-        if visible:
-            if platform.system() == "Linux":
-                return Popen(
-                    [
-                        "gnome-terminal",
-                        "--title",
-                        title,
-                        "--geometry=71x10",  # width=100 cols, height=30 rows
-                        "--",
-                    ]
-                    + bash_cmd
-                )
-            raise OSError("Unsupported OS for visible terminal mode.")
-        return Popen(bash_cmd)

@@ -11,7 +11,7 @@ import pymavlink.dialects.v20.ardupilotmega as mavlink
 from pymavlink import mavutil
 
 # First Party imports
-from config import BasePort
+from config import DATA_PATH, BasePort
 from mavlink.customtypes.connection import MAVConnection
 from mavlink.enums import Autopilot, Type
 from mavlink.util import connect
@@ -204,7 +204,7 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
         verbose=verbose,
     )
 
-    log_file = open(f"proxy_{sysid}.log", "w")
+    log_file = open(DATA_PATH / f"proxy_{sysid}.log", "w")
     log_writer = csv.writer(log_file)
     log_writer.writerow(
         ["sender", "recipient", "time_received", "time_sent", "message"]

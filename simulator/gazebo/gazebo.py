@@ -20,10 +20,10 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from config import ARDUPILOT_GAZEBO_MODELS, ENV_CMD_GAZ
+from helpers import create_process
 from helpers.change_coordinates import heading_to_yaw
 from mavlink.customtypes.location import XYZRPY, GRAPose
 from simulator.gazebo.config import COLOR_MAP, ConfigGazebo, GazVehicle, GazWP
-from simulator.sim import Simulator
 from simulator.visualizer import Visualizer
 
 
@@ -54,9 +54,7 @@ class Gazebo(Visualizer[GazVehicle]):
         base_models = [f"{veh.model}_{veh.color}" for veh in self.config.vehicles]
         self._generate_drone_models_from_bases(base_models, base_port_in=9002, step=10)
         updated_world = self._update_world(self.config.world_path)
-        Simulator.create_process(
-            f"gazebo {updated_world}", visible=False, env_cmd=ENV_CMD_GAZ
-        )
+        create_process(f"gazebo {updated_world}", visible=False, env_cmd=ENV_CMD_GAZ)
         print("🖥️ Gazebo launched for realistic simulation and 3D visualization.")
 
     def _generate_drone_models_from_bases(

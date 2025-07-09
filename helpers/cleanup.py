@@ -2,6 +2,7 @@
 
 import os
 import shutil
+from pathlib import Path
 from typing import List, Literal
 
 from config import LOGS_PATH
@@ -49,3 +50,11 @@ def clean(victims: All | List[str] = "all", sim_out: bool = True):
     delete_missions()
     if sim_out and LOGS_PATH.exists():
         shutil.rmtree(LOGS_PATH)
+
+
+def reset_folder(path: str | Path):
+    """Ensure a clean folder by deleting and recreating it."""
+    path = Path(path)
+    if path.exists():
+        shutil.rmtree(path)
+    path.mkdir()
