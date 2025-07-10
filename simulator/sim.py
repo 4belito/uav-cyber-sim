@@ -137,7 +137,7 @@ class Simulator:
 
         oracle = Oracle(orc_conns, name=self.oracle_name, verbose=self.verbose)
         for gcs_name in self.gcs_sysids.keys():
-            gcs_cmd = f'python3 gcs.py --name "{gcs_name}" --verbose {self.verbose}'
+            gcs_cmd = f'python3 gcs.py --config-path "{DATA_PATH / f"gcs_config_{gcs_name}.json"}" --verbose {self.verbose}'
             p = create_process(
                 gcs_cmd,
                 after="exec bash",
@@ -172,7 +172,10 @@ class Simulator:
         if self.verbose:
             print(f"🚀 ArduPilot SITL vehicle {sysid} launched (PID {p.pid})")
 
-        logic_cmd = f"python3 logic.py --sysid {sysid} " f"--verbose {self.verbose} "
+        logic_cmd = (
+            f'python3 logic.py --config-path "{DATA_PATH / f"logic_config_{sysid}.json"}" '
+            f"--verbose {self.verbose} "
+        )
         p = create_process(
             logic_cmd,
             after="exec bash",

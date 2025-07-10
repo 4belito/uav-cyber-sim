@@ -36,9 +36,9 @@ heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
 
 def main():
     """Entry point for the Multi-UAV MAVLink Proxy."""
-    system_id, verbose = parse_arguments()
-    port_offset = VehicleLogic.load_config(system_id)["port_offset"]
-    start_proxy(system_id, port_offset, verbose=verbose or 1)
+    config_path, verbose = parse_arguments()
+    config = VehicleLogic.load_config(config_path)
+    start_proxy(config["sysid"], config["port_offset"], verbose=verbose or 1)
 
 
 # taken from mavproxy
@@ -202,22 +202,21 @@ class VehicleLogic:
             return None
 
     @staticmethod
-    def load_config(sysid: int) -> LogicConfig:
-        """Load GCS configuration from a JSON file via command line argument."""
-        config_path = DATA_PATH / f"logic_config_{sysid}.json"
-        with config_path.open() as f:
+    def load_config(config_path: str) -> LogicConfig:
+        """Load logic configuration from a JSON file."""
+        with open(config_path) as f:
             logic_config: LogicConfig = json.load(f)
         return logic_config
 
 
-def parse_arguments() -> tuple[int, int | None]:
+def parse_arguments() -> tuple[str, int | None]:
     """Parse a single system ID."""
     parser = argparse.ArgumentParser(description="Single UAV MAVLink Proxy")
     parser.add_argument(
-        "--sysid",
-        type=int,
+        "--config-path",
+        type=str,
         required=True,
-        help="System ID of the UAV (e.g., 1)",
+        help="Path to the logic configuration file (e.g. logic_config_1.json)",
     )
     parser.add_argument(
         "--verbose",
@@ -226,7 +225,7 @@ def parse_arguments() -> tuple[int, int | None]:
         help="verbosity level (e.g. 0,1,2,3)",
     )
     args = parser.parse_args()
-    return (args.sysid, args.verbose)
+    return (args.config_path, args.verbose)
 
 
 if __name__ == "__main__":

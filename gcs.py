@@ -18,8 +18,10 @@ from oracle import Oracle
 
 def main():
     """Run a GCS instance to monitor UAVs."""
-    gcs_name, verbose = parse_arguments()
-    gcs_uavs = GCS.load_config(gcs_name)["uavs"]
+    config_path, verbose = parse_arguments()
+    config = GCS.load_config(config_path)
+    gcs_name = config["name"]
+    gcs_uavs = config["uavs"]
     conns: dict[int, MAVConnection] = {}
     for uav in gcs_uavs:
         sysid = uav["sysid"]
@@ -76,10 +78,9 @@ class GCS(Oracle):
             self.paths[sysid].append(pos)
 
     @staticmethod
-    def load_config(name: str) -> GCSConfig:
+    def load_config(config_path: str) -> GCSConfig:
         """Load GCS configuration from a JSON file via command line argument."""
-        config_path = DATA_PATH / f"gcs_config_{name}.json"
-        with config_path.open() as f:
+        with open(config_path) as f:
             gcs_config: GCSConfig = json.load(f)
         return gcs_config
 
@@ -88,10 +89,10 @@ def parse_arguments() -> tuple[str, int]:
     """Parse List of GCS system IDs and GCS name."""
     parser = argparse.ArgumentParser(description="Single GCS")
     parser.add_argument(
-        "--name",
+        "--config-path",
         type=str,
         required=True,
-        help="Ground Control Station(GCS) name",
+        help="Path to the GCS configuration file (e.g. gcs_config_blue.json)",
     )
     parser.add_argument(
         "--verbose",
@@ -101,7 +102,7 @@ def parse_arguments() -> tuple[str, int]:
         help="Verbosity level (0=silent, 1=normal, 2=debug)",
     )
     args = parser.parse_args()
-    return args.name, args.verbose
+    return args.config_path, args.verbose
 
 
 if __name__ == "__main__":
