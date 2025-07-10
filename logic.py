@@ -2,8 +2,10 @@
 
 # Third Party imports
 import argparse
+import json
 import time
 from enum import StrEnum
+from typing import TypedDict
 
 from pymavlink import mavutil
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
@@ -34,7 +36,8 @@ heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
 
 def main():
     """Entry point for the Multi-UAV MAVLink Proxy."""
-    system_id, port_offset, verbose = parse_arguments()
+    system_id, verbose = parse_arguments()
+    port_offset = VehicleLogic.load_config(system_id)["port_offset"]
     start_proxy(system_id, port_offset, verbose=verbose or 1)
 
 
@@ -114,6 +117,13 @@ def send_done_until_ack(conn: MAVConnection, idx: int, max_tries: float = float(
     print("⚠️ No ACK received after max attempts.")
 
 
+class LogicConfig(TypedDict):
+    """UAV logic configuration."""
+
+    sysid: int
+    port_offset: int
+
+
 class VehicleMode(StrEnum):
     """Defines operational modes for the UAV."""
 
@@ -191,8 +201,16 @@ class VehicleLogic:
         else:
             return None
 
+    @staticmethod
+    def load_config(sysid: int) -> LogicConfig:
+        """Load GCS configuration from a JSON file via command line argument."""
+        config_path = DATA_PATH / f"logic_config_{sysid}.json"
+        with config_path.open() as f:
+            logic_config: LogicConfig = json.load(f)
+        return logic_config
 
-def parse_arguments() -> tuple[int, int, int | None]:
+
+def parse_arguments() -> tuple[int, int | None]:
     """Parse a single system ID."""
     parser = argparse.ArgumentParser(description="Single UAV MAVLink Proxy")
     parser.add_argument(
@@ -207,11 +225,8 @@ def parse_arguments() -> tuple[int, int, int | None]:
         required=False,
         help="verbosity level (e.g. 0,1,2,3)",
     )
-    parser.add_argument(
-        "--port-offset", type=int, required=True, help="Port offset to use (e.g. 10)"
-    )
     args = parser.parse_args()
-    return (args.sysid, args.port_offset, args.verbose)
+    return (args.sysid, args.verbose)
 
 
 if __name__ == "__main__":

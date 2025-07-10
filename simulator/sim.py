@@ -74,6 +74,7 @@ class Simulator:
         reset_folder(DATA_PATH)
         self.save_missions()
         self.port_offsets = self._find_port_offsets()
+        self._save_logic_configs(DATA_PATH)
         self._save_gcs_configs(DATA_PATH)
         for visual in self.visuals:
             if not visual.delay:
@@ -94,6 +95,18 @@ class Simulator:
                 poses=traj,
                 delay=mission.delay,
             )
+
+    def _save_logic_configs(self, folder_name: Path):
+        """Save the logic configurations for each UAV."""
+        for i in range(self.n_vehs):
+            sysid = i + 1
+            logic_config = {
+                "sysid": sysid,
+                "port_offset": self.port_offsets[i],
+            }
+            config_path = folder_name / f"logic_config_{sysid}.json"
+            with config_path.open("w") as f:
+                json.dump(logic_config, f, indent=2)
 
     def _save_gcs_configs(self, folder_name: Path):
         for gcs_name, sysids in self.gcs_sysids.items():
@@ -159,11 +172,7 @@ class Simulator:
         if self.verbose:
             print(f"🚀 ArduPilot SITL vehicle {sysid} launched (PID {p.pid})")
 
-        logic_cmd = (
-            f"python3 logic.py --sysid {sysid} "
-            f"--port-offset={self.port_offsets[i]} "
-            f"--verbose {self.verbose} "
-        )
+        logic_cmd = f"python3 logic.py --sysid {sysid} " f"--verbose {self.verbose} "
         p = create_process(
             logic_cmd,
             after="exec bash",
