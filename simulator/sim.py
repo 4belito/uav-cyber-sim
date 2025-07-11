@@ -10,7 +10,7 @@ import socket
 from concurrent import futures
 from itertools import product
 from pathlib import Path
-from typing import Literal, TypeVar
+from typing import Callable, Literal, TypeVar
 
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
@@ -55,6 +55,12 @@ class Simulator:
         visualizers: list[Visualizer[V]],
         missions: Missions,
         gcs_sysids: dict[str, list[int]],
+        logic_cmd: Callable[[int, str, int], str] = lambda _, config_path, verbose: (
+            f'python3 logic.py --config-path "{config_path}" ' f"--verbose {verbose} "
+        ),
+        gcs_cmd: Callable[
+            [str, str, int], str
+        ] = lambda _, config_path, verbose: f'python3 gcs.py --config-path "{config_path}" --verbose {verbose}',
         terminals: list[SimProcess] = [],
         supress_output: list[SimProcess] = ["launcher"],
         verbose: int = 1,
@@ -67,6 +73,8 @@ class Simulator:
         self.port_offsets: list[int] = []
         self.gcs_sysids = gcs_sysids
         self.missions = missions
+        self.logic_cmd = logic_cmd
+        self.gcs_cmd = gcs_cmd
 
     def launch(self) -> Oracle:
         """Launch vehicle instances and the optional simulator."""
@@ -137,7 +145,9 @@ class Simulator:
 
         oracle = Oracle(orc_conns, name=self.oracle_name, verbose=self.verbose)
         for gcs_name in self.gcs_sysids.keys():
-            gcs_cmd = f'python3 gcs.py --config-path "{DATA_PATH / f"gcs_config_{gcs_name}.json"}" --verbose {self.verbose}'
+            gcs_cmd = self.gcs_cmd(
+                gcs_name, str(DATA_PATH / f"gcs_config_{gcs_name}.json"), self.verbose
+            )
             p = create_process(
                 gcs_cmd,
                 after="exec bash",
@@ -172,9 +182,8 @@ class Simulator:
         if self.verbose:
             print(f"🚀 ArduPilot SITL vehicle {sysid} launched (PID {p.pid})")
 
-        logic_cmd = (
-            f'python3 logic.py --config-path "{DATA_PATH / f"logic_config_{sysid}.json"}" '
-            f"--verbose {self.verbose} "
+        logic_cmd = self.logic_cmd(
+            sysid, str(DATA_PATH / f"logic_config_{sysid}.json"), self.verbose
         )
         p = create_process(
             logic_cmd,
