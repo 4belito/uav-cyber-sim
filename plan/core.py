@@ -124,7 +124,7 @@ class Step(MissionElement):
     def execute(self) -> None:
         """Execute the step and change state to IN_PROGRESS."""
         self.exec_fn(self.conn, self.verbose)
-        if self.verbose:
+        if self.verbose > 1:
             print(f"Vehicle {self.sysid}: ▶️ {self.class_name} Started: {self.name}")
         self.state = State.IN_PROGRESS
 
@@ -135,7 +135,7 @@ class Step(MissionElement):
             self.curr_pos = curr_pos
         if answer:
             self.state = State.DONE
-            if self.verbose:
+            if self.verbose > 1:
                 print(f"Vehicle {self.sysid}: ✅ {self.class_name} Done: {self.name}")
 
     def act(self):
@@ -223,7 +223,7 @@ class Action(MissionElement, Generic[T]):
 
     def _start_action(self):
         self.state = State.IN_PROGRESS
-        if self.verbose:
+        if self.verbose > 1:
             print(
                 f"Vehicle {self.sysid}: ▶️ {self.class_name} "
                 f"Started: {self.emoji} {self.name}"

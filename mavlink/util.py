@@ -146,7 +146,7 @@ def save_mission(path: Path, poses: GRAs, delay: int = 0) -> None:
 
         # Return to Launch (RTL)
         last = poses[-1]
-        rtl_index = len(poses) + 1
+        rtl_index = len(poses) + takeoff_idx
         f.write(
             f"{rtl_index}\t0\t{REL_ALT}\t{LAND}\t0\t0\t0\t0\t{last.lat:.7f}\t{last.lon:.7f}\t0.0\t1\n"
         )

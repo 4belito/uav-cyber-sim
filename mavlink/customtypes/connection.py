@@ -31,7 +31,7 @@ class MAVConnection(Protocol):
     def recv_match(
         self,
         type: Literal["HEARTBEAT"],
-        timeout: float | None = ...,
+        blocking: bool | None = ...,
     ) -> mavlink.MAVLink_heartbeat_message | None: ...
 
     @overload

@@ -8,7 +8,6 @@ Simulation script that launches the full setup:
 import json
 import socket
 from concurrent import futures
-from itertools import product
 from pathlib import Path
 from typing import Callable, Literal, TypeVar
 
@@ -56,11 +55,11 @@ class Simulator:
         missions: Missions,
         gcs_sysids: dict[str, list[int]],
         logic_cmd: Callable[[int, str, int], str] = lambda _, config_path, verbose: (
-            f'python3 logic.py --config-path "{config_path}" ' f"--verbose {verbose} "
+            f'python3 logic.py --config-path "{config_path}" --verbose {verbose} '
         ),
-        gcs_cmd: Callable[
-            [str, str, int], str
-        ] = lambda _, config_path, verbose: f'python3 gcs.py --config-path "{config_path}" --verbose {verbose}',
+        gcs_cmd: Callable[[str, str, int], str] = lambda _,
+        config_path,
+        verbose: f'python3 gcs.py --config-path "{config_path}" --verbose {verbose}',
         terminals: list[SimProcess] = [],
         supress_output: list[SimProcess] = ["launcher"],
         verbose: int = 1,
@@ -131,17 +130,22 @@ class Simulator:
 
     def _launch_vehicles(self) -> Oracle:
         """Launch ArduPilot and logic processes for each UAV."""
-        # with futures.ThreadPoolExecutor() as executor:
-        #     orc_conns = list(executor.map(self._launch_uav, range(self.n_vehs)))
-
-        args = list(product(range(self.n_vehs), range(len(self.visuals))))
-
         with futures.ThreadPoolExecutor() as executor:
-            futures_list = [executor.submit(self._launch_uav, i, j) for i, j in args]
-            orc_conns: dict[int, MAVConnection] = {}
-            for f in futures_list:
-                conn = f.result()
-                orc_conns[conn.target_system] = conn
+            orc_conns = dict(
+                zip(
+                    range(self.n_vehs),
+                    executor.map(self._launch_uav, range(self.n_vehs)),
+                )
+            )
+
+        # args = list(product(range(self.n_vehs), range(len(self.visuals))))
+
+        # with futures.ThreadPoolExecutor() as executor:
+        #     futures_list = [executor.submit(self._launch_uav, i, j) for i, j in args]
+        #     orc_conns: dict[int, MAVConnection] = {}
+        #     for f in futures_list:
+        #         conn = f.result()
+        #         orc_conns[conn.target_system] = conn
 
         oracle = Oracle(orc_conns, name=self.oracle_name, verbose=self.verbose)
         for gcs_name in self.gcs_sysids.keys():
@@ -160,7 +164,7 @@ class Simulator:
                 print(f"🚀 GCS {gcs_name} launched (PID {p.pid})")
         return oracle
 
-    def _launch_uav(self, i: int, j: int):
+    def _launch_uav(self, i: int):  # , j: int
         sysid = i + 1
         veh_cmd = (
             f"python3 {ARDUPILOT_VEHICLE_PATH}"
@@ -170,7 +174,7 @@ class Simulator:
             f" --port-offset={self.port_offsets[i]}"
             + (" --terminal" if self.terminals.get("veh", False) else "")
         )
-        veh_cmd += self.visuals[j].add_vehicle_cmd(i)
+        veh_cmd += self.visuals[0].add_vehicle_cmd(i)  # j
         p = create_process(
             veh_cmd,
             after="exec bash",
