@@ -35,6 +35,7 @@ class Mission:
 
     traj: QGCTraj
     delay: int  # in sec
+    n_items: int
 
 
 @dataclass
@@ -74,7 +75,8 @@ class ConfigQGC(ConfigVis[QGCVehicle]):
         path = poses(self.origin, home_path)
         home = pose(self.origin, base_home)
         traj = ConfigQGC.create_mtraj(traj=path, color=color)
-        mission = Mission(traj=traj, delay=mission_delay)
+        n_items = len(traj) + 2 + int(mission_delay > 0)
+        mission = Mission(traj=traj, delay=mission_delay, n_items=n_items)
         self.add_vehicle(QGCVehicle(home=home, mission=mission))
 
     def __str__(self) -> str:

@@ -27,6 +27,7 @@ from plan.core import Action, ActionNames, Step, StepFailed
 
 
 def make_pre_arm(
+    delay: float = 0,
     ekf_flags: tuple[EkfStatus, ...] = (
         EkfStatus.ATTITUDE,
         EkfStatus.VELOCITY_HORIZ,
@@ -65,6 +66,8 @@ def make_pre_arm(
         exec_fn=partial(ask_msg, msg_id=MsgID.SYS_STATUS),
         onair=False,
     )
+    if delay:
+        pre_arm.add(Step.make_wait(t=delay))
     for step in [disarm, ekf_status, gps, system]:
         pre_arm.add(step)
     return pre_arm

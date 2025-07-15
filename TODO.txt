@@ -1,9 +1,11 @@
 TODO:
 - Check UDP conections( some times some uavs does not complete its mission)
 
--List of posible cyber attacks
--collect Sensors measurements
--Study GAZEBO Model
+
+- collect Sensors measurements
+- study GAZEBO Model
+- Apply delay between upload mission and 
+- clean all the old notations
 - Add support to use different UAV models other than Iris.
 
 - Fix: [Errno 111] Connection refused — sleeping.
@@ -12,7 +14,8 @@ TODO:
 - Add a parameter for waypoint reach distance, similar to Guided mode.
 
 
-- Add collision avoidance and dynamic planning capabilities (some old code is commented out in vehicle_logic.py and oracle.py).
+- Add collision avoidance and dynamic planning capabilities (some old code is commented out in vehicle_logic.py and oracle.py)
 - Improve collision avoidance — ideally, use ArduPilot’s built-in algorithm or implement a state-of-the-art alternative.
 
+- List of posible cyber attacks
 

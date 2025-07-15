@@ -195,7 +195,7 @@ class Plan(Action[Action[Step]]):
         plan.add(make_land(final_wp=land_wp))
         return plan
 
-    # TODO Improve this for no repeating code
+    # TODO Add concatenate plan/actiom method to no repeat code
 
     @classmethod
     def hover(
@@ -222,18 +222,31 @@ class Plan(Action[Action[Step]]):
         cls,
         name: str,
         mission_path: str,
+        mission_delay: float = 0,
         from_scratch: bool = True,
-        monitor: bool = True,
+        monitored_items: list[int] = [],
     ):
         """Create a plan to execute a mission in auto mode."""
         plan = cls(name)
         plan.add(make_upload_mission(mission_path, from_scratch))
-        plan.add(make_pre_arm())
+        plan.add(make_pre_arm(delay=mission_delay))
         plan.add(make_set_mode(CopterMode.GUIDED))
         plan.add(make_arm())
         plan.add(make_start_mission())
-        if monitor:
-            plan.add(make_monitoring())
+        plan.add(make_monitoring(monitored_items))
+        return plan
+
+    @classmethod
+    def arm(
+        cls,
+        name: str,
+        mission_delay: float = 0,
+    ):
+        """Create a plan to execute a mission in auto mode."""
+        plan = cls(name)
+        plan.add(make_pre_arm(delay=mission_delay))
+        plan.add(make_set_mode(CopterMode.GUIDED))
+        plan.add(make_arm())
         return plan
 
 

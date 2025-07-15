@@ -38,7 +38,7 @@ def main():
     """Entry point for the Multi-UAV MAVLink Proxy."""
     config_path, verbose = parse_arguments()
     config = VehicleLogic.load_config(config_path)
-    start_proxy(config["sysid"], config["port_offset"], verbose=verbose or 1)
+    start_proxy(config, verbose=verbose or 1)
 
 
 # taken from mavproxy
@@ -57,8 +57,19 @@ def create_connection_tcp(base_port: int, offset: int) -> MAVConnection:
     return conn
 
 
-def start_proxy(sysid: int, port_offset: int, verbose: int = 1):
+class LogicConfig(TypedDict):
+    """UAV logic configuration."""
+
+    sysid: int
+    port_offset: int
+    monitored_items: list[int]
+
+
+def start_proxy(config: LogicConfig, verbose: int = 1):
     """Start bidirectional proxy for a given UAV system_id."""
+    sysid = config["sysid"]
+    port_offset = config["port_offset"]
+    monitored_items = config["monitored_items"]
     i = sysid - 1
     vh_conn = create_connection_tcp(base_port=BasePort.VEH, offset=port_offset)
     cs_conn = create_connection_udp(base_port=BasePort.GCS, offset=port_offset)
@@ -68,7 +79,9 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1):
         vh_conn,
         plan=(
             Plan.auto(
-                name="auto", mission_path=str(DATA_PATH / f"mission_{sysid}.waypoints")
+                name="auto",
+                mission_path=str(DATA_PATH / f"mission_{sysid}.waypoints"),
+                monitored_items=monitored_items,
             )
             if mission
             else plans[i]
@@ -115,13 +128,6 @@ def send_done_until_ack(conn: MAVConnection, idx: int, max_tries: float = float(
         i += 1
 
     print("⚠️ No ACK received after max attempts.")
-
-
-class LogicConfig(TypedDict):
-    """UAV logic configuration."""
-
-    sysid: int
-    port_offset: int
 
 
 class VehicleMode(StrEnum):

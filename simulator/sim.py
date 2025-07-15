@@ -57,9 +57,11 @@ class Simulator:
         logic_cmd: Callable[[int, str, int], str] = lambda _, config_path, verbose: (
             f'python3 logic.py --config-path "{config_path}" --verbose {verbose} '
         ),
-        gcs_cmd: Callable[[str, str, int], str] = lambda _,
-        config_path,
-        verbose: f'python3 gcs.py --config-path "{config_path}" --verbose {verbose}',
+        gcs_cmd: Callable[[str, str, int], str] = lambda _, config_path, verbose: (
+            f'python3 gcs.py --config-path "{config_path}" --verbose {verbose}'
+        ),
+        monitored_mission_items: list[list[int]] | None = None,
+        # visualization
         terminals: list[SimProcess] = [],
         supress_output: list[SimProcess] = ["launcher"],
         verbose: int = 1,
@@ -74,6 +76,9 @@ class Simulator:
         self.missions = missions
         self.logic_cmd = logic_cmd
         self.gcs_cmd = gcs_cmd
+        self.monitored_items = monitored_mission_items or [
+            list(range(1, mission.n_items - 1)) for mission in missions
+        ]
 
     def launch(self) -> Oracle:
         """Launch vehicle instances and the optional simulator."""
@@ -110,6 +115,7 @@ class Simulator:
             logic_config = {
                 "sysid": sysid,
                 "port_offset": self.port_offsets[i],
+                "monitored_items": self.monitored_items[i],
             }
             config_path = folder_name / f"logic_config_{sysid}.json"
             with config_path.open("w") as f:

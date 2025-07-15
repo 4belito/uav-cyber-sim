@@ -5,7 +5,9 @@ Supports chained execution, state tracking, and verbose status reporting.
 
 from __future__ import annotations
 
+import time
 from enum import StrEnum
+from functools import partial
 from typing import Callable, Generic, List, Self, TypeVar, cast
 
 from mavlink.customtypes.connection import MAVConnection
@@ -170,6 +172,21 @@ class Step(MissionElement):
     def noop_check(_conn: MAVConnection, _verbose: int) -> tuple[bool, None]:
         """No checking."""
         return True, None
+
+    @staticmethod
+    def exec_wait(_conn: MAVConnection, _verbose: int, t: float = 0) -> None:
+        """No execution."""
+        time.sleep(t)
+
+    @classmethod
+    def make_wait(cls, t: float = 0) -> Self:
+        """Wait for t seconds."""
+        return cls(
+            "wait",
+            exec_fn=partial(cls.exec_wait, t=t),
+            check_fn=partial(cls.noop_check),
+            onair=False,
+        )
 
 
 T = TypeVar("T", bound=MissionElement)
