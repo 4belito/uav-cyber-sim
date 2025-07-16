@@ -14,7 +14,6 @@ from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 from config import (
     ARDUPILOT_VEHICLE_PATH,
     DATA_PATH,
-    ENV_CMD_ARP,
     ENV_CMD_PYT,
     LOGS_PATH,
     VEH_PARAMS_PATH,
@@ -59,8 +58,8 @@ class Simulator:
         verbose: int = 1,
     ):
         self.visuals = visualizers
-        self.terminals: dict[SimProcess, bool] = dict.fromkeys(terminals, True)
-        self.supress: dict[SimProcess, bool] = dict.fromkeys(supress_output, True)
+        self.terminals: set[SimProcess] = set(terminals)
+        self.suppress: set[SimProcess] = set(supress_output)
         self.n_vehs = visualizers[0].config.n_vehicles
         self.verbose = verbose
         self.port_offsets: list[int] = []
@@ -82,7 +81,7 @@ class Simulator:
         for visual in self.visuals:
             if not visual.delay:
                 visual.launch(self.port_offsets, self.verbose)
-        oracle = self._launch_vehicles()
+        oracle = self._launch_gcses()
         for visual in self.visuals:
             if visual.delay:
                 visual.launch(self.port_offsets, self.verbose)
@@ -117,25 +116,40 @@ class Simulator:
             gcs_config = {
                 "name": gcs_name,
                 "uavs": [
-                    {"sysid": sysid, "port_offset": self.port_offsets[sysid - 1]}
+                    {
+                        "sysid": sysid,
+                        "port_offset": self.port_offsets[sysid - 1],
+                        "ardupilot_cmd": (
+                            f"python3 {ARDUPILOT_VEHICLE_PATH}"
+                            f" -v ArduCopter -I{sysid - 1} --sysid {sysid} --no-rebuild"
+                            f" --use-dir={LOGS_PATH} --add-param-file {VEH_PARAMS_PATH}"
+                            f" --no-mavproxy"
+                            f" --port-offset={self.port_offsets[sysid - 1]}"
+                            + (" --terminal" if "veh" in self.terminals else "")
+                            + self.visuals[0].add_vehicle_cmd(sysid - 1)
+                        ),
+                        "logic_cmd": self.logic_cmd(
+                            sysid,
+                            str(DATA_PATH / f"logic_config_{sysid}.json"),
+                            self.verbose,
+                        ),
+                        "proxy_cmd": (
+                            f"python3 proxy.py --sysid {sysid} "
+                            f"--port-offset={self.port_offsets[sysid - 1]} "
+                            f"--verbose {self.verbose}"
+                        ),
+                    }
                     for sysid in sysids
                 ],
+                "terminals": list(self.terminals),
+                "suppress": list(self.suppress),
             }
             config_path = folder_name / f"gcs_config_{gcs_name}.json"
             with config_path.open("w") as f:
                 json.dump(gcs_config, f, indent=2)
 
-    def _launch_vehicles(self) -> Oracle:
-        """Launch ArduPilot and logic processes for each UAV."""
-        with futures.ThreadPoolExecutor() as executor:
-            orc_conns = dict(
-                zip(
-                    range(self.n_vehs),
-                    executor.map(self._launch_uav, range(self.n_vehs)),
-                )
-            )
-
-        oracle = Oracle(orc_conns, name=self.oracle_name, verbose=self.verbose)
+    def _launch_gcses(self) -> Oracle:
+        """Launch each GCS process and create an Oracle instance."""
         for gcs_name in self.gcs_sysids.keys():
             gcs_cmd = self.gcs_cmd(
                 gcs_name, str(DATA_PATH / f"gcs_config_{gcs_name}.json"), self.verbose
@@ -143,73 +157,32 @@ class Simulator:
             p = create_process(
                 gcs_cmd,
                 after="exec bash",
-                visible=self.terminals.get("gcs", False),
-                suppress_output=self.supress.get("gcs", False),
+                visible="gcs" in self.terminals,
+                suppress_output="gcs" in self.suppress,
                 title=f"GCS: {gcs_name}",
                 env_cmd=ENV_CMD_PYT,
             )  # "exit"
             if self.verbose:
                 print(f"🚀 GCS {gcs_name} launched (PID {p.pid})")
-        return oracle
-
-    def _launch_uav(self, i: int):
-        sysid = i + 1
-        veh_cmd = (
-            f"python3 {ARDUPILOT_VEHICLE_PATH}"
-            f" -v ArduCopter -I{i} --sysid {sysid} --no-rebuild"
-            f" --use-dir={LOGS_PATH} --add-param-file {VEH_PARAMS_PATH}"
-            f" --no-mavproxy"
-            f" --port-offset={self.port_offsets[i]}"
-            + (" --terminal" if self.terminals.get("veh", False) else "")
-        )
-        veh_cmd += self.visuals[0].add_vehicle_cmd(i)  # j
-        p = create_process(
-            veh_cmd,
-            after="exec bash",
-            visible=self.terminals.get("launcher", False),
-            suppress_output=self.supress.get("launcher", False),
-            title=f"ArduPilot SITL Launcher: Vehicle {sysid}",
-            env_cmd=ENV_CMD_ARP,
-        )  # "exit"
-        if self.verbose:
-            print(f"🚀 ArduPilot SITL vehicle {sysid} launched (PID {p.pid})")
-
-        logic_cmd = self.logic_cmd(
-            sysid, str(DATA_PATH / f"logic_config_{sysid}.json"), self.verbose
-        )
-        p = create_process(
-            logic_cmd,
-            after="exec bash",
-            visible=self.terminals.get("logic", False),
-            suppress_output=self.supress.get("logic", False),
-            title=f"UAV logic: Vehicle {sysid}",
-            env_cmd=ENV_CMD_PYT,
-        )  # "exit"
-        if self.verbose:
-            print(f"🚀 UAV logic for vehicle {sysid} launched (PID {p.pid})")
-
-        proxy_cmd = (
-            f"python3 proxy.py --sysid {sysid} "
-            f"--port-offset={self.port_offsets[i]} "
-            f"--verbose {self.verbose}"
-        )
-        p = create_process(
-            proxy_cmd,
-            after="exec bash",
-            visible=self.terminals.get("proxy", False),
-            suppress_output=self.supress.get("proxy", False),
-            title=f"Proxy: Vehicle {sysid}",
-            env_cmd=ENV_CMD_PYT,
-        )  # "exit"
-        if self.verbose:
-            print(f"🚀 Proxy for vehicle {sysid} launched (PID {p.pid})")
 
         ## Connect to oracle
+        with futures.ThreadPoolExecutor() as executor:
+            orc_conns = dict(
+                zip(
+                    range(self.n_vehs),
+                    executor.map(self._connect_to_vehicle, range(self.n_vehs)),
+                )
+            )
+        oracle = Oracle(orc_conns, name=self.oracle_name, verbose=self.verbose)
+        return oracle
+
+    def _connect_to_vehicle(self, i: int) -> MAVConnection:
+        """Connect to a UAV through MAVLink."""
         port = BasePort.ORC + self.port_offsets[i]
         conn: MAVConnection = connect(f"udp:127.0.0.1:{port}")  # type: ignore
         conn.wait_heartbeat()
         if self.verbose:
-            print(f"🔗 UAV logic {sysid} is connected to {self.oracle_name}")
+            print(f"🔗 UAV logic {i + 1} is connected to {self.oracle_name}")
         return conn
 
     def _find_port_offsets(self):
