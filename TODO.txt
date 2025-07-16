@@ -3,6 +3,7 @@ TODO:
 
 
 - collect Sensors measurements
+- modularize upload mission
 - study GAZEBO Model
 - Apply delay between upload mission and 
 - clean all the old notations

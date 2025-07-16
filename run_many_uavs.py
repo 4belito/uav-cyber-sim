@@ -9,10 +9,12 @@ from config import Color
 from mavlink.customtypes.location import ENUPose, GRAPose
 from plan import Plan
 from simulator import (
+    QGC,
     ConfigGazebo,
+    ConfigNovis,
     ConfigQGC,
-    ConfigVis,
-    NoneVisualizer,
+    Gazebo,
+    NoVisualizer,
     Simulator,
 )
 
@@ -27,15 +29,15 @@ def main():
     gra_origin = GRAPose(-35.3633280, 149.1652241, 0, 90)  # east, north, up, heading
     enu_origin = ENUPose(0, 0, gra_origin.alt, gra_origin.heading)
 
-    gcs = [Color.GREEN, Color.ORANGE, Color.RED, Color.BLUE]
-    n_uavs_per_gcs = 30
+    gcs = [Color.RED, Color.ORANGE, Color.GREEN, Color.BLUE]
+    n_uavs_per_gcs = 60
     side_len = 10
     altitude = 5
-    max_delay = 10
+    max_delay = 3
 
     base_homes = ENUPose.list(
         [
-            (i * 200, j * 200, 0, 0)
+            (i * 50, j * 3 * side_len, 0, 0)
             for i in range(len(gcs))
             for j in range(n_uavs_per_gcs)
         ]
@@ -48,7 +50,6 @@ def main():
     colors = [color for color in gcs for _ in range(n_uavs_per_gcs)]
 
     msn_delays = [random.randint(0, max_delay) for _ in base_homes]
-    msn_delays = [1 for _ in base_homes]
 
     # Assign vehicles to GCS (by color)
     gcs_sysids: dict[str, list[int]] = defaultdict(list)
@@ -61,23 +62,23 @@ def main():
     )
     for path, home, c in zip(base_paths, base_homes, colors):
         gaz_config.add(base_path=path, base_home=home, color=c)
-    # Optionally: gaz_config.show()
+    # gaz_config.show()
 
     # QGroundControl Configuration
     qgc_config = ConfigQGC(origin=gra_origin)
     for path, home, color, delay in zip(base_paths, base_homes, colors, msn_delays):
         qgc_config.add(base_path=path, base_home=home, color=color, mission_delay=delay)
-    # Optionally: qgc_config.show()
+    # qgc_config.show()
 
-    # No Simulator
-    novis_config = ConfigVis[int]()
-    for i, _ in enumerate(base_homes):
-        novis_config.add_vehicle(i)
+    # No Visualizer
+    novis_config = ConfigNovis(origin=gra_origin)
+    for home in base_homes:
+        novis_config.add(base_home=home)
 
     # Visualization Parameters
-    novis = NoneVisualizer(novis_config)
-    # gaz = Gazebo(gaz_config, gra_origin)
-    # qgc = QGC(qgc_config)
+    novis = NoVisualizer(novis_config)  # type: ignore  # noqa: F841
+    gaz = Gazebo(gaz_config, gra_origin)  # type: ignore  # noqa: F841
+    qgc = QGC(qgc_config)  # type: ignore  # noqa: F841
 
     # Launch Simulator
     simulator = Simulator(
@@ -94,8 +95,9 @@ def main():
         for sysid in list(orac.conns.keys()):
             if orac.is_plan_done(sysid):  # Make sure this is non-blocking!
                 orac.remove(sysid)
+                print(f"Vehicles left: {len(orac.conns)}")
         time.sleep(0.1)  # Prevent busy-waiting
-    time.sleep(5)
+    time.sleep(2)
     print("🎉 All UAVs have completed their missions!")
 
 

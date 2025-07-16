@@ -1,8 +1,6 @@
 """
-Simulation script that launches the full setup:
-1. ArduPilot instances for each vehicle.
-2. Logic process for each vehicle.
-3. Optionally a simulator (None, QGroundControl, or Gazebo).
+Launches multi-UAV simulation with ArduPilot SITL, logic, proxies,
+and optional visualization.
 """
 
 import json
@@ -37,14 +35,8 @@ V = TypeVar("V")  # Vehicle type
 
 class Simulator:
     """
-    Base simulator class to manage UAV vehicle processes and optional external
-    simulators.
-
-    Args:
-        name (VisualizerName): Type of simulator to use.
-        offsets: Spawn offsets for each UAV.
-        plans: Mission plans for each UAV.
-
+    Manages a full multi-UAV simulation, including SITL, logic, proxy, GCS,
+    and visualization.
     """
 
     oracle_name: str = "Oracle ⚪"
@@ -81,8 +73,7 @@ class Simulator:
         ]
 
     def launch(self) -> Oracle:
-        """Launch vehicle instances and the optional simulator."""
-        # Simulator.save_gcs_sysids(gcs_sysids)
+        """Launch vehicle instances and visualizer."""
         reset_folder(DATA_PATH)
         self.save_missions()
         self.port_offsets = self._find_port_offsets()
@@ -144,15 +135,6 @@ class Simulator:
                 )
             )
 
-        # args = list(product(range(self.n_vehs), range(len(self.visuals))))
-
-        # with futures.ThreadPoolExecutor() as executor:
-        #     futures_list = [executor.submit(self._launch_uav, i, j) for i, j in args]
-        #     orc_conns: dict[int, MAVConnection] = {}
-        #     for f in futures_list:
-        #         conn = f.result()
-        #         orc_conns[conn.target_system] = conn
-
         oracle = Oracle(orc_conns, name=self.oracle_name, verbose=self.verbose)
         for gcs_name in self.gcs_sysids.keys():
             gcs_cmd = self.gcs_cmd(
@@ -170,7 +152,7 @@ class Simulator:
                 print(f"🚀 GCS {gcs_name} launched (PID {p.pid})")
         return oracle
 
-    def _launch_uav(self, i: int):  # , j: int
+    def _launch_uav(self, i: int):
         sysid = i + 1
         veh_cmd = (
             f"python3 {ARDUPILOT_VEHICLE_PATH}"
