@@ -13,6 +13,7 @@ from typing import cast
 from pymavlink import mavutil
 
 from helpers.change_coordinates import NED_to_ENU
+import pymavlink.dialects.v20.ardupilotmega as mavlink
 from mavlink.customtypes.connection import MAVConnection
 from mavlink.customtypes.location import ENU, GRA, NED, GRAs
 from mavlink.enums import CmdNav, CmdSet, Frame, MsgID
@@ -85,23 +86,23 @@ def get_ENU_position(conn: MAVConnection) -> ENU | None:
     return None
 
 
-def get_GRA_position(conn: MAVConnection, verbose: int = 1) -> GRA | None:
+def get_GRA_position(
+    msg: mavlink.MAVLink_global_position_int_message, sysid: int, verbose: int = 1
+) -> GRA:
     """Request and return the UAV's current local NED position."""
     ## Check this to make blocking optional parameter
-    msg = conn.recv_match(type="GLOBAL_POSITION_INT", blocking=True, timeout=0.001)
+    # msg = conn.recv_match(type="GLOBAL_POSITION_INT", blocking=False, timeout=0.001)
     # This does not work. I'am not sure why
     # msg = conn.recv_match(type="LOCAL_POSITION_NED")
-    if msg:
-        lat = msg.lat / 1e7
-        lon = msg.lon / 1e7
-        alt = msg.relative_alt / 1000.0
-        if verbose > 1:
-            print(
-                f"Vehicle {conn.target_system}: 📍 Position: "
-                f"lat={lat:.7f}, lon={lon:.7f}, alt={alt:.2f} m"
-            )
-        return GRA(lat, lon, alt)
-    return None
+    lat = msg.lat / 1e7
+    lon = msg.lon / 1e7
+    alt = msg.relative_alt / 1000.0
+    if verbose > 1:
+        print(
+            f"Vehicle {sysid}: 📍 Position: "
+            f"lat={lat:.7f}, lon={lon:.7f}, alt={alt:.2f} m"
+        )
+    return GRA(lat, lon, alt)
 
 
 def save_mission(path: Path, poses: GRAs, delay: int = 0) -> None:

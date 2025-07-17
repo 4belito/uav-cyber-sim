@@ -32,6 +32,7 @@ if not mission:
 # TODO: Refactor this module
 
 heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
+open_drone_id_period = mavutil.periodic_event(1.0)  # 1 second for Open Drone ID
 
 
 def main():
@@ -93,6 +94,16 @@ def start_proxy(config: LogicConfig, verbose: int = 1):
         while True:
             if heartbeat_period.trigger():
                 send_heartbeat(vh_conn)
+
+            if open_drone_id_period.trigger():
+                oc_conn.mav.open_drone_id_basic_id_send(
+                    target_system=oc_conn.target_system,
+                    target_component=oc_conn.target_component,
+                    id_or_mac=[0] * 20,
+                    id_type=0,  # 0 - MAV_ODID_ID_TYPE_NONE,
+                    ua_type=2,  # 2 - MAV_ODID_UA_TYPE_HELICOPTER_OR_MULTIROTOR
+                    uas_id=[0] * 20,
+                )
 
             if logic.plan.state == State.DONE:
                 send_done_until_ack(oc_conn, sysid)

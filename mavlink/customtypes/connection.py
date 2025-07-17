@@ -153,6 +153,14 @@ class MAVConnection(Protocol):
         blocking: bool | None = ...,
     ) -> mavlink.MAVLink_global_position_int_message | None: ...
 
+    @overload
+    def recv_match(
+        self,
+        type: Literal["OPEN_DRONE_ID_BASIC_ID"],
+        timeout: float | None = ...,
+        blocking: bool | None = ...,
+    ) -> mavlink.MAVLink_open_drone_id_basic_id_message | None: ...
+
     def recv_msg(self) -> mavlink.MAVLink_message | None:
         """Receive the next MAVLink message (non-blocking)."""
 

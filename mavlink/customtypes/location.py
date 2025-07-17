@@ -1,6 +1,8 @@
 """Location types."""
 
 from typing import NamedTuple, Self, Type, TypeVar
+from geopy import distance
+import numpy as np
 
 T = TypeVar("T")
 
@@ -44,6 +46,14 @@ class LLA(NamedTuple):
     def list(cls: Type[Self], data: list[tuple[float, float, float]]) -> list[Self]:
         """Create a list of LLA instances from a list of (x, y, z) tuples."""
         return [cls(*pair) for pair in data]
+
+    @classmethod
+    def distance(cls, a: Self, b: Self) -> float:
+        """Calculate the distance between two LLA points."""
+        return np.sqrt(
+            distance.geodesic((a.lat, a.lon), (b.lat, b.lon)).m ** 2  # type: ignore
+            + (a.alt - b.alt) ** 2
+        )
 
 
 class PoseXYZ(NamedTuple):
