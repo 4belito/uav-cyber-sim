@@ -7,11 +7,11 @@ from .cmddo import CmdDo
 from .cmdnav import CmdNav
 from .cmdset import CmdSet
 from .coptermode import CopterMode
+from .datastream import DataStream
 from .ekfstatus import EkfStatus
 from .frame import Frame
 from .landstate import LandState
 from .missionresult import MissionResult
-from .modeflag import ModeFlag
 from .modeflag import ModeFlag
 from .msgid import MsgID
 from .paramtype import ParamType
@@ -26,11 +26,11 @@ __all__ = [
     "CmdNav",
     "CmdSet",
     "CopterMode",
+    "DataStream",
     "EkfStatus",
     "Frame",
     "LandState",
     "MissionResult",
-    "ModeFlag",
     "ModeFlag",
     "MsgID",
     "ParamType",

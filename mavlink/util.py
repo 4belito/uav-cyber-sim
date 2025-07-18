@@ -10,13 +10,13 @@ from enum import IntEnum
 from pathlib import Path
 from typing import cast
 
+import pymavlink.dialects.v20.ardupilotmega as mavlink
 from pymavlink import mavutil
 
 from helpers.change_coordinates import NED_to_ENU
-import pymavlink.dialects.v20.ardupilotmega as mavlink
 from mavlink.customtypes.connection import MAVConnection
 from mavlink.customtypes.location import ENU, GRA, NED, GRAs
-from mavlink.enums import CmdNav, CmdSet, Frame, MsgID
+from mavlink.enums import CmdNav, CmdSet, DataStream, Frame, MsgID
 
 
 def connect(device: str) -> MAVConnection:
@@ -75,6 +75,22 @@ def stop_msg(conn: MAVConnection, msg_id: int) -> None:
         0,
         0,
     )
+
+
+def request_sensor_streams(
+    conn: MAVConnection,
+    stream_ids: list[DataStream],
+    rate_hz: int = 5,
+) -> None:
+    """Request sensor messages from ArduPilot."""
+    for stream_id in stream_ids:
+        conn.mav.request_data_stream_send(
+            target_system=conn.target_system,
+            target_component=conn.target_component,
+            req_stream_id=stream_id,
+            req_message_rate=rate_hz,
+            start_stop=1,
+        )
 
 
 def get_ENU_position(conn: MAVConnection) -> ENU | None:

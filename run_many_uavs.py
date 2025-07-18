@@ -29,8 +29,8 @@ def main():
     gra_origin = GRAPose(-35.3633280, 149.1652241, 0, 90)  # east, north, up, heading
     enu_origin = ENUPose(0, 0, gra_origin.alt, gra_origin.heading)
 
-    gcs = [Color.RED, Color.ORANGE, Color.GREEN, Color.BLUE]
-    n_uavs_per_gcs = 60
+    gcs = [Color.RED, Color.ORANGE]
+    n_uavs_per_gcs = 2
     side_len = 10
     altitude = 5
     max_delay = 3

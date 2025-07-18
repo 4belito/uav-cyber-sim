@@ -2,11 +2,11 @@ TODO:
 - Check UDP conections( some times some uavs does not complete its mission)
 
 
-- collect Sensors measurements
+- organize data collection
 - modularize upload mission
 - study GAZEBO Model
 - Apply delay between upload mission and 
-- clean all the old notations
+- clean all the old notations after passing to the new branch
 - Add support to use different UAV models other than Iris.
 
 - Fix: [Errno 111] Connection refused — sleeping.

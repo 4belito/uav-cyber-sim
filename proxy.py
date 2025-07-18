@@ -3,9 +3,12 @@
 import _csv
 import argparse
 import csv
+import json
+import os
 import threading
 import time
 from queue import Queue
+from typing import TextIO
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 from pymavlink import mavutil
@@ -13,11 +16,20 @@ from pymavlink import mavutil
 # First Party imports
 from config import DATA_PATH, BasePort
 from mavlink.customtypes.connection import MAVConnection
-from mavlink.enums import Autopilot, Type
-from mavlink.util import connect
+from mavlink.enums import Autopilot, DataStream, Type
+from mavlink.util import connect, request_sensor_streams
 from params.simulation import HEARTBEAT_PERIOD
 
 heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
+
+
+DATA_STREAM_IDS = [
+    DataStream.RAW_SENSORS,
+    DataStream.EXTENDED_STATUS,
+    DataStream.POSITION,
+    DataStream.EXTRA1,
+    DataStream.EXTRA2,
+]
 
 
 def main() -> None:
@@ -141,13 +153,55 @@ def write_and_log_message(
         )
 
 
+def write_and_log_with_sensors(
+    q: Queue[tuple[str, float, mavlink.MAVLink_message]],
+    conn: MAVConnection,
+    log_writer: _csv.Writer,
+    recipient: str,
+    sensor_logs: dict[str, TextIO],
+    sysid: int,
+):
+    """Write and log proxy and sensor messages in one step."""
+    sender, time_received, msg = q.get()
+    conn.write(bytes(msg.get_msgbuf()))
+    if msg.get_type() != "BAD_DATA":
+        # Log general proxy traffic
+        log_writer.writerow(
+            [
+                sender,
+                recipient,
+                time_received,
+                time.time(),
+                msg.to_json(),
+            ]
+        )
+        # Also log per-sensor messages
+        msg_type = msg.get_type()
+        if msg_type in {"RAW_IMU", "SCALED_PRESSURE", "GPS_RAW_INT"}:
+            log_line = json.dumps(
+                {
+                    "sysid": sysid,
+                    "sender": sender,
+                    "time_received": time_received,
+                    "time_logged": time.time(),
+                    "msg": msg.to_dict(),
+                }
+            )
+            if msg_type not in sensor_logs:
+                path = DATA_PATH / "sensor_logs" / f"sensor_{sysid}_{msg_type}.log"
+                os.makedirs(path.parent, exist_ok=True)
+                sensor_logs[msg_type] = open(path, "a")
+            sensor_logs[msg_type].write(log_line + "\n")
+            sensor_logs[msg_type].flush()
+
+
 def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
     """Start bidirectional proxy for a given UAV system_id."""
     ap_conn = create_connection_tcp(base_port=BasePort.ARP, offset=port_offset)
     cs_conn = create_connection_udp(base_port=BasePort.GCS, offset=port_offset)
     oc_conn = create_connection_udp(base_port=BasePort.ORC, offset=port_offset)
     vh_conn = create_connection_tcp(base_port=BasePort.VEH, offset=port_offset)
-
+    request_sensor_streams(vh_conn, stream_ids=DATA_STREAM_IDS, rate_hz=5)
     ap_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
     cs_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
     oc_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
@@ -205,7 +259,7 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
     log_writer.writerow(
         ["sender", "recipient", "time_received", "time_sent", "message"]
     )
-
+    sensor_log_files: dict[str, TextIO] = {}
     try:
         router1.start()
         router2.start()
@@ -223,7 +277,10 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
                 write_and_log_message(ap_queue, ap_conn, log_writer, "ARP")
 
             while not vh_queue.empty():
-                write_and_log_message(vh_queue, vh_conn, log_writer, "VEH")
+                # write_and_log_message(vh_queue, vh_conn, log_writer, "VEH")
+                write_and_log_with_sensors(
+                    vh_queue, vh_conn, log_writer, "VEH", sensor_log_files, sysid
+                )
 
             time.sleep(0.01)
     finally:
