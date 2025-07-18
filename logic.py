@@ -7,10 +7,9 @@ import time
 from enum import StrEnum
 from typing import TypedDict
 
+import zmq
 from pymavlink import mavutil
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
-
-import zmq
 
 # First Party imports
 from config import DATA_PATH, BasePort

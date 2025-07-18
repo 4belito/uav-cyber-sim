@@ -4,9 +4,9 @@ instances.
 """
 
 import argparse
-from concurrent import futures
 import json
 import pickle
+from concurrent import futures
 from typing import TypedDict
 
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore

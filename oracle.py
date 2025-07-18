@@ -5,11 +5,10 @@ Define the Oracle class to simulate UAV-to-UAV communication.
 Currently provides basic global position tracking and mission completion detection.
 """
 
-from queue import Queue
 import threading
+from queue import Queue
 from typing import cast
 
-from pymavlink.dialects.v20 import common as mavlink2  # type: ignore
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 import zmq
 
@@ -79,7 +78,7 @@ class Oracle(UAVMonitor):
                     msg = conn.recv_msg()
                     if not msg:
                         continue
-                except:
+                except Exception:
                     continue
                 match msg.get_type():
                     case "GLOBAL_POSITION_INT":
@@ -101,10 +100,11 @@ class Oracle(UAVMonitor):
         self.zmq_ctx.term()
 
     def enqueue_remote_ids(self, sysid: int):
+        """Receive Remote ID messages from one UAV and add them to the queue."""
         while sysid in self.rid_in_socks:
             try:
                 rid = self.rid_in_socks[sysid].recv()
-            except:
+            except Exception:
                 continue
             self.rid_queue.put((sysid, rid))
 
@@ -113,7 +113,7 @@ class Oracle(UAVMonitor):
         while self.rid_out_socks:
             try:
                 sysid, rid = self.rid_queue.get(timeout=0.1)
-            except:
+            except Exception:
                 continue
             if self.verbose > 1:
                 print(f"{self.name}: 🔁 Received Remote ID from {sysid}")
@@ -132,7 +132,8 @@ class Oracle(UAVMonitor):
                 other_sock.send(rid)  # type: ignore
                 if self.verbose > 1:
                     print(
-                        f"{self.name}: 🔁 Retransmitted Remote ID from {sysid} to {other_sysid}"
+                        f"{self.name}: 🔁 Retransmitted Remote ID from {sysid} "
+                        f"to {other_sysid}"
                     )
 
     def remove(self, sysid: int):

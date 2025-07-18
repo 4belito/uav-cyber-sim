@@ -106,10 +106,6 @@ def get_GRA_position(
     msg: mavlink.MAVLink_global_position_int_message, sysid: int, verbose: int = 1
 ) -> GRA:
     """Request and return the UAV's current local NED position."""
-    ## Check this to make blocking optional parameter
-    # msg = conn.recv_match(type="GLOBAL_POSITION_INT", blocking=False, timeout=0.001)
-    # This does not work. I'am not sure why
-    # msg = conn.recv_match(type="LOCAL_POSITION_NED")
     lat = msg.lat / 1e7
     lon = msg.lon / 1e7
     alt = msg.relative_alt / 1000.0

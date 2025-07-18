@@ -52,7 +52,8 @@ def check_set_nav_speed(
     if not msg:
         return False, None
 
-    expected = WPNav.SPEED
+    # check this decode(added to avoid warning)
+    expected_id = WPNav.SPEED.decode("ascii")
     speed_cmps = speed * 100
 
-    return (msg.param_id == expected and msg.param_value == speed_cmps), None
+    return (msg.param_id == expected_id and msg.param_value == speed_cmps), None

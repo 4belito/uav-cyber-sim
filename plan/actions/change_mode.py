@@ -15,7 +15,7 @@ from plan.core import Action, ActionNames, Step
 def make_set_mode(flight_mode: CopterMode, onair: bool = False) -> Action[Step]:
     """Create an Action to switch the UAV flight mode."""
     action = Action[Step](
-        f"{ActionNames.CHANGE_FLIGHTMODE}: {flight_mode.name}", emoji="⚙️"
+        f"{ActionNames.CHANGE_FLIGHTMODE}: {flight_mode.name}", emoji="⚙️ "
     )
     exec_fn = partial(exec_set_mode, mode=flight_mode)
     check_fn = partial(check_set_mode, mode=flight_mode)
@@ -52,7 +52,7 @@ def check_set_mode(
     conn: MAVConnection, _verbose: int, mode: CopterMode
 ) -> tuple[bool, None]:
     """Verify the UAV has switched to the target flight mode."""
-    msg = conn.recv_match(type="HEARTBEAT", timeout=1.0)
+    msg = conn.recv_match(type="HEARTBEAT")
     if msg and msg.custom_mode == mode.value:
         return True, None
     return False, None

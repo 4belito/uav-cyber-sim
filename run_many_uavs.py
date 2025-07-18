@@ -1,11 +1,24 @@
+"""
+Multi-UAV Mission Launcher.
+
+This script launches a multi-UAV simulation using predefined mission plans
+and visualizers. It assigns UAVs to Ground Control Stations (GCS) by color,
+creates square paths with random delays, and monitors mission completion.
+
+Run from command line for faster output than notebooks:
+
+    python multi_uav_launcher.py
+"""
+
 import random
 import signal
-import time
 from collections import defaultdict
 
 from config import Color
+from helpers import clean
 
 # from helpers import clean  # , local2global
+from helpers.cleanup import ALL_PROCESSES
 from mavlink.customtypes.location import ENUPose, GRAPose
 from plan import Plan
 from simulator import (
@@ -19,18 +32,19 @@ from simulator import (
 )
 
 signal.signal(signal.SIGTTIN, signal.SIG_IGN)
+ALL_PROCESSES.remove("run_many_uavs.py")
 
 
 def main():
-    # Clean environment
-    # clean()
+    """Launch a multi-UAV simulation and monitors mission completion."""
+    clean(ALL_PROCESSES)
 
     # Create Plans
     gra_origin = GRAPose(-35.3633280, 149.1652241, 0, 90)  # east, north, up, heading
     enu_origin = ENUPose(0, 0, gra_origin.alt, gra_origin.heading)
 
-    gcs = [Color.RED, Color.ORANGE]
-    n_uavs_per_gcs = 2
+    gcs = [Color.RED, Color.ORANGE, Color.GREEN, Color.BLUE]
+    n_uavs_per_gcs = 10
     side_len = 10
     altitude = 5
     max_delay = 3
@@ -90,14 +104,8 @@ def main():
     )
     orac = simulator.launch()
 
-    # Main loop: check all UAVs for completion, non-blocking
-    while len(orac.conns):
-        for sysid in list(orac.conns.keys()):
-            if orac.is_plan_done(sysid):  # Make sure this is non-blocking!
-                orac.remove(sysid)
-                print(f"Vehicles left: {len(orac.conns)}")
-        time.sleep(0.1)  # Prevent busy-waiting
-    time.sleep(2)
+    # Main loop: check all UAVs for completion
+    orac.run()
     print("🎉 All UAVs have completed their missions!")
 
 

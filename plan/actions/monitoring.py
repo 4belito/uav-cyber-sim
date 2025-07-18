@@ -18,11 +18,11 @@ from plan.core import Step
 
 def make_monitoring(items: list[int] = []) -> Action[Step]:
     """Monitor mission items."""
-    monitoring = Action[Step](name=ActionNames.UPLOAD_MISSION, emoji="📤")
+    monitoring = Action[Step](name=ActionNames.MONITOR_MISSION, emoji="🧭")
     for i in items:
         monitoring.add(
             Step(
-                "check item",
+                f"check item {i}",
                 exec_fn=Step.noop_exec,
                 check_fn=partial(check_item, seq=i),
                 onair=False,
@@ -30,7 +30,7 @@ def make_monitoring(items: list[int] = []) -> Action[Step]:
         )
     monitoring.add(
         Step(
-            "check item",
+            "check mission completion",
             exec_fn=Step.noop_exec,
             check_fn=check_endmission,
             onair=False,
@@ -48,7 +48,7 @@ def check_item(
     msg = conn.recv_match(type="MISSION_ITEM_REACHED", blocking=True)
     if msg:
         if verbose and msg.seq == seq:
-            print(f"Vehicle {conn.target_system}: ✴️ Reached waypoint: {msg.seq}")
+            print(f"Vehicle {conn.target_system}: ✴️  Reached waypoint: {msg.seq}")
             return True, None
     else:
         print(f"Vehicle {conn.target_system}: loss reached item {seq} message")

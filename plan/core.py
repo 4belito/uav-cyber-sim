@@ -44,6 +44,7 @@ class ActionNames(StrEnum):
     START_MISSION = "START_MISSION"
     UPLOAD_MISSION = "UPLOAD_MISSION"
     WAIT = "WAIT"
+    MONITOR_MISSION = "MONITOR_MISSION"
 
 
 class StepFailed(Exception):
@@ -127,7 +128,7 @@ class Step(MissionElement):
         """Execute the step and change state to IN_PROGRESS."""
         self.exec_fn(self.conn, self.verbose)
         if self.verbose > 1:
-            print(f"Vehicle {self.sysid}: ▶️ {self.class_name} Started: {self.name}")
+            print(f"Vehicle {self.sysid}: ▶️  {self.class_name} Started: {self.name}")
         self.state = State.IN_PROGRESS
 
     def check(self) -> None:
@@ -242,7 +243,7 @@ class Action(MissionElement, Generic[T]):
         self.state = State.IN_PROGRESS
         if self.verbose > 1:
             print(
-                f"Vehicle {self.sysid}: ▶️ {self.class_name} "
+                f"Vehicle {self.sysid}: ▶️  {self.class_name} "
                 f"Started: {self.emoji} {self.name}"
             )
 

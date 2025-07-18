@@ -30,6 +30,7 @@ DATA_STREAM_IDS = [
     DataStream.EXTRA1,
     DataStream.EXTRA2,
 ]
+DATA_STREAM_RATE = 5
 
 
 def main() -> None:
@@ -96,6 +97,8 @@ def create_connection_tcp(
 
 
 class MessageRouter(threading.Thread):
+    """Threaded message router between MAVLink connections."""
+
     def __init__(
         self,
         source: MAVConnection,
@@ -116,18 +119,20 @@ class MessageRouter(threading.Thread):
         self.verbose = verbose
 
     def run(self):
+        """Continuously receive messages and dispatch them until stopped."""
         while not self.stop_event.is_set():
             try:
                 msg = self.source.recv_match(blocking=True, timeout=0.1)
                 if msg:
                     self.dispatch_message(msg)
-            except:
+            except Exception:
                 self.stop_event.set()
 
     def dispatch_message(self, msg: mavlink.MAVLink_message):
+        """Send a message to all targets with timestamp and sender."""
         time_received = time.time()
         for q, label in zip(self.targets, self.labels):
-            if self.verbose == 3:
+            if self.verbose > 2:
                 print(f"{label} {self.sysid}: {msg.get_type()}")
             q.put((self.sender, time_received, msg))
 
@@ -212,7 +217,9 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
     cs_conn = create_connection_udp(base_port=BasePort.GCS, offset=port_offset)
     oc_conn = create_connection_udp(base_port=BasePort.ORC, offset=port_offset)
     vh_conn = create_connection_tcp(base_port=BasePort.VEH, offset=port_offset)
-    request_sensor_streams(ap_conn, stream_ids=DATA_STREAM_IDS, rate_hz=5)
+    request_sensor_streams(
+        ap_conn, stream_ids=DATA_STREAM_IDS, rate_hz=DATA_STREAM_RATE
+    )
     ap_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
     cs_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
     oc_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()

@@ -3,8 +3,8 @@ Define the UAVMonitor class to UAV monitoring.
 Currently provides basic global position tracking and mission completion detection.
 """
 
-from pymavlink.dialects.v20 import common as mavlink2  # type: ignore
 import pymavlink.dialects.v20.ardupilotmega as mavlink
+from pymavlink.dialects.v20 import common as mavlink2  # type: ignore
 
 from helpers.change_coordinates import GRA  # ,global2local
 from mavlink.customtypes.connection import MAVConnection
