@@ -163,36 +163,47 @@ def write_and_log_with_sensors(
 ):
     """Write and log proxy and sensor messages in one step."""
     sender, time_received, msg = q.get()
+    msg_type = msg.get_type()
+
     conn.write(bytes(msg.get_msgbuf()))
-    if msg.get_type() != "BAD_DATA":
-        # Log general proxy traffic
-        log_writer.writerow(
-            [
-                sender,
-                recipient,
-                time_received,
-                time.time(),
-                msg.to_json(),
-            ]
+
+    if msg_type == "BAD_DATA":
+        return
+
+    now = time.time()
+
+    # Log general proxy traffic
+    log_writer.writerow(
+        [
+            sender,
+            recipient,
+            time_received,
+            now,
+            msg.to_json(),
+        ]
+    )
+
+    # Check if it's a sensor message to log separately
+    if msg_type in {"RAW_IMU", "SCALED_PRESSURE", "GPS_RAW_INT"}:
+        log_line = json.dumps(
+            {
+                "sysid": sysid,
+                "sender": sender,
+                "time_received": time_received,
+                "time_logged": now,
+                "msg": msg.to_dict(),
+            }
         )
-        # Also log per-sensor messages
-        msg_type = msg.get_type()
-        if msg_type in {"RAW_IMU", "SCALED_PRESSURE", "GPS_RAW_INT"}:
-            log_line = json.dumps(
-                {
-                    "sysid": sysid,
-                    "sender": sender,
-                    "time_received": time_received,
-                    "time_logged": time.time(),
-                    "msg": msg.to_dict(),
-                }
-            )
-            if msg_type not in sensor_logs:
-                path = DATA_PATH / "sensor_logs" / f"sensor_{sysid}_{msg_type}.log"
-                os.makedirs(path.parent, exist_ok=True)
-                sensor_logs[msg_type] = open(path, "a")
-            sensor_logs[msg_type].write(log_line + "\n")
-            sensor_logs[msg_type].flush()
+
+        file = sensor_logs.get(msg_type)
+        if file is None:
+            path = DATA_PATH / "sensor_logs" / f"sensor_{sysid}_{msg_type}.log"
+            os.makedirs(path.parent, exist_ok=True)
+            file = open(path, "a")
+            sensor_logs[msg_type] = file
+
+        file.write(log_line + "\n")
+        file.flush()
 
 
 def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
@@ -201,7 +212,7 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
     cs_conn = create_connection_udp(base_port=BasePort.GCS, offset=port_offset)
     oc_conn = create_connection_udp(base_port=BasePort.ORC, offset=port_offset)
     vh_conn = create_connection_tcp(base_port=BasePort.VEH, offset=port_offset)
-    request_sensor_streams(vh_conn, stream_ids=DATA_STREAM_IDS, rate_hz=5)
+    request_sensor_streams(ap_conn, stream_ids=DATA_STREAM_IDS, rate_hz=5)
     ap_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
     cs_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
     oc_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
