@@ -169,11 +169,16 @@ class Simulator:
         with futures.ThreadPoolExecutor() as executor:
             orc_conns = dict(
                 zip(
-                    range(self.n_vehs),
+                    range(1, self.n_vehs + 1),
                     executor.map(self._connect_to_vehicle, range(self.n_vehs)),
                 )
             )
-        oracle = Oracle(orc_conns, name=self.oracle_name, verbose=self.verbose)
+        oracle = Oracle(
+            orc_conns,
+            port_offsets={i + 1: offset for i, offset in enumerate(self.port_offsets)},
+            name=self.oracle_name,
+            verbose=self.verbose,
+        )
         return oracle
 
     def _connect_to_vehicle(self, i: int) -> MAVConnection:
@@ -193,6 +198,8 @@ class Simulator:
             BasePort.ORC,
             BasePort.QGC,
             BasePort.VEH,
+            BasePort.RID_UP,
+            BasePort.RID_DOWN,
         ]
         unit_offset = 10
         offsets = list[int]()

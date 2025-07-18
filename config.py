@@ -53,6 +53,8 @@ class BasePort(IntEnum):
     GCS = 14551  # Ground Control Station(UDP)
     ORC = 14552  # Oracle(UDP)
     VEH = 14553
+    RID_UP = 14554  # Remote ID (UAV->ORC)
+    RID_DOWN = 14555  # Remote ID (ORC->UAV)
 
 
 # --- UAV Visualization Colors ---

@@ -5,11 +5,16 @@ Define the Oracle class to simulate UAV-to-UAV communication.
 Currently provides basic global position tracking and mission completion detection.
 """
 
+from queue import Queue
+import threading
 from typing import cast
+
 from pymavlink.dialects.v20 import common as mavlink2  # type: ignore
 import pymavlink.dialects.v20.ardupilotmega as mavlink
+import zmq
 
-from helpers.change_coordinates import GRA  # ,global2local
+from config import BasePort
+from helpers.change_coordinates import GRA
 from mavlink.customtypes.connection import MAVConnection
 from mavlink.enums import MsgID
 from mavlink.util import ask_msg
@@ -25,14 +30,44 @@ class Oracle(UAVMonitor):
     """
 
     def __init__(
-        self, conns: dict[int, MAVConnection], name: str = "Oracle ⚪", verbose: int = 1
+        self,
+        conns: dict[int, MAVConnection],
+        port_offsets: dict[int, int],
+        name: str = "Oracle ⚪",
+        verbose: int = 1,
     ) -> None:
         super().__init__(conns, name, verbose)
+        self.rid_queue = Queue[tuple[int, bytes]]()
+        self.zmq_ctx = zmq.Context()
+        self.rid_in_socks = dict[int, zmq.Socket[bytes]]()
+        self.rid_out_socks = dict[int, zmq.Socket[bytes]]()
+        for sysid in conns.keys():
+            self.rid_in_socks[sysid] = self.zmq_ctx.socket(zmq.SUB)
+            self.rid_in_socks[sysid].connect(
+                f"tcp://127.0.0.1:{BasePort.RID_UP + port_offsets[sysid]}"
+            )
+            self.rid_in_socks[sysid].setsockopt_string(zmq.SUBSCRIBE, "")
+            self.rid_in_socks[sysid].setsockopt(zmq.RCVTIMEO, 100)
+            self.rid_out_socks[sysid] = self.zmq_ctx.socket(zmq.PUB)
+            self.rid_out_socks[sysid].bind(
+                f"tcp://127.0.0.1:{BasePort.RID_DOWN + port_offsets[sysid]}"
+            )
 
     def run(self):
         """Run the Oracle to manage UAV connections and communication."""
+        rid_in_threads = [
+            threading.Thread(target=self.enqueue_remote_ids, args=(sysid,))
+            for sysid in self.conns.keys()
+        ]
+        rid_out_thread = threading.Thread(target=self.retransmit_remote_ids)
+
         if self.verbose:
             print(f"{self.name}: 🏁 Starting Oracle with {len(self.conns)} vehicles")
+
+        for thread in rid_in_threads:
+            thread.start()
+        rid_out_thread.start()
+
         for conn in self.conns.values():
             ask_msg(
                 conn, self.verbose, msg_id=MsgID.GLOBAL_POSITION_INT, interval=100_000
@@ -56,41 +91,52 @@ class Oracle(UAVMonitor):
                         msg = cast(mavlink.MAVLink_statustext_message, msg)
                         if self._is_plan_done(conn, msg, sysid):
                             self.remove(sysid)
-                    case "OPEN_DRONE_ID_BASIC_ID":
-                        self.retransmit_remote_id(
-                            cast(mavlink.MAVLink_open_drone_id_basic_id_message, msg),
-                            sysid,
-                        )
                     case _:
                         pass
 
-    def retransmit_remote_id(
-        self, msg: mavlink.MAVLink_open_drone_id_basic_id_message, sysid: int
-    ):
-        """Retransmit remote ID information for all vehicles."""
-        if self.verbose > 1:
-            print(f"{self.name}: 🔁 Received Open Drone ID from {sysid}")
-        pos = self.pos.get(sysid, None)
-        if pos is None:
-            return
-        for other_sysid, other_conn in self.conns.items():
-            if other_sysid == sysid:
+        for thread in rid_in_threads:
+            thread.join()
+        rid_out_thread.join()
+
+        self.zmq_ctx.term()
+
+    def enqueue_remote_ids(self, sysid: int):
+        while sysid in self.rid_in_socks:
+            try:
+                rid = self.rid_in_socks[sysid].recv()
+            except:
                 continue
-            other_pos = self.pos.get(other_sysid, None)
-            if other_pos is None:
+            self.rid_queue.put((sysid, rid))
+
+    def retransmit_remote_ids(self):
+        """Retransmit Remote IDs to other UAVs."""
+        while self.rid_out_socks:
+            try:
+                sysid, rid = self.rid_queue.get(timeout=0.1)
+            except:
                 continue
-            dist = GRA.distance(pos, other_pos)
-            if dist > 100:
-                continue
-            other_conn.mav.open_drone_id_basic_id_send(
-                target_system=other_conn.target_system,
-                target_component=other_conn.target_component,
-                id_or_mac=msg.id_or_mac,
-                id_type=msg.id_type,
-                ua_type=msg.ua_type,
-                uas_id=msg.uas_id,
-            )
             if self.verbose > 1:
-                print(
-                    f"{self.name}: 🔁 Retransmitted Open Drone ID from {sysid} to {other_sysid}"
-                )
+                print(f"{self.name}: 🔁 Received Remote ID from {sysid}")
+            pos = self.pos.get(sysid, None)
+            if pos is None:
+                continue
+            for other_sysid, other_sock in self.rid_out_socks.items():
+                if other_sysid == sysid:
+                    continue
+                other_pos = self.pos.get(other_sysid, None)
+                if other_pos is None:
+                    continue
+                dist = GRA.distance(pos, other_pos)
+                if dist > 100:
+                    continue
+                other_sock.send(rid)  # type: ignore
+                if self.verbose > 1:
+                    print(
+                        f"{self.name}: 🔁 Retransmitted Remote ID from {sysid} to {other_sysid}"
+                    )
+
+    def remove(self, sysid: int):
+        """Remove a UAV connection and its associated sockets."""
+        super().remove(sysid)
+        del self.rid_in_socks[sysid]
+        del self.rid_out_socks[sysid]
