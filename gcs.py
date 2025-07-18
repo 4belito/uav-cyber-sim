@@ -15,7 +15,7 @@ from config import DATA_PATH, ENV_CMD_ARP, ENV_CMD_PYT, BasePort
 from helpers.processes import create_process
 from mavlink.customtypes.connection import MAVConnection
 from mavlink.customtypes.location import GRAs
-from oracle import Oracle
+from monitor import UAVMonitor
 
 
 def main():
@@ -57,7 +57,7 @@ class GCSConfig(TypedDict):
     suppress: list[str]
 
 
-class GCS(Oracle):
+class GCS(UAVMonitor):
     """Ground Control Station class extending Oracle with trajectory logging."""
 
     def __init__(self, config_path: str, verbose: int = 1):
