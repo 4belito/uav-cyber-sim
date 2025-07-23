@@ -9,6 +9,7 @@ import pickle
 from concurrent import futures
 from typing import TypedDict
 
+import zmq
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
 from config import DATA_PATH, ENV_CMD_ARP, ENV_CMD_PYT, BasePort
@@ -22,20 +23,7 @@ def main():
     """Run a GCS instance to monitor UAVs."""
     config_path, verbose = parse_arguments()
     gcs = GCS(config_path, verbose=verbose)
-    gcs_name = gcs.config["name"]
-    while len(gcs.conns):
-        gcs.gather_broadcasts()
-        gcs.save_pos()
-        for sysid in list(gcs.conns.keys()):
-            if gcs.is_plan_done(sysid):
-                gcs.remove(sysid)
-    if verbose:
-        print(f"✅ All UAVs assigned to GCS {gcs_name} have completed their mission.")
-    trajectory_file = DATA_PATH / f"trajectories_{gcs_name}.pkl"
-    with open(trajectory_file, "wb") as file:
-        pickle.dump(gcs.paths, file)
-    if verbose:
-        print(f"💾 Trajectories saved to '{trajectory_file}'.")
+    gcs.run()
 
 
 class UAVGCSConfig(TypedDict):
@@ -52,6 +40,7 @@ class GCSConfig(TypedDict):
     """Ground Control Station (GCS) Configuration."""
 
     name: str
+    port_offset: int
     uavs: list[UAVGCSConfig]
     terminals: list[str]
     suppress: list[str]
@@ -68,8 +57,34 @@ class GCS(UAVMonitor):
         self.terminals = set(self.config["terminals"])
         self.suppress = set(self.config["suppress"])
         self._launch_vehicles()
+
+        self.zmq_ctx = zmq.Context()
+        self.orc_sock = self.zmq_ctx.socket(zmq.PUB)
+        self.orc_sock.bind(
+            f"tcp://127.0.0.1:{BasePort.GCS_ZMQ + self.config['port_offset']}"
+        )
+        self.orc_sock.setsockopt(zmq.SNDTIMEO, 100)
+
         super().__init__(self.conns, name=f"GCS {self.config['name']}", verbose=verbose)
         self.paths: dict[int, GRAs] = {sysid: [] for sysid in self.conns}
+
+    def run(self):
+        while len(self.conns):
+            self.gather_broadcasts()
+            self.save_pos()
+            for sysid in list(self.conns.keys()):
+                if self.is_plan_done(sysid):
+                    self.remove(sysid)
+        if self.verbose:
+            print(
+                f"✅ All UAVs assigned to GCS {self.config['name']} have completed their mission."
+            )
+            self.orc_sock.send_string("DONE")  # type: ignore
+        trajectory_file = DATA_PATH / f"trajectories_{self.config['name']}.pkl"
+        with open(trajectory_file, "wb") as file:
+            pickle.dump(self.paths, file)
+        if self.verbose:
+            print(f"💾 Trajectories saved to '{trajectory_file}'.")
 
     def save_pos(self):
         """Save the current global position of each UAV to their trajectory path."""

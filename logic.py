@@ -40,7 +40,7 @@ def main():
     """Entry point for the Multi-UAV MAVLink Proxy."""
     config_path, verbose = parse_arguments()
     config = VehicleLogic.load_config(config_path)
-    start_proxy(config, verbose=verbose or 1)
+    start_logic(config, verbose=verbose or 1)
 
 
 # taken from mavproxy
@@ -67,7 +67,7 @@ class LogicConfig(TypedDict):
     monitored_items: list[int]
 
 
-def start_proxy(config: LogicConfig, verbose: int = 1):
+def start_logic(config: LogicConfig, verbose: int = 1):
     """Start bidirectional proxy for a given UAV system_id."""
     sysid = config["sysid"]
     port_offset = config["port_offset"]
@@ -75,13 +75,13 @@ def start_proxy(config: LogicConfig, verbose: int = 1):
     i = sysid - 1
     vh_conn = create_connection_tcp(base_port=BasePort.VEH, offset=port_offset)
     cs_conn = create_connection_udp(base_port=BasePort.GCS, offset=port_offset)
-    oc_conn = create_connection_udp(base_port=BasePort.ORC, offset=port_offset)
 
     zmq_ctx = zmq.Context()
     rid_in_sock = zmq_ctx.socket(zmq.SUB)
     rid_in_sock.connect(f"tcp://127.0.0.1:{BasePort.RID_DOWN + port_offset}")
     rid_out_sock = zmq_ctx.socket(zmq.PUB)
     rid_out_sock.bind(f"tcp://127.0.0.1:{BasePort.RID_UP + port_offset}")
+    rid_out_sock.setsockopt(zmq.SNDTIMEO, 100)
 
     logic = VehicleLogic(
         vh_conn,
@@ -103,10 +103,12 @@ def start_proxy(config: LogicConfig, verbose: int = 1):
                 send_heartbeat(vh_conn)
 
             if remote_id_period.trigger():
-                rid_out_sock.send_json({"test": "test"})  # type: ignore
+                try:
+                    rid_out_sock.send_json({"test": "test"})  # type: ignore
+                except:
+                    pass
 
             if logic.plan.state == State.DONE:
-                send_done_until_ack(oc_conn, sysid)
                 send_done_until_ack(cs_conn, sysid)
                 break
             logic.act()
@@ -114,7 +116,6 @@ def start_proxy(config: LogicConfig, verbose: int = 1):
     finally:
         cs_conn.close()
         vh_conn.close()
-        oc_conn.close()
 
         rid_in_sock.close()
         rid_out_sock.close()

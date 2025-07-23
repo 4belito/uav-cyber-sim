@@ -45,7 +45,7 @@ class BasePort(IntEnum):
     QGC connects directly to ArduPilot (SITL).
     Gazebo connects to ArduPilot via UDP 9002 (to ArduPilot) and 9003 (from ArduPilot).
     """
-
+    # ONE-PER-UAV PORTS
     # variable QGC_UDP is not actually being used because QGround control connects
     # automatically to UDP 14550
     QGC = QGC_TCP if CONNECT_GCS_TO_ARP else QGC_UDP
@@ -55,6 +55,9 @@ class BasePort(IntEnum):
     VEH = 14553
     RID_UP = 14554  # Remote ID (UAV->ORC)
     RID_DOWN = 14555  # Remote ID (ORC->UAV)
+
+    # ONE-PER-GCS PORTS
+    GCS_ZMQ = 30000  # GCS ZMQ (GCS->ORC)
 
 
 # --- UAV Visualization Colors ---

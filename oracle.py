@@ -31,26 +31,38 @@ class Oracle(UAVMonitor):
     def __init__(
         self,
         conns: dict[int, MAVConnection],
-        port_offsets: dict[int, int],
+        uav_port_offsets: dict[int, int],
+        gcs_port_offsets: dict[int, int],
         name: str = "Oracle ⚪",
         verbose: int = 1,
     ) -> None:
         super().__init__(conns, name, verbose)
         self.rid_queue = Queue[tuple[int, bytes]]()
         self.zmq_ctx = zmq.Context()
+
         self.rid_in_socks = dict[int, zmq.Socket[bytes]]()
         self.rid_out_socks = dict[int, zmq.Socket[bytes]]()
         for sysid in conns.keys():
             self.rid_in_socks[sysid] = self.zmq_ctx.socket(zmq.SUB)
             self.rid_in_socks[sysid].connect(
-                f"tcp://127.0.0.1:{BasePort.RID_UP + port_offsets[sysid]}"
+                f"tcp://127.0.0.1:{BasePort.RID_UP + uav_port_offsets[sysid]}"
             )
             self.rid_in_socks[sysid].setsockopt_string(zmq.SUBSCRIBE, "")
             self.rid_in_socks[sysid].setsockopt(zmq.RCVTIMEO, 100)
             self.rid_out_socks[sysid] = self.zmq_ctx.socket(zmq.PUB)
             self.rid_out_socks[sysid].bind(
-                f"tcp://127.0.0.1:{BasePort.RID_DOWN + port_offsets[sysid]}"
+                f"tcp://127.0.0.1:{BasePort.RID_DOWN + uav_port_offsets[sysid]}"
             )
+            self.rid_in_socks[sysid].setsockopt(zmq.SNDTIMEO, 100)
+
+        self.gcs_socks = dict[int, zmq.Socket[bytes]]()
+        for gcsid in gcs_port_offsets.keys():
+            self.gcs_socks[gcsid] = self.zmq_ctx.socket(zmq.SUB)
+            self.gcs_socks[gcsid].connect(
+                f"tcp://127.0.0.1:{BasePort.GCS_ZMQ + gcs_port_offsets[gcsid]}"
+            )
+            self.gcs_socks[gcsid].setsockopt_string(zmq.SUBSCRIBE, "")
+            self.gcs_socks[gcsid].setsockopt(zmq.RCVTIMEO, 100)
 
     def run(self):
         """Run the Oracle to manage UAV connections and communication."""
@@ -78,7 +90,7 @@ class Oracle(UAVMonitor):
                     msg = conn.recv_msg()
                     if not msg:
                         continue
-                except Exception:
+                except:
                     continue
                 match msg.get_type():
                     case "GLOBAL_POSITION_INT":
@@ -86,18 +98,21 @@ class Oracle(UAVMonitor):
                             cast(mavlink.MAVLink_global_position_int_message, msg),
                             sysid,
                         )
-                    case "STATUSTEXT":
-                        msg = cast(mavlink.MAVLink_statustext_message, msg)
-                        if self._is_plan_done(conn, msg, sysid):
-                            self.remove(sysid)
                     case _:
                         pass
+            for sysid, sock in list(self.gcs_socks.items()):
+                try:
+                    msg = sock.recv_string(flags=zmq.NOBLOCK)
+                except:
+                    continue
+                if msg == "DONE":
+                    if self.verbose:
+                        print(f"{self.name}: ✅ Received DONE from GCS {sysid}")
+                    self.remove(sysid)
 
         for thread in rid_in_threads:
             thread.join()
         rid_out_thread.join()
-
-        self.zmq_ctx.term()
 
     def enqueue_remote_ids(self, sysid: int):
         """Receive Remote ID messages from one UAV and add them to the queue."""
@@ -129,12 +144,15 @@ class Oracle(UAVMonitor):
                 dist = GRA.distance(pos, other_pos)
                 if dist > 100:
                     continue
-                other_sock.send(rid)  # type: ignore
-                if self.verbose > 1:
-                    print(
-                        f"{self.name}: 🔁 Retransmitted Remote ID from {sysid} "
-                        f"to {other_sysid}"
-                    )
+                try:
+                    other_sock.send(rid)  # type: ignore
+                    if self.verbose > 1:
+                        print(
+                            f"{self.name}: 🔁 Retransmitted Remote ID from {sysid} "
+                            f"to {other_sysid}"
+                        )
+                except:
+                    pass
 
     def remove(self, sysid: int):
         """Remove a UAV connection and its associated sockets."""

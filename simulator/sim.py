@@ -62,8 +62,8 @@ class Simulator:
         self.terminals: set[SimProcess] = set(terminals)
         self.suppress: set[SimProcess] = set(supress_output)
         self.n_vehs = visualizers[0].config.n_vehicles
+        self.n_gcss = len(gcs_names)
         self.verbose = verbose
-        self.port_offsets: list[int] = []
         self.gcs_names = gcs_names
         self.gcs_sysids = gcs_sysids
         self.missions = missions
@@ -77,16 +77,17 @@ class Simulator:
         """Launch vehicle instances and visualizer."""
         reset_folder(DATA_PATH)
         self.save_missions()
-        self.port_offsets = self._find_port_offsets()
+        self.uav_port_offsets = self._find_uav_port_offsets()
+        self.gcs_port_offsets = self._find_gcs_port_offsets()
         self._save_logic_configs(DATA_PATH)
         self._save_gcs_configs(DATA_PATH)
         for visual in self.visuals:
             if not visual.delay:
-                visual.launch(self.port_offsets, self.verbose)
+                visual.launch(self.uav_port_offsets, self.verbose)
         oracle = self._launch_gcses()
         for visual in self.visuals:
             if visual.delay:
-                visual.launch(self.port_offsets, self.verbose)
+                visual.launch(self.uav_port_offsets, self.verbose)
 
         return oracle
 
@@ -106,7 +107,7 @@ class Simulator:
             sysid = i + 1
             logic_config = {
                 "sysid": sysid,
-                "port_offset": self.port_offsets[i],
+                "port_offset": self.uav_port_offsets[i],
                 "monitored_items": self.monitored_items[i],
             }
             config_path = folder_name / f"logic_config_{sysid}.json"
@@ -117,16 +118,17 @@ class Simulator:
         for i, (gcs_name, sysids) in enumerate(zip(self.gcs_names, self.gcs_sysids)):
             gcs_config = {
                 "name": gcs_name,
+                "port_offset": self.gcs_port_offsets[i],
                 "uavs": [
                     {
                         "sysid": sysid,
-                        "port_offset": self.port_offsets[sysid - 1],
+                        "port_offset": self.uav_port_offsets[sysid - 1],
                         "ardupilot_cmd": (
                             f"python3 {ARDUPILOT_VEHICLE_PATH}"
                             f" -v ArduCopter -I{sysid - 1} --sysid {sysid} --no-rebuild"
                             f" --use-dir={LOGS_PATH} --add-param-file {VEH_PARAMS_PATH}"
                             f" --no-mavproxy"
-                            f" --port-offset={self.port_offsets[sysid - 1]}"
+                            f" --port-offset={self.uav_port_offsets[sysid - 1]}"
                             + (" --terminal" if "veh" in self.terminals else "")
                             + self.visuals[0].add_vehicle_cmd(sysid - 1)
                         ),
@@ -137,7 +139,7 @@ class Simulator:
                         ),
                         "proxy_cmd": (
                             f"python3 proxy.py --sysid {sysid} "
-                            f"--port-offset={self.port_offsets[sysid - 1]} "
+                            f"--port-offset={self.uav_port_offsets[sysid - 1]} "
                             f"--verbose {self.verbose}"
                         ),
                     }
@@ -178,7 +180,12 @@ class Simulator:
             )
         oracle = Oracle(
             orc_conns,
-            port_offsets={i + 1: offset for i, offset in enumerate(self.port_offsets)},
+            uav_port_offsets={
+                i + 1: offset for i, offset in enumerate(self.uav_port_offsets)
+            },
+            gcs_port_offsets={
+                i + 1: offset for i, offset in enumerate(self.gcs_port_offsets)
+            },
             name=self.oracle_name,
             verbose=self.verbose,
         )
@@ -186,15 +193,14 @@ class Simulator:
 
     def _connect_to_vehicle(self, i: int) -> MAVConnection:
         """Connect to a UAV through MAVLink."""
-        port = BasePort.ORC + self.port_offsets[i]
+        port = BasePort.ORC + self.uav_port_offsets[i]
         conn: MAVConnection = connect(f"udp:127.0.0.1:{port}")  # type: ignore
         conn.wait_heartbeat()
         if self.verbose:
             print(f"🔗 UAV logic {i + 1} is connected to {self.oracle_name}")
         return conn
 
-    def _find_port_offsets(self):
-        """Find available port offsets for each UAV to avoid conflicts."""
+    def _find_uav_port_offsets(self):
         base_ports = [
             BasePort.ARP,
             BasePort.GCS,
@@ -204,7 +210,16 @@ class Simulator:
             BasePort.RID_UP,
             BasePort.RID_DOWN,
         ]
-        unit_offset = 10
+        return self._find_port_offsets(base_ports, self.n_vehs)
+
+    def _find_gcs_port_offsets(self):
+        base_ports = [BasePort.GCS_ZMQ]
+        return self._find_port_offsets(base_ports, self.n_gcss)
+
+    def _find_port_offsets(
+        self, base_ports: list[BasePort], n_ports: int, unit_offset: int = 10
+    ) -> list[int]:
+        """Find available port offsets for each UAV to avoid conflicts."""
         offsets = list[int]()
 
         cur_offset = 0
