@@ -44,11 +44,12 @@ class Simulator:
         self,
         visualizers: list[Visualizer[V]],
         missions: Missions,
-        gcs_sysids: dict[str, list[int]],
+        gcs_names: list[str],
+        gcs_sysids: list[list[int]],
         logic_cmd: Callable[[int, str, int], str] = lambda _, config_path, verbose: (
             f'python3 logic.py --config-path "{config_path}" --verbose {verbose} '
         ),
-        gcs_cmd: Callable[[str, str, int], str] = lambda _, config_path, verbose: (
+        gcs_cmd: Callable[[int, str, int], str] = lambda _, config_path, verbose: (
             f'python3 gcs.py --config-path "{config_path}" --verbose {verbose}'
         ),
         monitored_mission_items: list[list[int]] | None = None,
@@ -63,6 +64,7 @@ class Simulator:
         self.n_vehs = visualizers[0].config.n_vehicles
         self.verbose = verbose
         self.port_offsets: list[int] = []
+        self.gcs_names = gcs_names
         self.gcs_sysids = gcs_sysids
         self.missions = missions
         self.logic_cmd = logic_cmd
@@ -112,7 +114,7 @@ class Simulator:
                 json.dump(logic_config, f, indent=2)
 
     def _save_gcs_configs(self, folder_name: Path):
-        for gcs_name, sysids in self.gcs_sysids.items():
+        for i, (gcs_name, sysids) in enumerate(zip(self.gcs_names, self.gcs_sysids)):
             gcs_config = {
                 "name": gcs_name,
                 "uavs": [
@@ -144,15 +146,16 @@ class Simulator:
                 "terminals": list(self.terminals),
                 "suppress": list(self.suppress),
             }
-            config_path = folder_name / f"gcs_config_{gcs_name}.json"
+            config_path = folder_name / f"gcs_config_{i + 1}.json"
             with config_path.open("w") as f:
                 json.dump(gcs_config, f, indent=2)
 
     def _launch_gcses(self) -> Oracle:
         """Launch each GCS process and create an Oracle instance."""
-        for gcs_name in self.gcs_sysids.keys():
+        for i, gcs_name in enumerate(self.gcs_names):
+            gcsid = i + 1
             gcs_cmd = self.gcs_cmd(
-                gcs_name, str(DATA_PATH / f"gcs_config_{gcs_name}.json"), self.verbose
+                gcsid, str(DATA_PATH / f"gcs_config_{gcsid}.json"), self.verbose
             )
             p = create_process(
                 gcs_cmd,

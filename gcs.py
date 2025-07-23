@@ -145,7 +145,7 @@ def parse_arguments() -> tuple[str, int]:
         "--config-path",
         type=str,
         required=True,
-        help="Path to the GCS configuration file (e.g. gcs_config_blue.json)",
+        help="Path to the GCS configuration file (e.g. gcs_config_1.json)",
     )
     parser.add_argument(
         "--verbose",
