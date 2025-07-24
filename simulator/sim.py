@@ -186,6 +186,7 @@ class Simulator:
             gcs_port_offsets={
                 i + 1: offset for i, offset in enumerate(self.gcs_port_offsets)
             },
+            gcs_sysids={i + 1: sysids for i, sysids in enumerate(self.gcs_sysids)},
             name=self.oracle_name,
             verbose=self.verbose,
         )

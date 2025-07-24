@@ -33,10 +33,12 @@ class Oracle(UAVMonitor):
         conns: dict[int, MAVConnection],
         uav_port_offsets: dict[int, int],
         gcs_port_offsets: dict[int, int],
+        gcs_sysids: dict[int, list[int]],
         name: str = "Oracle ⚪",
         verbose: int = 1,
     ) -> None:
         super().__init__(conns, name, verbose)
+        self.gcs_sysids = gcs_sysids
         self.rid_queue = Queue[tuple[int, bytes]]()
         self.zmq_ctx = zmq.Context()
 
@@ -53,7 +55,7 @@ class Oracle(UAVMonitor):
             self.rid_out_socks[sysid].bind(
                 f"tcp://127.0.0.1:{BasePort.RID_DOWN + uav_port_offsets[sysid]}"
             )
-            self.rid_in_socks[sysid].setsockopt(zmq.SNDTIMEO, 100)
+            self.rid_out_socks[sysid].setsockopt(zmq.SNDTIMEO, 100)
 
         self.gcs_socks = dict[int, zmq.Socket[bytes]]()
         for gcsid in gcs_port_offsets.keys():
@@ -100,15 +102,15 @@ class Oracle(UAVMonitor):
                         )
                     case _:
                         pass
-            for sysid, sock in list(self.gcs_socks.items()):
+            for gcsid, sock in list(self.gcs_socks.items()):
                 try:
                     msg = sock.recv_string(flags=zmq.NOBLOCK)
                 except:
                     continue
                 if msg == "DONE":
                     if self.verbose:
-                        print(f"{self.name}: ✅ Received DONE from GCS {sysid}")
-                    self.remove(sysid)
+                        print(f"{self.name}: ✅ Received DONE from GCS {gcsid}")
+                    self.remove_gcs(gcsid)
 
         for thread in rid_in_threads:
             thread.join()
@@ -135,7 +137,7 @@ class Oracle(UAVMonitor):
             pos = self.pos.get(sysid, None)
             if pos is None:
                 continue
-            for other_sysid, other_sock in self.rid_out_socks.items():
+            for other_sysid, other_sock in list(self.rid_out_socks.items()):
                 if other_sysid == sysid:
                     continue
                 other_pos = self.pos.get(other_sysid, None)
@@ -154,8 +156,14 @@ class Oracle(UAVMonitor):
                 except:
                     pass
 
-    def remove(self, sysid: int):
+    def remove_gcs(self, gcsid: int):
+        """Remove a GCS connection and its associated sockets."""
+        del self.gcs_socks[gcsid]
+        for sysid in self.gcs_sysids[gcsid]:
+            self.remove_uav(sysid)
+
+    def remove_uav(self, sysid: int):
         """Remove a UAV connection and its associated sockets."""
-        super().remove(sysid)
+        super().remove_uav(sysid)
         del self.rid_in_socks[sysid]
         del self.rid_out_socks[sysid]

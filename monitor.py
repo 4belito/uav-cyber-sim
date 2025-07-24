@@ -27,7 +27,7 @@ class UAVMonitor:
         self.name = name
         self.verbose = verbose
 
-    def remove(self, sysid: int):
+    def remove_uav(self, sysid: int):
         """Remove vehicles from the environment."""
         del self.conns[sysid]
         del self.pos[sysid]

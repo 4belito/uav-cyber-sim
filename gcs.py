@@ -74,7 +74,7 @@ class GCS(UAVMonitor):
             self.save_pos()
             for sysid in list(self.conns.keys()):
                 if self.is_plan_done(sysid):
-                    self.remove(sysid)
+                    self.remove_uav(sysid)
         if self.verbose:
             print(
                 f"✅ All UAVs assigned to GCS {self.config['name']} have completed their mission."
