@@ -17,7 +17,9 @@ def create_process(
     bash_cmd = [
         "bash",
         "-c",
-        (f"{env_cmd}; " if env_cmd else "") + f"{cmd}{redirect}; {after}",
+        (f"{env_cmd}; " if env_cmd else "")
+        + f"{cmd}{redirect}"
+        + (f"; {after}" if visible else ""),
     ]
     if visible:
         if platform.system() == "Linux":
