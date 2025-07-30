@@ -118,7 +118,7 @@ def check_gps_status(conn: MAVConnection, verbose: int) -> tuple[bool, None]:
             )
             return False, None
         # raise StepFailed(f"GPS fix too weak (fix_type = {msg.fix_type})")
-    stop_msg(conn, msg_id=MsgID.GPS_RAW_INT)
+    # stop_msg(conn, msg_id=MsgID.GPS_RAW_INT)
     return True, None
 
 

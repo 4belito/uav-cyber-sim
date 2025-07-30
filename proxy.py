@@ -326,6 +326,9 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
         oc_conn.close()
         vh_conn.close()
 
+        # rid_sock.close()
+        # zmq_ctx.term()
+
         log_file.close()
 
         print(f"❎ Proxy {sysid} stopped.")

@@ -181,11 +181,12 @@ def start_logic(config: LogicConfig, verbose: int = 1):
         cs_conn.close()
         vh_conn.close()
 
-        rid_in_sock.close()
-        rid_out_sock.close()
+        # rid_in_sock.close()
+        # rid_out_sock.close()
+        # rid_data_sock.close()
         rid_data_thread.join()
         rid_recv_thread.join()
-        zmq_ctx.term()
+        # zmq_ctx.term()
 
         print(f"❎ Vehicle {sysid} logic stopped.")
 
