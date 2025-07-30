@@ -3,9 +3,10 @@
 # Third Party imports
 import argparse
 import json
+import threading
 import time
 from enum import StrEnum
-from typing import TypedDict
+from typing import Any, TypedDict
 
 import zmq
 from pymavlink import mavutil
@@ -67,11 +68,54 @@ class LogicConfig(TypedDict):
     monitored_items: list[int]
 
 
+rid_data = dict[str, str | float]()
+rid_fields = {"lat", "lon", "alt", "vel", "cog"}
+
+
+def collect_rid_data(
+    rid_sock: zmq.Socket[bytes], lock: threading.Lock, stop_event: threading.Event
+):
+    """Collect Remote ID data from the ZMQ socket."""
+    global rid_data
+    while not stop_event.is_set():
+        try:
+            msg: dict[str, Any] = rid_sock.recv_json()  # type: ignore
+            update_rid_data(msg, lock)
+        except:
+            pass
+
+
+def update_rid_data(new_data: dict[str, Any], lock: threading.Lock):
+    """Update the global Remote ID data with new values."""
+    global rid_data
+    with lock:
+        for key, value in new_data.items():
+            if key in rid_fields:
+                rid_data[key] = value
+
+
+def receive_rids(
+    rid_sock: zmq.Socket[bytes], stop_event: threading.Event, verbose: int
+):
+
+    while not stop_event.is_set():
+        try:
+            msg: dict[str, Any] = rid_sock.recv_json()  # type: ignore
+            if verbose > 1:
+                print(f"🔁 Received Remote ID data: {msg}")
+        except:
+            pass
+
+
 def start_logic(config: LogicConfig, verbose: int = 1):
     """Start bidirectional proxy for a given UAV system_id."""
     sysid = config["sysid"]
     port_offset = config["port_offset"]
     monitored_items = config["monitored_items"]
+
+    global rid_data
+    rid_data["sysid"] = sysid
+
     i = sysid - 1
     vh_conn = create_connection_tcp(base_port=BasePort.VEH, offset=port_offset)
     cs_conn = create_connection_udp(base_port=BasePort.GCS, offset=port_offset)
@@ -79,9 +123,27 @@ def start_logic(config: LogicConfig, verbose: int = 1):
     zmq_ctx = zmq.Context()
     rid_in_sock = zmq_ctx.socket(zmq.SUB)
     rid_in_sock.connect(f"tcp://127.0.0.1:{BasePort.RID_DOWN + port_offset}")
+    rid_in_sock.setsockopt(zmq.SUBSCRIBE, b"")
+    rid_in_sock.setsockopt(zmq.RCVTIMEO, 100)
     rid_out_sock = zmq_ctx.socket(zmq.PUB)
     rid_out_sock.bind(f"tcp://127.0.0.1:{BasePort.RID_UP + port_offset}")
     rid_out_sock.setsockopt(zmq.SNDTIMEO, 100)
+    rid_data_sock = zmq_ctx.socket(zmq.SUB)
+    rid_data_sock.connect(f"tcp://127.0.0.1:{BasePort.RID_DATA + port_offset}")
+    rid_data_sock.setsockopt(zmq.SUBSCRIBE, b"")
+    rid_data_sock.setsockopt(zmq.RCVTIMEO, 100)
+    rid_lock = threading.Lock()
+    stop_event = threading.Event()
+    rid_data_thread = threading.Thread(
+        target=collect_rid_data,
+        args=(rid_data_sock, rid_lock, stop_event),
+    )
+    rid_data_thread.start()
+    rid_recv_thread = threading.Thread(
+        target=receive_rids,
+        args=(rid_in_sock, stop_event, verbose),
+    )
+    rid_recv_thread.start()
 
     logic = VehicleLogic(
         vh_conn,
@@ -104,21 +166,25 @@ def start_logic(config: LogicConfig, verbose: int = 1):
 
             if remote_id_period.trigger():
                 try:
-                    rid_out_sock.send_json({"test": "test"})  # type: ignore
+                    rid_out_sock.send_json(rid_data)  # type: ignore
                 except:
                     pass
 
             if logic.plan.state == State.DONE:
                 send_done_until_ack(cs_conn, sysid)
                 break
+
             logic.act()
             time.sleep(0.01)
     finally:
+        stop_event.set()
         cs_conn.close()
         vh_conn.close()
 
         rid_in_sock.close()
         rid_out_sock.close()
+        rid_data_thread.join()
+        rid_recv_thread.join()
         zmq_ctx.term()
 
         print(f"❎ Vehicle {sysid} logic stopped.")

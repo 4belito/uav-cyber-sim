@@ -210,6 +210,7 @@ class Simulator:
             BasePort.VEH,
             BasePort.RID_UP,
             BasePort.RID_DOWN,
+            BasePort.RID_DATA,
         ]
         return self._find_port_offsets(base_ports, self.n_vehs)
 

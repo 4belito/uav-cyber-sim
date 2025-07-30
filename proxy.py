@@ -12,6 +12,7 @@ from typing import TextIO
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 from pymavlink import mavutil
+import zmq
 
 # First Party imports
 from config import DATA_PATH, BasePort
@@ -165,6 +166,7 @@ def write_and_log_with_sensors(
     recipient: str,
     sensor_logs: dict[str, TextIO],
     sysid: int,
+    rid_sock: zmq.Socket[bytes],
 ):
     """Write and log proxy and sensor messages in one step."""
     sender, time_received, msg = q.get()
@@ -190,13 +192,15 @@ def write_and_log_with_sensors(
 
     # Check if it's a sensor message to log separately
     if msg_type in {"RAW_IMU", "SCALED_PRESSURE", "GPS_RAW_INT"}:
+        data = msg.to_dict()
+        rid_sock.send_json(data, flags=zmq.NOBLOCK)  # type: ignore
         log_line = json.dumps(
             {
                 "sysid": sysid,
                 "sender": sender,
                 "time_received": time_received,
                 "time_logged": now,
-                "msg": msg.to_dict(),
+                "msg": data,
             }
         )
 
@@ -224,6 +228,10 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
     cs_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
     oc_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
     vh_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
+
+    zmq_ctx = zmq.Context()
+    rid_sock = zmq_ctx.socket(zmq.PUB)
+    rid_sock.bind(f"tcp://127.0.0.1:{BasePort.RID_DATA + port_offset}")
     print(f"🚀 Starting Proxy {sysid}")
 
     stop_event = threading.Event()
@@ -297,7 +305,13 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
             while not vh_queue.empty():
                 # write_and_log_message(vh_queue, vh_conn, log_writer, "VEH")
                 write_and_log_with_sensors(
-                    vh_queue, vh_conn, log_writer, "VEH", sensor_log_files, sysid
+                    vh_queue,
+                    vh_conn,
+                    log_writer,
+                    "VEH",
+                    sensor_log_files,
+                    sysid,
+                    rid_sock,
                 )
 
             time.sleep(0.01)
