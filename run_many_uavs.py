@@ -12,7 +12,6 @@ Run from command line for faster output than notebooks:
 
 import random
 import signal
-from collections import defaultdict
 
 from config import Color
 from helpers import clean
@@ -44,7 +43,7 @@ def main():
     enu_origin = ENUPose(0, 0, gra_origin.alt, gra_origin.heading)
 
     gcs = [Color.RED, Color.ORANGE, Color.GREEN, Color.BLUE]
-    n_uavs_per_gcs = 10
+    n_uavs_per_gcs = 2
     side_len = 10
     altitude = 5
     max_delay = 3
@@ -65,10 +64,12 @@ def main():
 
     msn_delays = [random.randint(0, max_delay) for _ in base_homes]
 
-    # Assign vehicles to GCS (by color)
-    gcs_sysids: dict[str, list[int]] = defaultdict(list)
-    for i, color in enumerate(colors, start=1):
-        gcs_sysids[f"{color.name} {color.emoji}"].append(i)
+    ## Assign vehicles to GCS (by color)
+    gcs_names = [f"{color.name} {color.emoji}" for color in colors]
+    gcs_sysids = [
+        list(range(i * n_uavs_per_gcs + 1, (i + 1) * n_uavs_per_gcs + 1))
+        for i in range(len(colors))
+    ]
 
     # Gazebo Configuration
     gaz_config = ConfigGazebo(
@@ -97,6 +98,7 @@ def main():
     # Launch Simulator
     simulator = Simulator(
         visualizers=[novis],
+        gcs_names=gcs_names,
         gcs_sysids=gcs_sysids,
         missions=[veh.mission for veh in qgc_config.vehicles],
         terminals=["gcs"],
