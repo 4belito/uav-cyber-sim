@@ -193,7 +193,10 @@ def write_and_log_with_sensors(
     # Check if it's a sensor message to log separately
     if msg_type in {"RAW_IMU", "SCALED_PRESSURE", "GPS_RAW_INT"}:
         data = msg.to_dict()
-        rid_sock.send_json(data, flags=zmq.NOBLOCK)  # type: ignore
+        try:
+            rid_sock.send_json(data, flags=zmq.NOBLOCK)  # type: ignore
+        except:
+            pass
         log_line = json.dumps(
             {
                 "sysid": sysid,
