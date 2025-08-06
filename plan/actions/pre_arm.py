@@ -133,11 +133,14 @@ def check_sys_status(
         raise StepFailed(
             f"Vehicle {conn.target_system}: Battery too low ({msg.battery_remaining}%)"
         )
+    healthy = msg.onboard_control_sensors_health
+    enabled = msg.onboard_control_sensors_enabled
     missing = [
-        sensor.name
-        for sensor in required_sensors
-        if not msg.onboard_control_sensors_health & sensor
+        req_sensor.name
+        for req_sensor in required_sensors
+        if not healthy & enabled & req_sensor
     ]
+
     if missing:
         raise StepFailed(
             f"Vehicle {conn.target_system}: Missing or unhealthy sensors: "

@@ -1,8 +1,9 @@
 """Location types."""
 
 from typing import NamedTuple, Self, Type, TypeVar
-from geopy import distance
+
 import numpy as np
+from geopy import distance
 
 T = TypeVar("T")
 

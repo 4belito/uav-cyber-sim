@@ -62,5 +62,8 @@
     // ----------------------------
     // Notebook
     // ----------------------------
-    "notebook.lineNumbers": "on"
+    "notebook.lineNumbers": "on",
+    "python-envs.defaultEnvManager": "ms-python.python:conda",
+    "python-envs.defaultPackageManager": "ms-python.python:conda",
+    "python-envs.pythonProjects": []
 }

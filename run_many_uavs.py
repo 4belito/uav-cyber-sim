@@ -15,8 +15,6 @@ import signal
 
 from config import Color
 from helpers import clean
-
-# from helpers import clean  # , local2global
 from helpers.cleanup import ALL_PROCESSES
 from mavlink.customtypes.location import ENUPose, GRAPose
 from plan import Plan
@@ -39,14 +37,14 @@ def main():
     clean(ALL_PROCESSES)
 
     # Create Plans
-    gra_origin = GRAPose(-35.3633280, 149.1652241, 0, 90)  # east, north, up, heading
-    enu_origin = ENUPose(0, 0, gra_origin.alt, gra_origin.heading)
+    gra_origin = GRAPose(lat=-35.3633280, lon=149.1652241, alt=0, heading=90)
+    enu_origin = ENUPose(x=0, y=0, z=gra_origin.alt, heading=gra_origin.heading)
 
     gcs = [Color.RED, Color.ORANGE, Color.GREEN, Color.BLUE]
-    n_uavs_per_gcs = 2
+    n_uavs_per_gcs = 20
     side_len = 10
     altitude = 5
-    max_delay = 3
+    max_delay = 0  # sec
 
     base_homes = ENUPose.list(
         [
@@ -55,6 +53,7 @@ def main():
             for j in range(n_uavs_per_gcs)
         ]
     )
+
     base_paths = [
         Plan.create_square_path(side_len=side_len, alt=altitude, heading=0)
         for _ in base_homes
@@ -65,22 +64,24 @@ def main():
     msn_delays = [random.randint(0, max_delay) for _ in base_homes]
 
     ## Assign vehicles to GCS (by color)
-    gcs_names = [f"{color.name} {color.emoji}" for color in colors]
+    gcs_names = [f"{color.name} {color.emoji}" for color in gcs]
     gcs_sysids = [
         list(range(i * n_uavs_per_gcs + 1, (i + 1) * n_uavs_per_gcs + 1))
-        for i in range(len(colors))
+        for i in range(len(gcs))
     ]
 
     # Gazebo Configuration
     gaz_config = ConfigGazebo(
         origin=enu_origin, world_path="simulator/gazebo/worlds/runway3.world"
     )
+
     for path, home, c in zip(base_paths, base_homes, colors):
         gaz_config.add(base_path=path, base_home=home, color=c)
     # gaz_config.show()
 
     # QGroundControl Configuration
     qgc_config = ConfigQGC(origin=gra_origin)
+
     for path, home, color, delay in zip(base_paths, base_homes, colors, msn_delays):
         qgc_config.add(base_path=path, base_home=home, color=color, mission_delay=delay)
     # qgc_config.show()
@@ -104,6 +105,7 @@ def main():
         terminals=["gcs"],
         verbose=1,
     )
+
     orac = simulator.launch()
 
     # Main loop: check all UAVs for completion
