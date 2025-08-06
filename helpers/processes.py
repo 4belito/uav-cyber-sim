@@ -15,7 +15,11 @@ def create_process(
 ) -> Popen[bytes]:
     """Launch a subprocess, optionally in a visible terminal."""
     redirect = " > /dev/null 2>&1" if suppress_output else ""
-    full_cmd = (f"{env_cmd}; " if env_cmd else "") + f"{cmd}{redirect}; {after}"
+    full_cmd = (
+        (f"{env_cmd}; " if env_cmd else "")
+        + f"{cmd}{redirect}"
+        + (f"; {after}" if visible else "")
+    )
     bash_cmd = ["bash", "-c", full_cmd]
 
     if visible and platform.system() == "Linux":
