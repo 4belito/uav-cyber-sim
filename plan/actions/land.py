@@ -1,5 +1,7 @@
 """Defines a LAND action with execution and landing check using MAVLink commands."""
 
+import logging
+
 from mavlink.customtypes.connection import MAVConnection
 from mavlink.customtypes.location import ENU
 from mavlink.enums import CmdNav, LandState, MsgID
@@ -51,8 +53,8 @@ def check_land(conn: MAVConnection, verbose: int):
     # parameter 4 is confirmation(it may be increased)
     msg = conn.recv_match(type="EXTENDED_SYS_STATE")
     current_pos = get_ENU_position(conn)
-    if current_pos is not None and verbose > 1:
-        print(f"Vehicle {conn.target_system}: 🛬 Altitute: {current_pos[2]:.2f} m")
+    if current_pos is not None:
+        logging.debug(f"Vehicle {conn.target_system}: Altitude: {current_pos[2]:.2f} m")
     on_ground = bool(msg and msg.landed_state == LandState.ON_GROUND)
     if on_ground:
         stop_msg(conn, MsgID.EXTENDED_SYS_STATE)

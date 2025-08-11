@@ -6,6 +6,7 @@ Includes:
 - Construction of Step and Action objects to integrate into mission plans.
 """
 
+import logging
 import math
 from functools import partial
 
@@ -88,8 +89,7 @@ def check_reach_wp(
     pos = get_ENU_position(conn)
     if pos is not None:
         dist = math.dist(pos, wp)
-        if verbose > 1:
-            print(f"Vehicle {conn.target_system}: 📍 Distance to target: {dist:.2f} m")
+        logging.debug(f"📍 Vehicle {conn.target_system}: Distance to target: {dist:.2f} m")
         answer = dist < wp_margin
     else:
         answer = False

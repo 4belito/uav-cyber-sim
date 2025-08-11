@@ -7,6 +7,7 @@ format.
 
 """
 
+import logging
 import time
 from functools import partial
 
@@ -50,16 +51,15 @@ def exec_upload_mission(
     sysid, compid = conn.target_system, conn.target_component
     mission = MissionLoader(sysid, compid)
     count = mission.load(mission_path)
-    if verbose:
-        print(f"Vehicle {conn.target_system}: ✅ {count} waypoints read.")
-    if verbose == 2:
-        for i in range(count):
-            wp = mission.item(i)
-            cmd_name = CmdNav(wp.command).name
-            print(
-                f"Vehicle {conn.target_system}: 🧭 Mission[{i}] → cmd: {cmd_name}, "
-                f"x: {wp.x}, y: {wp.y}, z: {wp.z}, current: {wp.current}"
-            )
+    logging.info(f"✅ Vehicle {conn.target_system}: {count} waypoints read")
+    
+    for i in range(count):
+        wp = mission.item(i)
+        cmd_name = CmdNav(wp.command).name
+        logging.debug(
+            f"🧭 Vehicle {conn.target_system}: Mission[{i}] → cmd: {cmd_name}, "
+            f"x: {wp.x}, y: {wp.y}, z: {wp.z}, current: {wp.current}"
+        )
     time.sleep(1)
     conn.mav.mission_count_send(sysid, compid, mission.count())
     for i in range(mission.count()):
@@ -69,8 +69,7 @@ def exec_upload_mission(
                 f"Vehicle {conn.target_system}: ❌ Unexpected mission request: {msg}"
             )
         conn.mav.send(mission.wp(i))
-        if verbose:
-            print(f"Vehicle {conn.target_system}: ✅ Sent mission item {i}")
+        logging.debug(f"✅ Vehicle {conn.target_system}: Sent mission item {i}")
 
 
 def check_upload_mission(
@@ -80,11 +79,10 @@ def check_upload_mission(
     """Verify that the mission upload was successful."""
     ack = conn.recv_match(type="MISSION_ACK", blocking=True, timeout=5)
     if ack and MissionResult(ack.type) == MissionResult.ACCEPTED:
-        if verbose:
-            print(f"Vehicle {conn.target_system}: ✅ Mission upload successful!")
+        logging.info(f"✅ Vehicle {conn.target_system}: Mission upload successful!")
         return True, None
     if verbose:
-        print(f"⚠️ Mission upload failed or timed out: {ack}")
+        logging.warning(f"⚠️ Mission upload failed or timed out: {ack}")
     return False, None
 
 
@@ -104,7 +102,6 @@ def check_clear_mission(
     """Verify that cleared mission was succesful."""
     msg = conn.recv_match(type="STATUSTEXT")
     if msg and msg.text == "ArduPilot Ready":
-        if verbose == 2:
-            print(f"Vehicle {conn.target_system}: 🧹 Cleared previous mission")
+        logging.info(f"🧹 Vehicle {conn.target_system}: Cleared previous mission")
         return True, None
     return False, None

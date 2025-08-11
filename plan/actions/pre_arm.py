@@ -14,6 +14,7 @@ The main entry point is `make_pre_arm()`, which returns an `Action` composed of
 these checks in sequence.
 """
 
+import logging
 from functools import partial
 
 from mavlink.customtypes.connection import MAVConnection
@@ -95,11 +96,10 @@ def check_ekf_status(
         return False, None
     missing = [flag.name for flag in required_flags if not msg.flags & flag]
     if missing:
-        if verbose > 2:
-            print(
-                f"Vehicle {conn.target_system}: ⌛ Waiting for EKF to be ready... "
-                f"Pending: {', '.join(missing)}"
-            )
+        logging.debug(
+            f"🛰️ Vehicle {conn.target_system}: Waiting for EKF to be ready... "
+            f"Pending: {', '.join(missing)}"
+        )
         return False, None
     stop_msg(conn, msg_id=MsgID.EKF_STATUS_REPORT)
     return True, None
@@ -111,12 +111,11 @@ def check_gps_status(conn: MAVConnection, verbose: int) -> tuple[bool, None]:
     if not msg:
         return False, None
     if msg.fix_type < 3:
-        if verbose:
-            print(
-                f"Vehicle {conn.target_system}: 📡 GPS fix too weak —"
-                f" fix_type = {msg.fix_type} (need at least 3 for 3D fix)"
-            )
-            return False, None
+        logging.warning(
+            f"📡 Vehicle {conn.target_system}: GPS fix too weak — "
+            f"fix_type = {msg.fix_type} (need at least 3 for 3D fix)"
+        )
+        return False, None
         # raise StepFailed(f"GPS fix too weak (fix_type = {msg.fix_type})")
     # stop_msg(conn, msg_id=MsgID.GPS_RAW_INT)
     return True, None
@@ -131,7 +130,7 @@ def check_sys_status(
         return False, None
     if msg.battery_remaining < 20:
         raise StepFailed(
-            f"Vehicle {conn.target_system}: Battery too low ({msg.battery_remaining}%)"
+            f"🔋 Vehicle {conn.target_system}: Battery too low ({msg.battery_remaining}%)"
         )
     healthy = msg.onboard_control_sensors_health
     enabled = msg.onboard_control_sensors_enabled
@@ -143,7 +142,7 @@ def check_sys_status(
 
     if missing:
         raise StepFailed(
-            f"Vehicle {conn.target_system}: Missing or unhealthy sensors: "
+            f"⚠️ Vehicle {conn.target_system}: Missing or unhealthy sensors: "
             f"{', '.join(missing)}"
         )
     stop_msg(conn, msg_id=MsgID.SYS_STATUS)

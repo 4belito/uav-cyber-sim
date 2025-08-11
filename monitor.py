@@ -3,6 +3,8 @@ Define the UAVMonitor class to UAV monitoring.
 Currently provides basic global position tracking and mission completion detection.
 """
 
+import logging
+
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 from pymavlink.dialects.v20 import common as mavlink2  # type: ignore
 
@@ -74,6 +76,6 @@ class UAVMonitor:
                 command=CustomCmd.PLAN_DONE, result=mavlink2.MAV_RESULT_ACCEPTED
             )
             if self.verbose:
-                print(f"{self.name}: ✅ Vehicle {sysid} completed its mission")
+                logging.info(f"{self.name}: ✅ Vehicle {sysid} completed its mission")
             return True
         return False

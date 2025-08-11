@@ -1,5 +1,6 @@
 """Module defining the START_MISSION action for UAV mission planning."""
 
+import logging
 from functools import partial
 
 from mavlink.customtypes.connection import MAVConnection
@@ -44,7 +45,6 @@ def check_start_mission(conn: MAVConnection, verbose: int) -> tuple[bool, None]:
     if msg:
         text = msg.text.strip().lower()
         if text.startswith("mission"):
-            if verbose == 2:
-                print(f"Vehicle {conn.target_system}: 🚀 Mission has started")
+            logging.info(f"🚀 Vehicle {conn.target_system}: Mission has started")
             return True, None
     return False, None

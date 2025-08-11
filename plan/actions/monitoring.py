@@ -7,6 +7,7 @@ format.
 
 """
 
+import logging
 from functools import partial
 
 from mavlink.customtypes.connection import MAVConnection
@@ -47,11 +48,11 @@ def check_item(
     """Check if a item is reached."""
     msg = conn.recv_match(type="MISSION_ITEM_REACHED", blocking=True)
     if msg:
-        if verbose and msg.seq == seq:
-            print(f"Vehicle {conn.target_system}: ✴️  Reached waypoint: {msg.seq}")
+        if msg.seq == seq:
+            logging.info(f"Vehicle {conn.target_system}: Reached waypoint: {msg.seq}")
             return True, None
     else:
-        print(f"Vehicle {conn.target_system}: loss reached item {seq} message")
+        logging.warning(f"Vehicle {conn.target_system}: loss reached item {seq} message")
     return False, None
 
 
@@ -64,7 +65,7 @@ def check_endmission(
     if msg:
         text = msg.text.strip().lower()
         if "disarming" in text:
-            print(f"Vehicle {conn.target_system}: 🏁 Mission completed")
+            logging.info(f"Vehicle {conn.target_system}: Mission completed")
             if verbose > 1:
                 stop_msg(conn, msg_id=MsgID.GLOBAL_POSITION_INT)
             return True, None

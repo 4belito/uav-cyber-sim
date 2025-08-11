@@ -10,12 +10,14 @@ Run from command line for faster output than notebooks:
     python multi_uav_launcher.py
 """
 
+import logging
 import random
 import signal
 
 from config import Color
 from helpers import clean
 from helpers.cleanup import ALL_PROCESSES
+from helpers.setup_log import setup_logging
 from mavlink.customtypes.location import ENUPose, GRAPose
 from plan import Plan
 from simulator import (
@@ -36,19 +38,22 @@ def main():
     """Launch a multi-UAV simulation and monitors mission completion."""
     clean(ALL_PROCESSES)
 
+    setup_logging("main")
+    logging.info("Starting simulation...")
+
     # Create Plans
     gra_origin = GRAPose(lat=-35.3633280, lon=149.1652241, alt=0, heading=90)
     enu_origin = ENUPose(x=0, y=0, z=gra_origin.alt, heading=gra_origin.heading)
 
     gcs = [Color.RED, Color.ORANGE, Color.GREEN, Color.BLUE]
-    n_uavs_per_gcs = 20
+    n_uavs_per_gcs = 60
     side_len = 10
     altitude = 5
     max_delay = 0  # sec
 
     base_homes = ENUPose.list(
         [
-            (i * 50, j * 3 * side_len, 0, 0)
+            (i * 50 * side_len, j * 50 * side_len, 0, 0)
             for i in range(len(gcs))
             for j in range(n_uavs_per_gcs)
         ]
@@ -109,8 +114,11 @@ def main():
     orac = simulator.launch()
 
     # Main loop: check all UAVs for completion
+    logging.info("Starting Oracle monitoring...")
     orac.run()
-    print("🎉 All UAVs have completed their missions!")
+    logging.info("🎉 Oracle monitoring completed!")
+    logging.info("🎉 All UAVs have completed their missions!")
+    logging.info("🎯 Main simulation process terminating...")
 
 
 if __name__ == "__main__":

@@ -5,18 +5,19 @@ instances.
 
 import argparse
 import json
+import logging
 import pickle
 from concurrent import futures
 from typing import TypedDict
 
 import zmq
-from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
 from config import DATA_PATH, ENV_CMD_ARP, ENV_CMD_PYT, BasePort
 from helpers.processes import create_process
-from mavlink.customtypes.connection import MAVConnection
+from helpers.setup_log import setup_logging
 from mavlink.customtypes.location import GRAs
 from monitor import UAVMonitor
+from proxy import create_udp_conn
 
 
 def main():
@@ -50,6 +51,8 @@ class GCS(UAVMonitor):
     """Ground Control Station class extending Oracle with trajectory logging."""
 
     def __init__(self, config_path: str, verbose: int = 1):
+        # Configure logging for this GCS process
+
         with open(config_path) as f:
             self.config: GCSConfig = json.load(f)
         self.verbose = verbose
@@ -67,24 +70,35 @@ class GCS(UAVMonitor):
 
         super().__init__(self.conns, name=f"GCS {self.config['name']}", verbose=verbose)
         self.paths: dict[int, GRAs] = {sysid: [] for sysid in self.conns}
+        setup_logging(self.config["name"], verbose=verbose, console_output=True)
+        logging.debug(f"{self.config['name']} GCS initialized with {self.n_uavs} UAVs")
+        logging.info(f"GCS {self.config['name']} started with {self.n_uavs} UAVs")
 
     def run(self):
+        """Run the GCS monitoring loop until all UAVs complete their missions."""
         while len(self.conns):
             self.gather_broadcasts()
             self.save_pos()
             for sysid in list(self.conns.keys()):
                 if self.is_plan_done(sysid):
                     self.remove_uav(sysid)
-        if self.verbose:
-            print(
-                f"✅ All UAVs assigned to GCS {self.config['name']} have completed their mission."
-            )
-            self.orc_sock.send_string("DONE")  # type: ignore
+
+        logging.info(
+            f"All UAVs assigned to GCS {self.config['name']} have completed their mission"
+        )
+        logging.info(f"GCS {self.config['name']}: Sending DONE message to Oracle...")
+        self.orc_sock.send_string("DONE")  # type: ignore
+        logging.info(f"GCS {self.config['name']}: DONE message sent to Oracle")
+
+        # Small delay to ensure the message is sent before process termination
+        import time
+
+        time.sleep(0.1)
+
         trajectory_file = DATA_PATH / f"trajectories_{self.config['name']}.pkl"
         with open(trajectory_file, "wb") as file:
             pickle.dump(self.paths, file)
-        if self.verbose:
-            print(f"💾 Trajectories saved to '{trajectory_file}'.")
+        logging.info(f"Trajectories saved to '{trajectory_file}'")
 
     def save_pos(self):
         """Save the current global position of each UAV to their trajectory path."""
@@ -113,8 +127,7 @@ class GCS(UAVMonitor):
             title=f"ArduPilot SITL Launcher: Vehicle {sysid}",
             env_cmd=ENV_CMD_ARP,
         )  # "exit"
-        if self.verbose:
-            print(f"🚀 ArduPilot SITL vehicle {sysid} launched (PID {p.pid})")
+        logging.debug(f"ArduPilot SITL vehicle {sysid} launched (PID {p.pid})")
 
         p = create_process(
             uav_config["logic_cmd"],
@@ -124,8 +137,7 @@ class GCS(UAVMonitor):
             title=f"UAV logic: Vehicle {sysid}",
             env_cmd=ENV_CMD_PYT,
         )  # "exit"
-        if self.verbose:
-            print(f"🚀 UAV logic for vehicle {sysid} launched (PID {p.pid})")
+        logging.debug(f"UAV logic for vehicle {sysid} launched (PID {p.pid})")
 
         p = create_process(
             uav_config["proxy_cmd"],
@@ -135,14 +147,14 @@ class GCS(UAVMonitor):
             title=f"Proxy: Vehicle {sysid}",
             env_cmd=ENV_CMD_PYT,
         )  # "exit"
-        if self.verbose:
-            print(f"🚀 Proxy for vehicle {sysid} launched (PID {p.pid})")
+        logging.debug(f"Proxy for vehicle {sysid} launched (PID {p.pid})")
 
-        port = BasePort.GCS + uav_config["port_offset"]
-        conn: MAVConnection = connect(f"udp:127.0.0.1:{port}")  # type: ignore
-        conn.wait_heartbeat()
-        if self.verbose:
-            print(f"🔗 UAV {sysid} is connected to GCS {self.config['name']}")
+        conn = create_udp_conn(
+            base_port=BasePort.GCS,
+            offset=uav_config["port_offset"],
+            mode="receiver",
+        )
+        logging.info(f"UAV {sysid} connected to GCS {self.config['name']}")
         return conn
 
     @staticmethod

@@ -1,5 +1,6 @@
 """Minimal visualizer that sets home locations without GUI rendering."""
 
+import logging
 from dataclasses import dataclass
 
 from helpers.change_coordinates import pose
@@ -51,5 +52,4 @@ class NoVisualizer(Visualizer[NovisVehicle]):
 
     def launch(self, port_offsets: list[int], verbose: int = 1):
         """Print a message indicating that no visualizer will be launched."""
-        if verbose:
-            print("🙈 Running without visualization.")
+        logging.info("🙈 Running without visualization.")

@@ -4,6 +4,7 @@ and optional visualization.
 """
 
 import json
+import logging
 import socket
 from concurrent import futures
 from pathlib import Path
@@ -59,8 +60,8 @@ class Simulator:
         verbose: int = 1,
     ):
         self.visuals = visualizers
-        self.terminals: set[SimProcess] = set(terminals)
-        self.suppress: set[SimProcess] = set(supress_output)
+        self.terminals = set(terminals)
+        self.suppress = set(supress_output)
         self.n_vehs = visualizers[0].config.n_vehicles
         self.n_gcss = len(gcs_names)
         self.verbose = verbose
@@ -72,6 +73,12 @@ class Simulator:
         self.monitored_items = monitored_mission_items or [
             list(range(1, mission.n_items - 1)) for mission in missions
         ]
+        logging.debug(
+            (
+                f"simulator initialized with {self.n_vehs} vehicles "
+                f"and {self.n_gcss} GCSs"
+            )
+        )
 
     def launch(self) -> Oracle:
         """Launch vehicle instances and visualizer."""
@@ -167,8 +174,14 @@ class Simulator:
                 title=f"GCS: {gcs_name}",
                 env_cmd=ENV_CMD_PYT,
             )  # "exit"
-            if self.verbose:
-                print(f"🚀 GCS {gcs_name} launched (PID {p.pid})")
+            logging.info(f"🚀 GCS {gcs_name} launched (PID {p.pid})")
+
+        # Wait for GCS processes to launch their vehicles before connecting
+        import time
+
+        logging.info("⏳ Waiting for GCS processes to launch vehicles...")
+        time.sleep(5)  # Give GCS processes time to launch all their vehicles
+        logging.info("🔗 Starting Oracle connections to vehicles...")
 
         ## Connect to oracle
         with futures.ThreadPoolExecutor() as executor:
@@ -197,8 +210,7 @@ class Simulator:
         port = BasePort.ORC + self.uav_port_offsets[i]
         conn: MAVConnection = connect(f"udp:127.0.0.1:{port}")  # type: ignore
         conn.wait_heartbeat()
-        if self.verbose:
-            print(f"🔗 UAV logic {i + 1} is connected to {self.oracle_name}")
+        logging.info(f"🔗 UAV logic {i + 1} is connected to {self.oracle_name}")
         return conn
 
     def _find_uav_port_offsets(self):
@@ -237,6 +249,5 @@ class Simulator:
                     break
             else:
                 offsets.append(cur_offset)
-                # print(f"Found offset {len(offsets)} - {cur_offset}")
             cur_offset += unit_offset
         return offsets

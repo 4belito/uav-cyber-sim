@@ -53,7 +53,7 @@ class BasePort(IntEnum):
     ARP = 5760  # Ardupilot Vehicle(TCP)
     GCS = 14551  # Ground Control Station(UDP)
     ORC = 14552  # Oracle(UDP)
-    VEH = 14553
+    VEH = 14553  # Vehicle(TCP)
     RID_UP = 14554  # Remote ID (UAV->ORC)
     RID_DOWN = 14555  # Remote ID (ORC->UAV)
     RID_DATA = 14556  # Remote ID (PROXY->LOGIC) internal

@@ -3,6 +3,7 @@
 # Third Party imports
 import argparse
 import json
+import logging
 import threading
 import time
 from enum import StrEnum
@@ -14,13 +15,13 @@ from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
 # First Party imports
 from config import DATA_PATH, BasePort
+from helpers.setup_log import setup_logging
 from mavlink.customtypes.connection import MAVConnection
 from mavlink.customtypes.location import ENU
-from mavlink.enums import Autopilot, Type
-from mavlink.util import CustomCmd, connect
+from mavlink.util import CustomCmd
 from params.simulation import HEARTBEAT_PERIOD
 from plan import Action, Plan, State, Step
-from proxy import create_connection_udp
+from proxy import create_tcp_conn, create_udp_conn, send_heartbeat
 
 ######################################################################
 # NOTE: The plans have to only be hardcoded when using the GUIDED mode.
@@ -32,7 +33,6 @@ if not mission:
     ]
 ########################################
 # TODO: Refactor this module
-
 heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
 remote_id_period = mavutil.periodic_event(1.0)  # 1 hertz for Remote ID
 
@@ -42,22 +42,6 @@ def main():
     config_path, verbose = parse_arguments()
     config = VehicleLogic.load_config(config_path)
     start_logic(config, verbose=verbose or 1)
-
-
-# taken from mavproxy
-def send_heartbeat(conn: MAVConnection) -> None:
-    """Send a GCS heartbeat message to the UAV."""
-    conn.mav.heartbeat_send(Type.GCS, Autopilot.INVALID, 0, 0, 0)
-
-
-def create_connection_tcp(base_port: int, offset: int) -> MAVConnection:
-    """Create and in or out connection and wait for geting the hearbeat in."""
-    port = base_port + offset
-    conn = connect(f"tcpin:127.0.0.1:{port}")
-    conn.wait_heartbeat()
-    send_heartbeat(conn)
-    print("✅ Heartbeat received")
-    return conn
 
 
 class LogicConfig(TypedDict):
@@ -81,7 +65,7 @@ def collect_rid_data(
         try:
             msg: dict[str, Any] = rid_sock.recv_json()  # type: ignore
             update_rid_data(msg, lock)
-        except:
+        except Exception:
             pass
 
 
@@ -97,13 +81,12 @@ def update_rid_data(new_data: dict[str, Any], lock: threading.Lock):
 def receive_rids(
     rid_sock: zmq.Socket[bytes], stop_event: threading.Event, verbose: int
 ):
-
     while not stop_event.is_set():
         try:
             msg: dict[str, Any] = rid_sock.recv_json()  # type: ignore
             if verbose > 1:
-                print(f"🔁 Received Remote ID data: {msg}")
-        except:
+                logging.debug(f"Received Remote ID data: {msg}")
+        except Exception:
             pass
 
 
@@ -113,12 +96,34 @@ def start_logic(config: LogicConfig, verbose: int = 1):
     port_offset = config["port_offset"]
     monitored_items = config["monitored_items"]
 
+    # Setup logging for this logic process
+    setup_logging(f"logic_{sysid}", verbose=verbose, console_output=True)
+
     global rid_data
     rid_data["sysid"] = sysid
 
     i = sysid - 1
-    vh_conn = create_connection_tcp(base_port=BasePort.VEH, offset=port_offset)
-    cs_conn = create_connection_udp(base_port=BasePort.GCS, offset=port_offset)
+    try:
+        logging.debug(f"Vehicle {sysid}: Creating TCP connection to vehicle...")
+        vh_conn = create_tcp_conn(
+            base_port=BasePort.VEH, offset=port_offset, role="server", sysid=sysid
+        )
+        logging.debug(f"Vehicle {sysid}: Creating UDP connection to GCS...")
+        cs_conn = create_udp_conn(
+            base_port=BasePort.GCS, offset=port_offset, mode="sender"
+        )
+    except Exception as e:
+        logging.error(f"Vehicle {sysid}: Failed to create connections: {e}")
+        raise
+
+    # Debug: Check what target_system is after connection
+    logging.debug(
+        f"Vehicle {sysid}: MAVLink connection target_system = {vh_conn.target_system}"
+    )
+    logging.debug(
+        f"Vehicle {sysid}: MAVLink connection target_component = "
+        f"{vh_conn.target_component}"
+    )
 
     zmq_ctx = zmq.Context()
     rid_in_sock = zmq_ctx.socket(zmq.SUB)
@@ -167,11 +172,21 @@ def start_logic(config: LogicConfig, verbose: int = 1):
             if remote_id_period.trigger():
                 try:
                     rid_out_sock.send_json(rid_data)  # type: ignore
-                except:
+                except Exception as e:
+                    logging.error(f"Error sending RID data: {e}")
                     pass
 
             if logic.plan.state == State.DONE:
+                # Original working behavior for GCS/monitor
                 send_done_until_ack(cs_conn, sysid)
+
+                # Additional signal for immediate proxy termination
+                msg_proxy = mavlink.MAVLink_statustext_message(
+                    severity=6, text=b"LOGIC_DONE"
+                )
+                logging.info(f"Proxy ← Logic {sysid}: Sending LOGIC_DONE")
+                vh_conn.mav.send(msg_proxy)
+
                 break
 
             logic.act()
@@ -181,14 +196,14 @@ def start_logic(config: LogicConfig, verbose: int = 1):
         cs_conn.close()
         vh_conn.close()
 
-        # rid_in_sock.close()
-        # rid_out_sock.close()
-        # rid_data_sock.close()
+        rid_in_sock.close()
+        rid_out_sock.close()
+        rid_data_sock.close()
         rid_data_thread.join()
         rid_recv_thread.join()
-        # zmq_ctx.term()
+        zmq_ctx.term()
 
-        print(f"❎ Vehicle {sysid} logic stopped.")
+        logging.info(f"Vehicle {sysid} logic stopped")
 
 
 def send_done_until_ack(conn: MAVConnection, idx: int, max_tries: float = float("inf")):
@@ -199,19 +214,19 @@ def send_done_until_ack(conn: MAVConnection, idx: int, max_tries: float = float(
     msg = mavlink.MAVLink_statustext_message(severity=6, text=b"DONE")
     i = 0
     while i < max_tries:
-        print(f"📤 GCS ← UAV {idx}: Sending DONE (attempt {i + 1})")
+        logging.debug(f"GCS ← UAV {idx}: Sending DONE (attempt {i + 1})")
         conn.mav.send(msg)
 
         start = time.time()
         while time.time() - start < 0.05:
             ack = conn.recv_match(type="COMMAND_ACK", blocking=False)
             if ack and ack.command == CustomCmd.PLAN_DONE:
-                print("✅ ACK received. DONE message acknowledged.")
+                logging.info("ACK received. DONE message acknowledged")
                 return
             time.sleep(0.001)
         i += 1
 
-    print("⚠️ No ACK received after max attempts.")
+    logging.warning("No ACK received after max attempts")
 
 
 class VehicleMode(StrEnum):
@@ -249,7 +264,7 @@ class VehicleLogic:
         self.radar_radius: float = radar_radius
 
         if verbose:
-            print(f"{self.name}: 🚀 lauching")
+            logging.info(f"{self.name}: launching")
 
     def act(self):
         """Perform the next step in the mission plan."""
@@ -258,7 +273,9 @@ class VehicleLogic:
     def set_mode(self, new_mode: VehicleMode) -> None:
         """Switch the vehicle to a new operational mode."""
         if new_mode != self.mode:
-            print(f"{self.name}: Vehicle {self.sysid} switched to mode: 🔁 {new_mode}")
+            logging.info(
+                f"{self.name}: Vehicle {self.sysid} switched to mode: {new_mode}"
+            )
             self.mode = new_mode
 
     @property

@@ -5,6 +5,7 @@ Supports chained execution, state tracking, and verbose status reporting.
 
 from __future__ import annotations
 
+import logging
 import time
 from enum import StrEnum
 from functools import partial
@@ -96,11 +97,9 @@ class MissionElement:
         self.conn = connection  # Set later from the parent Action
         self.verbose = verbose
         self.sysid = connection.target_system
-        if self.verbose > 2:
-            print(
-                f"Vehicle {self.sysid}: {self.class_name} '{self.name}' is "
-                f"now connected ✅🔗"
-            )
+        logging.debug(
+            f"🔗 Vehicle {self.sysid}: {self.class_name} '{self.name}' is now connected"
+        )
 
 
 class Step(MissionElement):
@@ -127,8 +126,7 @@ class Step(MissionElement):
     def execute(self) -> None:
         """Execute the step and change state to IN_PROGRESS."""
         self.exec_fn(self.conn, self.verbose)
-        if self.verbose > 1:
-            print(f"Vehicle {self.sysid}: ▶️  {self.class_name} Started: {self.name}")
+        logging.debug(f"▶️ Vehicle {self.sysid}: {self.class_name} Started: {self.name}")
         self.state = State.IN_PROGRESS
 
     def check(self) -> None:
@@ -138,8 +136,9 @@ class Step(MissionElement):
             self.curr_pos = curr_pos
         if answer:
             self.state = State.DONE
-            if self.verbose > 1:
-                print(f"Vehicle {self.sysid}: ✅ {self.class_name} Done: {self.name}")
+            logging.debug(
+                f"✅ Vehicle {self.sysid}: {self.class_name} Done: {self.name}"
+            )
 
     def act(self):
         """Execute the step or check its progress based on current state."""
@@ -149,15 +148,15 @@ class Step(MissionElement):
             try:
                 self.check()
             except StepFailed as e:
-                print(
-                    f"Vehicle {self.conn.target_system}: ❌ {self.class_name} "
+                logging.error(
+                    f"❌ Vehicle {self.conn.target_system}: {self.class_name} "
                     f"{self.name} check failed: {e}"
                 )
                 self.state = State.NOT_STARTED
         elif self.state == State.DONE:
-            print("⚠️ Already done!. Cannot perform this step again!")
+            logging.warning("⚠️ Already done! Cannot perform this step again!")
         elif self.state == State.FAILED:
-            print("⚠️ Already failed!. Cannot perform this step again!")
+            logging.warning("⚠️ Already failed! Cannot perform this step again!")
 
     def reset(self):
         """Reset the step state and clear current position."""
@@ -241,43 +240,39 @@ class Action(MissionElement, Generic[T]):
 
     def _start_action(self):
         self.state = State.IN_PROGRESS
-        if self.verbose > 1:
-            print(
-                f"Vehicle {self.sysid}: ▶️  {self.class_name} "
-                f"Started: {self.emoji} {self.name}"
-            )
+        logging.debug(
+            f"▶️ Vehicle {self.sysid}: {self.class_name} Started: {self.emoji} {self.name}"
+        )
 
     def _progress_action(self):
         step = self.current
         if step is None or (step.state == State.DONE and step.next is None):
             self.state = State.DONE
-            if self.verbose:
-                print(
-                    f"Vehicle {self.sysid}: ✅ {self.class_name} "
-                    f"Done: {self.emoji} {self.name}"
-                )
+            logging.info(
+                f"✅ Vehicle {self.sysid}: {self.class_name} Done: {self.emoji} {self.name}"
+            )
         elif step.state == State.DONE:
             self.current = step.next
         elif step.state == State.FAILED:
             self.state = State.FAILED
-            print(
+            logging.error(
                 f"⚠️ Vehicle {self.sysid}: {self.class_name}: {self.emoji} {self.name} "
-                f"Already failed!. Cannot perform this again!"
+                f"Already failed! Cannot perform this again!"
             )
         else:
             step.act()
             self.update_pos(step)
 
     def _log_already_done(self):
-        print(
+        logging.warning(
             f"⚠️ Vehicle {self.sysid}: {self.class_name}: {self.emoji} {self.name} "
-            f"Already done!. Cannot perform this again!"
+            f"Already done! Cannot perform this again!"
         )
 
     def _log_already_failed(self):
-        print(
+        logging.warning(
             f"⚠️ Vehicle {self.sysid}: {self.class_name}: {self.emoji} {self.name} "
-            f"Already failed!. Cannot perform this again!"
+            f"Already failed! Cannot perform this again!"
         )
 
     def update_pos(self, step: T):
@@ -298,11 +293,9 @@ class Action(MissionElement, Generic[T]):
         for step in self.steps:
             step.bind(connection, verbose)
         super().bind(connection, verbose)
-        if verbose > 2:
-            print(
-                f"Vehicle {self.sysid}: {self.class_name} '{self.name}' is now "
-                f"connected ✅🔗"
-            )
+        logging.debug(
+            f"🔗 Vehicle {self.sysid}: {self.class_name} '{self.name}' is now connected"
+        )
 
     def __repr__(self) -> str:
         output = [super().__repr__()]

@@ -12,13 +12,14 @@ from functools import partial
 from mavlink.customtypes.connection import MAVConnection
 from mavlink.enums import CmdNav, LandState, MsgID
 from mavlink.util import ask_msg, stop_msg
-from plan.core import Action, ActionNames, Step
+from plan.core import ENU, Action, ActionNames, Step
 
 
 def make_takeoff(altitude: float = 1.0) -> Action[Step]:
     """Create a TAKEOFF action with execution and check steps."""
     takeoff_action = Action[Step](name=ActionNames.TAKEOFF, emoji="🛫")
-    target_pos = (0, 0, altitude)
+
+    target_pos = ENU(0, 0, altitude)
     # check_fn = partial(check_takeoff, wp=target_pos, wp_margin=wp_margin)
     exec_fn = partial(exec_takeoff, altitude=altitude)
     step = Step(
