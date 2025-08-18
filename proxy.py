@@ -42,7 +42,7 @@ def main() -> None:
     system_id, port_offset, verbose = parse_arguments()
     # Set up logging for standalone proxy
     setup_logging(f"proxy_{system_id}", verbose=verbose, console_output=True)
-    start_proxy(system_id, port_offset, verbose)
+    start_proxy(system_id, port_offset)
 
 
 def parse_arguments() -> tuple[int, int, int]:
@@ -128,7 +128,6 @@ class MessageRouter(threading.Thread):
         sender: str,
         sysid: int,
         stop_event: threading.Event,
-        verbose: int = 1,
     ):
         super().__init__()
         self.source = source
@@ -137,7 +136,6 @@ class MessageRouter(threading.Thread):
         self.sender = sender
         self.sysid = sysid
         self.stop_event = stop_event
-        self.verbose = verbose
 
     def run(self):
         """Continuously receive messages and dispatch them until stopped."""
@@ -154,7 +152,7 @@ class MessageRouter(threading.Thread):
                         and hasattr(msg, "text")
                         and getattr(msg, "text", None) == "LOGIC_DONE"
                     ):
-                        logging.info(
+                        logging.debug(
                             f"MessageRouter ({self.sender}): "
                             f"Received LOGIC_DONE, terminating proxy"
                         )
@@ -164,14 +162,14 @@ class MessageRouter(threading.Thread):
                     self.dispatch_message(msg)
 
             except EOFError as e:
-                logging.info(
+                logging.error(
                     f"EOF error in MessageRouter ({self.sender}): Connection closed"
                 )
                 logging.debug(f"EOF details: {e}")
                 self.stop_event.set()
                 break
             except ConnectionResetError as e:
-                logging.info(
+                logging.error(
                     f"Connection reset in MessageRouter ({self.sender}): "
                     f"Connection closed by peer"
                 )
@@ -180,7 +178,7 @@ class MessageRouter(threading.Thread):
                 break
             except OSError as e:
                 if e.errno == 5:  # Input/output error
-                    logging.info(
+                    logging.error(
                         f"I/O error in MessageRouter ({self.sender}): "
                         f"Connection terminated"
                     )
@@ -204,8 +202,7 @@ class MessageRouter(threading.Thread):
         """Send a message to all targets with timestamp and sender."""
         time_received = time.time()
         for q, label in zip(self.targets, self.labels):
-            if self.verbose > 2:
-                logging.debug(f"{label} {self.sysid}: {msg.get_type()}")
+            logging.debug(f"{label} {self.sysid}: {msg.get_type()}")
             q.put((self.sender, time_received, msg))
 
 
@@ -307,7 +304,7 @@ def write_and_log_with_sensors(
         file.flush()
 
 
-def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
+def start_proxy(sysid: int, port_offset: int) -> None:
     """Start bidirectional proxy for a given UAV system_id."""
     logging.debug(f"Proxy {sysid}: Creating connections...")
 
@@ -351,7 +348,7 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
     rid_sock.bind(f"tcp://127.0.0.1:{BasePort.RID_DATA + port_offset}")
     logging.debug(f"Proxy {sysid}: ZMQ setup complete")
 
-    logging.info(f"Starting Proxy {sysid}")
+    logging.debug(f"Starting Proxy {sysid}")
 
     stop_event = threading.Event()
 
@@ -364,7 +361,6 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
         sysid=sysid,
         sender="ARP",
         stop_event=stop_event,
-        verbose=verbose,
     )
 
     # GCS → ARP
@@ -375,7 +371,6 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
         sysid=sysid,
         sender="GCS",
         stop_event=stop_event,
-        verbose=verbose,
     )
 
     # ORC → ARP
@@ -386,7 +381,6 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
         sysid=sysid,
         sender="ORC",
         stop_event=stop_event,
-        verbose=verbose,
     )
 
     # VEH → ARP
@@ -397,7 +391,6 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
         sysid=sysid,
         sender="VEH",
         stop_event=stop_event,
-        verbose=verbose,
     )
     logging.debug(f"Proxy {sysid}: MessageRouter threads created")
 
@@ -452,13 +445,13 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
 
                 time.sleep(0.01)
             except EOFError as e:
-                logging.info(
+                logging.error(
                     f"EOF error in proxy main loop (sysid {sysid}): Connection closed"
                 )
                 logging.debug(f"EOF details: {e}")
                 break
             except ConnectionResetError as e:
-                logging.info(
+                logging.error(
                     f"Connection reset in proxy main loop (sysid {sysid}): "
                     f"Connection closed by peer"
                 )
@@ -466,7 +459,7 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
                 break
             except OSError as e:
                 if e.errno == 5:  # Input/output error
-                    logging.info(
+                    logging.error(
                         f"I/O error in proxy main loop (sysid {sysid}): "
                         f"Connection terminated"
                     )

@@ -6,6 +6,7 @@ flags. Also defines protocol interfaces for typed access to MAVLink messages and
 connections.
 """
 
+import logging
 from enum import IntEnum
 from pathlib import Path
 from typing import cast
@@ -43,7 +44,6 @@ class CustomCmd(IntEnum):
 
 def ask_msg(
     conn: MAVConnection,
-    verbose: int,
     msg_id: int,
     interval: int = 1_000_000,
 ) -> None:
@@ -61,11 +61,10 @@ def ask_msg(
         0,
         0,
     )
-    if verbose > 2:
-        print(
-            f"Vehicle {conn.target_system}: 📡 Requested message "
-            f"{MsgID(msg_id).name} at {1e6 / interval:.2f} Hz"
-        )
+    logging.debug(
+        f"Vehicle {conn.target_system}: 📡 Requested message "
+        f"{MsgID(msg_id).name} at {1e6 / interval:.2f} Hz"
+    )
 
 
 def stop_msg(conn: MAVConnection, msg_id: int) -> None:
@@ -111,17 +110,15 @@ def get_ENU_position(conn: MAVConnection) -> ENU | None:
 
 
 def get_GRA_position(
-    msg: mavlink.MAVLink_global_position_int_message, sysid: int, verbose: int = 1
+    msg: mavlink.MAVLink_global_position_int_message, sysid: int
 ) -> GRA:
     """Request and return the UAV's current local NED position."""
     lat = msg.lat / 1e7
     lon = msg.lon / 1e7
     alt = msg.relative_alt / 1000.0
-    if verbose > 1:
-        print(
-            f"Vehicle {sysid}: 📍 Position: "
-            f"lat={lat:.7f}, lon={lon:.7f}, alt={alt:.2f} m"
-        )
+    logging.debug(
+        f"Vehicle {sysid}: 📍 Position: lat={lat:.7f}, lon={lon:.7f}, alt={alt:.2f} m"
+    )
     return GRA(lat, lon, alt)
 
 

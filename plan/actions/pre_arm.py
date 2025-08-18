@@ -22,10 +22,6 @@ from mavlink.enums import EkfStatus, ModeFlag, MsgID, SensorFlag
 from mavlink.util import ask_msg, stop_msg
 from plan.core import Action, ActionNames, Step, StepFailed
 
-# def noop_exec(conn: MAVConnection, verbose: int) -> None:
-#     """No execution."""
-#     pass
-
 
 def make_pre_arm(
     delay: float = 0,
@@ -75,7 +71,7 @@ def make_pre_arm(
 
 
 # === CHECK FUNCTIONS ===
-def check_disarmed(conn: MAVConnection, _verbose: int) -> tuple[bool, None]:
+def check_disarmed(conn: MAVConnection) -> tuple[bool, None]:
     """Fail if the UAV is currently armed."""
     msg = conn.recv_match(type="HEARTBEAT")
     if not msg:
@@ -87,7 +83,6 @@ def check_disarmed(conn: MAVConnection, _verbose: int) -> tuple[bool, None]:
 
 def check_ekf_status(
     conn: MAVConnection,
-    verbose: int,
     required_flags: tuple[EkfStatus, ...],
 ) -> tuple[bool, None]:
     """Check whether all required EKF flags are set."""
@@ -105,7 +100,7 @@ def check_ekf_status(
     return True, None
 
 
-def check_gps_status(conn: MAVConnection, verbose: int) -> tuple[bool, None]:
+def check_gps_status(conn: MAVConnection) -> tuple[bool, None]:
     """Fail if GPS fix is not 3D (fix_type < 3)."""
     msg = conn.recv_match(type="GPS_RAW_INT")
     if not msg:
@@ -122,7 +117,7 @@ def check_gps_status(conn: MAVConnection, verbose: int) -> tuple[bool, None]:
 
 
 def check_sys_status(
-    conn: MAVConnection, verbose: int, required_sensors: tuple[SensorFlag, ...]
+    conn: MAVConnection, required_sensors: tuple[SensorFlag, ...]
 ) -> tuple[bool, None]:
     """Fail if battery is low or any required sensors are unhealthy."""
     msg = conn.recv_match(type="SYS_STATUS")
@@ -130,7 +125,10 @@ def check_sys_status(
         return False, None
     if msg.battery_remaining < 20:
         raise StepFailed(
-            f"🔋 Vehicle {conn.target_system}: Battery too low ({msg.battery_remaining}%)"
+            (
+                f"🔋 Vehicle {conn.target_system}: Battery too low "
+                f"({msg.battery_remaining}%)"
+            )
         )
     healthy = msg.onboard_control_sensors_health
     enabled = msg.onboard_control_sensors_enabled

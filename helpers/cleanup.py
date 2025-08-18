@@ -3,9 +3,9 @@
 import os
 import shutil
 from pathlib import Path
-from typing import List, Literal
+from typing import List
 
-from config import ARDU_LOGS_PATH, DATA_PATH, LOGS_PATH
+from config import DATA_PATH, LOGS_PATH
 
 ALL_PROCESSES = [
     "QGroundControl",
@@ -18,36 +18,27 @@ ALL_PROCESSES = [
     "gcs.py",
 ]
 
-All = Literal["all"]
 
-
-def kill_processes(victims: All | List[str] = "all"):
+def kill_processes(victims: List[str]):
     """Kill all related processes or a given list of process names."""
-    if victims == "all":
-        victims = ALL_PROCESSES
     for process in victims:
         os.system(f"pkill -9 -f {process}")
 
 
-def delete_logs():
-    """Delete all proxy log files."""
-    for file in os.listdir():
-        if file.startswith("proxy_") and file.endswith(".log"):
-            os.remove(file)
-
-
-def clean(victims: All | List[str] = "all", sim_out: bool = True):
+def clean(
+    victims_process: List[str] = ALL_PROCESSES,
+    del_folders: list[Path] = [],
+    reset_folders: list[Path] = [DATA_PATH, LOGS_PATH],
+):
     """End the simulation."""
-    kill_processes(victims)
-    reset_folder(DATA_PATH)
-    reset_folder(LOGS_PATH)
-    if sim_out and ARDU_LOGS_PATH.exists():
-        shutil.rmtree(ARDU_LOGS_PATH)
+    kill_processes(victims_process)
+    for folder in reset_folders + del_folders:
+        del_folder(folder)
+    for folder in reset_folders:
+        folder.mkdir(parents=True, exist_ok=True)
 
 
-def reset_folder(path: str | Path):
+def del_folder(path: Path):
     """Ensure a clean folder by deleting and recreating it."""
-    path = Path(path)
     if path.exists():
         shutil.rmtree(path)
-    path.mkdir()

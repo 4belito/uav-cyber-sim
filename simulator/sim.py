@@ -20,7 +20,7 @@ from config import (
     VEH_PARAMS_PATH,
     BasePort,
 )
-from helpers import create_process
+from helpers import create_process, setup_logging
 from mavlink.customtypes.connection import MAVConnection
 from mavlink.util import save_mission
 from oracle import Oracle
@@ -73,6 +73,7 @@ class Simulator:
         self.monitored_items = monitored_mission_items or [
             list(range(1, mission.n_items - 1)) for mission in missions
         ]
+        setup_logging(self.oracle_name, verbose=verbose, console_output=True)
         logging.debug(
             (
                 f"simulator initialized with {self.n_vehs} vehicles "
@@ -89,11 +90,11 @@ class Simulator:
         self._save_gcs_configs(DATA_PATH)
         for visual in self.visuals:
             if not visual.delay:
-                visual.launch(self.uav_port_offsets, self.verbose)
+                visual.launch(self.uav_port_offsets)
         oracle = self._launch_gcses()
         for visual in self.visuals:
             if visual.delay:
-                visual.launch(self.uav_port_offsets, self.verbose)
+                visual.launch(self.uav_port_offsets)
 
         return oracle
 
@@ -132,7 +133,8 @@ class Simulator:
                         "ardupilot_cmd": (
                             f"python3 {ARDUPILOT_VEHICLE_PATH}"
                             f" -v ArduCopter -I{sysid - 1} --sysid {sysid} --no-rebuild"
-                            f" --use-dir={ARDU_LOGS_PATH} --add-param-file {VEH_PARAMS_PATH}"
+                            f" --use-dir={ARDU_LOGS_PATH}"
+                            f" --add-param-file {VEH_PARAMS_PATH}"
                             f" --no-mavproxy"
                             f" --port-offset={self.uav_port_offsets[sysid - 1]}"
                             + (" --terminal" if "veh" in self.terminals else "")
@@ -196,11 +198,12 @@ class Simulator:
                 i + 1: offset for i, offset in enumerate(self.uav_port_offsets)
             },
             gcs_port_offsets={
-                i + 1: offset for i, offset in enumerate(self.gcs_port_offsets)
+                name: offset
+                for name, offset in zip(self.gcs_names, self.gcs_port_offsets)
             },
-            gcs_sysids={i + 1: sysids for i, sysids in enumerate(self.gcs_sysids)},
-            name=self.oracle_name,
-            verbose=self.verbose,
+            gcs_sysids={
+                name: sysids for name, sysids in zip(self.gcs_names, self.gcs_sysids)
+            },
         )
         return oracle
 
@@ -212,20 +215,7 @@ class Simulator:
         logging.info(f"🔗 UAV logic {i + 1} is connected to {self.oracle_name}")
         return conn
 
-    # def _find_uav_port_offsets(self):
-    #     base_ports = [
-    #         BasePort.ARP,
-    #         BasePort.GCS,
-    #         BasePort.ORC,
-    #         BasePort.QGC,
-    #         BasePort.VEH,
-    #         BasePort.RID_UP,
-    #         BasePort.RID_DOWN,
-    #         BasePort.RID_DATA,
-    #     ]
-    #     return self._find_port_offsets(base_ports, self.n_vehs)
-
-    def _find_uav_port_offsets(self) -> int:
+    def _find_uav_port_offsets(self):
         base_ports = [
             BasePort.ARP,
             BasePort.GCS,
@@ -236,40 +226,27 @@ class Simulator:
             BasePort.RID_DOWN,
             BasePort.RID_DATA,
         ]
-        # Exclude offset 160 (which would result in port 5920 for ARP)
-        excluded_offset = 160
-        offsets = []
-        cur_offset = 0
-        while len(offsets) < self.n_vehs:
-            if cur_offset == excluded_offset:
-                cur_offset += 10
-                continue
-            for base_port in base_ports:
-                port = base_port + cur_offset
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.settimeout(0.01)
-                try:
-                    s.bind(("127.0.0.1", port))
-                    s.close()
-                except Exception:
-                    break
-            else:
-                offsets.append(cur_offset)
-            cur_offset += 10
-        return offsets
+        return self._find_port_offsets(base_ports, self.n_vehs, excluded_offsets=[160])
 
-    def _find_gcs_port_offsets(self):
+    def _find_gcs_port_offsets(self) -> list[int]:
         base_ports = [BasePort.GCS_ZMQ]
         return self._find_port_offsets(base_ports, self.n_gcss)
 
     def _find_port_offsets(
-        self, base_ports: list[BasePort], n_ports: int, unit_offset: int = 10
+        self,
+        base_ports: list[BasePort],
+        n_ports: int,
+        unit_offset: int = 10,
+        excluded_offsets: list[int] = [],
     ) -> list[int]:
         """Find available port offsets for each UAV to avoid conflicts."""
         offsets = list[int]()
 
         cur_offset = 0
         while len(offsets) < n_ports:
+            if cur_offset in excluded_offsets:
+                cur_offset += 10
+                continue
             for base_port in base_ports:
                 port = base_port + cur_offset
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

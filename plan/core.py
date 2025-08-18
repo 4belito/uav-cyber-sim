@@ -1,6 +1,6 @@
 """
-Mission execution module defining core classes for steps and actions used in UAV plans.
-Supports chained execution, state tracking, and verbose status reporting.
+Mission execution module defining core classes for steps and actions used
+in UAV plans.
 """
 
 from __future__ import annotations
@@ -75,7 +75,6 @@ class MissionElement:
         self.onair: bool | None = None  # Default onair status
         self.target_pos: ENU | None = None  # Default target position
         self.curr_pos: ENU | None = None  # Default current position
-        self.verbose: int = 1
         self.sysid: int = cast(int, None)
 
     def act(self):
@@ -89,13 +88,12 @@ class MissionElement:
         symbol = state_symbols.get(self.state, "❔")
         return f"{symbol} <{self.class_name} '{self.emoji} {self.name}'>"
 
-    def bind(self, connection: MAVConnection, verbose: int = 1) -> None:
+    def bind(self, connection: MAVConnection) -> None:
         """
         Binds the mission element to a MAVLink connection and sets verbosity
         level.
         """
         self.conn = connection  # Set later from the parent Action
-        self.verbose = verbose
         self.sysid = connection.target_system
         logging.debug(
             f"🔗 Vehicle {self.sysid}: {self.class_name} '{self.name}' is now connected"
@@ -111,8 +109,8 @@ class Step(MissionElement):
         self,
         name: str,
         onair: bool,
-        check_fn: Callable[[MAVConnection, int], tuple[bool, ENU | None]],
-        exec_fn: Callable[[MAVConnection, int], None],
+        check_fn: Callable[[MAVConnection], tuple[bool, ENU | None]],
+        exec_fn: Callable[[MAVConnection], None],
         target_pos: ENU = ENU(0, 0, 0),
         emoji: str = "🔹",
     ) -> None:
@@ -125,13 +123,13 @@ class Step(MissionElement):
 
     def execute(self) -> None:
         """Execute the step and change state to IN_PROGRESS."""
-        self.exec_fn(self.conn, self.verbose)
+        self.exec_fn(self.conn)
         logging.debug(f"▶️ Vehicle {self.sysid}: {self.class_name} Started: {self.name}")
         self.state = State.IN_PROGRESS
 
     def check(self) -> None:
         """Check step completion and updates state and position."""
-        answer, curr_pos = self.check_fn(self.conn, self.verbose)
+        answer, curr_pos = self.check_fn(self.conn)
         if curr_pos is not None:
             self.curr_pos = curr_pos
         if answer:
@@ -164,17 +162,17 @@ class Step(MissionElement):
         self.curr_pos = None
 
     @staticmethod
-    def noop_exec(_conn: MAVConnection, _verbose: int) -> None:
+    def noop_exec(_conn: MAVConnection) -> None:
         """No execution."""
         pass
 
     @staticmethod
-    def noop_check(_conn: MAVConnection, _verbose: int) -> tuple[bool, None]:
+    def noop_check(_conn: MAVConnection) -> tuple[bool, None]:
         """No checking."""
         return True, None
 
     @staticmethod
-    def exec_wait(_conn: MAVConnection, _verbose: int, t: float = 0) -> None:
+    def exec_wait(_conn: MAVConnection, t: float = 0) -> None:
         """No execution."""
         time.sleep(t)
 
@@ -241,7 +239,10 @@ class Action(MissionElement, Generic[T]):
     def _start_action(self):
         self.state = State.IN_PROGRESS
         logging.debug(
-            f"▶️ Vehicle {self.sysid}: {self.class_name} Started: {self.emoji} {self.name}"
+            (
+                f"▶️ Vehicle {self.sysid}: {self.class_name} Started: "
+                f"{self.emoji} {self.name}"
+            )
         )
 
     def _progress_action(self):
@@ -249,7 +250,10 @@ class Action(MissionElement, Generic[T]):
         if step is None or (step.state == State.DONE and step.next is None):
             self.state = State.DONE
             logging.info(
-                f"✅ Vehicle {self.sysid}: {self.class_name} Done: {self.emoji} {self.name}"
+                (
+                    f"✅ Vehicle {self.sysid}: {self.class_name} Done: "
+                    f"{self.emoji} {self.name}"
+                )
             )
         elif step.state == State.DONE:
             self.current = step.next
@@ -288,11 +292,11 @@ class Action(MissionElement, Generic[T]):
         self.current = self.steps[0] if self.steps else None
         super().reset()
 
-    def bind(self, connection: MAVConnection, verbose: int = 1) -> None:
-        """Bind the action to the MAVLink connection and set verbosity."""
+    def bind(self, connection: MAVConnection) -> None:
+        """Bind the action to the MAVLink connection."""
         for step in self.steps:
-            step.bind(connection, verbose)
-        super().bind(connection, verbose)
+            step.bind(connection)
+        super().bind(connection)
         logging.debug(
             f"🔗 Vehicle {self.sysid}: {self.class_name} '{self.name}' is now connected"
         )

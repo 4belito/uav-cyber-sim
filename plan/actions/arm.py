@@ -27,7 +27,7 @@ def make_arm() -> Action[Step]:
     return arm
 
 
-def exec_arm(conn: MAVConnection, _verbose: int) -> None:
+def exec_arm(conn: MAVConnection) -> None:
     """Send ARM command to the UAV."""
     conn.mav.command_long_send(
         conn.target_system,
@@ -44,13 +44,11 @@ def exec_arm(conn: MAVConnection, _verbose: int) -> None:
     )
 
 
-def check_arm(conn: MAVConnection, _verbose: int) -> tuple[bool, None]:
+def check_arm(conn: MAVConnection) -> tuple[bool, None]:
     """Check if the UAV is armed using a HEARTBEAT message."""
     msg = conn.recv_match(type="HEARTBEAT")
     if msg:
         if msg.base_mode & ModeFlag.SAFETY_ARMED:
             return True, None
         raise StepFailed(f"flag {msg.base_mode}")
-
-    # armed = bool(msg and (msg.base_mode & MavCmd.ARMED_FLAG))
     return False, None

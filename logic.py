@@ -41,7 +41,8 @@ def main():
     """Entry point for the Multi-UAV MAVLink Proxy."""
     config_path, verbose = parse_arguments()
     config = VehicleLogic.load_config(config_path)
-    start_logic(config, verbose=verbose or 1)
+    setup_logging(f"logic_{config['sysid']}", verbose=verbose or 1, console_output=True)
+    start_logic(config)
 
 
 class LogicConfig(TypedDict):
@@ -78,26 +79,22 @@ def update_rid_data(new_data: dict[str, Any], lock: threading.Lock):
                 rid_data[key] = value
 
 
-def receive_rids(
-    rid_sock: zmq.Socket[bytes], stop_event: threading.Event, verbose: int
-):
+def receive_rids(rid_sock: zmq.Socket[bytes], stop_event: threading.Event):
+    """Receive Remote ID data from the ZMQ socket and optionally log it."""
     while not stop_event.is_set():
         try:
             msg: dict[str, Any] = rid_sock.recv_json()  # type: ignore
-            if verbose > 1:
-                logging.debug(f"Received Remote ID data: {msg}")
+            logging.debug(f"Received Remote ID data: {msg}")
         except Exception:
             pass
+            # No additional code needed here.
 
 
-def start_logic(config: LogicConfig, verbose: int = 1):
+def start_logic(config: LogicConfig):
     """Start bidirectional proxy for a given UAV system_id."""
     sysid = config["sysid"]
     port_offset = config["port_offset"]
     monitored_items = config["monitored_items"]
-
-    # Setup logging for this logic process
-    setup_logging(f"logic_{sysid}", verbose=verbose, console_output=True)
 
     global rid_data
     rid_data["sysid"] = sysid
@@ -146,7 +143,7 @@ def start_logic(config: LogicConfig, verbose: int = 1):
     rid_data_thread.start()
     rid_recv_thread = threading.Thread(
         target=receive_rids,
-        args=(rid_in_sock, stop_event, verbose),
+        args=(rid_in_sock, stop_event),
     )
     rid_recv_thread.start()
 
@@ -161,7 +158,6 @@ def start_logic(config: LogicConfig, verbose: int = 1):
             if mission
             else plans[i]
         ),
-        verbose=verbose,
     )
 
     try:
@@ -245,26 +241,23 @@ class VehicleLogic:
         plan: Plan,
         safety_radius: float = 5,
         radar_radius: float = 10,
-        verbose: int = 1,
     ):
         # Vehicle Creation
         self.conn = connection
         self.sysid = connection.target_system
         self.name = f"Logic 🧠 {self.sysid}"
-        self.verbose = verbose
 
         # Mode Properties
         self.mode = VehicleMode.MISSION
         self.plan = plan
-        self.plan.bind(self.conn, verbose)
+        self.plan.bind(self.conn)
         self.back_mode = VehicleMode.MISSION
 
         # Communication properties (positions are local)
         self.safety_radius: float = safety_radius
         self.radar_radius: float = radar_radius
 
-        if verbose:
-            logging.info(f"{self.name}: launching")
+        logging.info(f"{self.name}: launching")
 
     def act(self):
         """Perform the next step in the mission plan."""

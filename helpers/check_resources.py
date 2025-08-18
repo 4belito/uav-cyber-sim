@@ -1,3 +1,10 @@
+"""
+Resource monitoring utilities for logging CPU and memory usage.
+
+This module provides the PsutilResourceLogger class for logging CPU and memory
+usage statistics of the current process and its children using psutil.
+"""
+
 import logging
 import os
 import threading
@@ -93,8 +100,9 @@ class PsutilResourceLogger:
                     total_cpu += ch.cpu_percent(None)
                     m = self._safe_mem_info(ch)
                     total_rss += m.rss / (1024**2)
-                    if hasattr(m, "uss"):
-                        total_uss += m.uss / (1024**2)
+                    uss_value = getattr(m, "uss", None)
+                    if uss_value is not None:
+                        total_uss += uss_value / (1024**2)
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     continue
 
@@ -119,6 +127,7 @@ class PsutilResourceLogger:
             time.sleep(self.interval)
 
     def start(self):
+        """Start resource logging in a background thread."""
         if self._running:
             return
         self._running = True
@@ -126,6 +135,7 @@ class PsutilResourceLogger:
         self._thread.start()
 
     def stop(self):
+        """Stop resource logging and wait for the background thread to finish."""
         self._running = False
         if self._thread:
             self._thread.join()

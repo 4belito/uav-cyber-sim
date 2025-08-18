@@ -54,9 +54,7 @@ def make_path(wps: ENUs | None = None, wp_margin: float = 0.5) -> Action[Step]:
 TYPE_MASK = int(0b110111111000)
 
 
-def exec_go_local(
-    conn: MAVConnection, verbose: int, wp: ENU, ask_pos_interval: int = 100_000
-):
+def exec_go_local(conn: MAVConnection, wp: ENU, ask_pos_interval: int = 100_000):
     """Send a MAVLink command to move the UAV to a local waypoint."""
     ned_wp = ENU_to_NED(wp)
     go_msg = mavutil.mavlink.MAVLink_set_position_target_local_ned_message(
@@ -76,12 +74,11 @@ def exec_go_local(
         0,
     )
     conn.mav.send(go_msg)
-    ask_msg(conn, verbose, MsgID.LOCAL_POSITION_NED, interval=ask_pos_interval)
+    ask_msg(conn, MsgID.LOCAL_POSITION_NED, interval=ask_pos_interval)
 
 
 def check_reach_wp(
     conn: MAVConnection,
-    verbose: int,
     wp: ENU = ENU(0, 0, 10),
     wp_margin: float = 0.5,
 ):
@@ -89,7 +86,9 @@ def check_reach_wp(
     pos = get_ENU_position(conn)
     if pos is not None:
         dist = math.dist(pos, wp)
-        logging.debug(f"📍 Vehicle {conn.target_system}: Distance to target: {dist:.2f} m")
+        logging.debug(
+            f"📍 Vehicle {conn.target_system}: Distance to target: {dist:.2f} m"
+        )
         answer = dist < wp_margin
     else:
         answer = False

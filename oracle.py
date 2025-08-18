@@ -33,12 +33,10 @@ class Oracle(UAVMonitor):
         self,
         conns: dict[int, MAVConnection],
         uav_port_offsets: dict[int, int],
-        gcs_port_offsets: dict[int, int],
-        gcs_sysids: dict[int, list[int]],
-        name: str = "Oracle ⚪",
-        verbose: int = 1,
+        gcs_port_offsets: dict[str, int],
+        gcs_sysids: dict[str, list[int]],
     ) -> None:
-        super().__init__(conns, name, verbose)
+        super().__init__(conns)
         self.gcs_sysids = gcs_sysids
         self.rid_queue = Queue[tuple[int, bytes]]()
         self.zmq_ctx = zmq.Context()
@@ -58,14 +56,14 @@ class Oracle(UAVMonitor):
             )
             self.rid_out_socks[sysid].setsockopt(zmq.SNDTIMEO, 100)
 
-        self.gcs_socks = dict[int, zmq.Socket[bytes]]()
-        for gcsid in gcs_port_offsets.keys():
-            self.gcs_socks[gcsid] = self.zmq_ctx.socket(zmq.SUB)
-            self.gcs_socks[gcsid].connect(
-                f"tcp://127.0.0.1:{BasePort.GCS_ZMQ + gcs_port_offsets[gcsid]}"
+        self.gcs_socks = dict[str, zmq.Socket[bytes]]()
+        for gcs_name in gcs_port_offsets.keys():
+            self.gcs_socks[gcs_name] = self.zmq_ctx.socket(zmq.SUB)
+            self.gcs_socks[gcs_name].connect(
+                f"tcp://127.0.0.1:{BasePort.GCS_ZMQ + gcs_port_offsets[gcs_name]}"
             )
-            self.gcs_socks[gcsid].setsockopt_string(zmq.SUBSCRIBE, "")
-            self.gcs_socks[gcsid].setsockopt(zmq.RCVTIMEO, 100)
+            self.gcs_socks[gcs_name].setsockopt_string(zmq.SUBSCRIBE, "")
+            self.gcs_socks[gcs_name].setsockopt(zmq.RCVTIMEO, 100)
 
         # Small delay to ensure ZMQ connections are established
         import time
@@ -80,24 +78,21 @@ class Oracle(UAVMonitor):
         ]
         rid_out_thread = threading.Thread(target=self.retransmit_remote_ids)
 
-        logging.info(f"{self.name}: 🏁 Starting Oracle with {len(self.conns)} vehicles")
-        logging.info(f"{self.name}: Monitoring {len(self.gcs_socks)} GCS processes")
+        logging.info(f"🏁 Starting Oracle with {len(self.conns)} vehicles")
+        logging.info(f"Monitoring {len(self.gcs_socks)} GCS processes")
 
         for thread in rid_in_threads:
             thread.start()
         rid_out_thread.start()
 
         for conn in self.conns.values():
-            ask_msg(
-                conn, self.verbose, msg_id=MsgID.GLOBAL_POSITION_INT, interval=100_000
-            )
+            ask_msg(conn, msg_id=MsgID.GLOBAL_POSITION_INT, interval=100_000)
 
-        logging.info(f"{self.name}: Entering main monitoring loop...")
+        logging.debug("Entering main monitoring loop...")
 
         while self.conns:
             logging.debug(
-                f"{self.name}: Loop iteration - {len(self.conns)} UAV "
-                f"connections remaining"
+                f"Loop iteration - {len(self.conns)} UAV connections remaining"
             )
 
             for sysid, conn in list(self.conns.items()):
@@ -117,55 +112,37 @@ class Oracle(UAVMonitor):
                         pass
 
             # Check for GCS completion messages
-            logging.debug(
-                f"{self.name}: Checking {len(self.gcs_socks)} GCS sockets "
-                f"for messages..."
-            )
+            logging.debug(f"Checking {len(self.gcs_socks)} GCS sockets for messages...")
 
             messages_received = 0
-            for gcsid, sock in list(self.gcs_socks.items()):
+            for gcs_name, sock in list(self.gcs_socks.items()):
                 try:
                     msg = sock.recv_string(flags=zmq.NOBLOCK)
                     messages_received += 1
-                    logging.info(
-                        f"{self.name}: Received message '{msg}' from GCS {gcsid}"
-                    )
+                    logging.info(f"Received message '{msg}' from GCS {gcs_name}")
                     if msg == "DONE":
-                        logging.info(
-                            f"{self.name}: ✅ Processing DONE from GCS {gcsid}"
-                        )
-                        self.remove_gcs(gcsid)
-                        logging.info(
-                            f"{self.name}: Remaining UAV connections: {len(self.conns)}"
-                        )
+                        self.remove_gcs(gcs_name)
                     else:
-                        logging.debug(f"{self.name}: Ignoring non-DONE message: {msg}")
+                        logging.debug(f"Ignoring non-DONE message: {msg}")
                 except zmq.Again:
                     # No message available, this is expected
                     continue
                 except Exception as e:
-                    logging.error(f"{self.name}: Error receiving from GCS {gcsid}: {e}")
+                    logging.error(f"Error receiving from GCS {gcs_name}: {e}")
                     continue
 
             if messages_received == 0:
-                logging.debug(
-                    f"{self.name}: No messages received from any GCS this iteration"
-                )
+                logging.debug("No messages received from any GCS this iteration")
             else:
-                logging.debug(
-                    f"{self.name}: Received {messages_received} messages this iteration"
-                )
+                logging.debug(f"Received {messages_received} messages this iteration")
 
-        logging.info(
-            f"{self.name}: ✅ Main monitoring loop completed - all connections closed"
-        )
-        logging.info(f"{self.name}: Waiting for background threads to finish...")
+        logging.info("✅ Main monitoring loop completed - all connections closed")
 
         for thread in rid_in_threads:
             thread.join()
         rid_out_thread.join()
 
-        logging.info(f"{self.name}: 🎉 Oracle shutdown complete!")
+        logging.info("🎉 Oracle shutdown complete!")
 
     def enqueue_remote_ids(self, sysid: int):
         """Receive Remote ID messages from one UAV and add them to the queue."""
@@ -183,7 +160,7 @@ class Oracle(UAVMonitor):
                 sysid, rid = self.rid_queue.get(timeout=0.1)
             except Exception:
                 continue
-            logging.debug(f"{self.name}: 🔁 Received Remote ID from {sysid}")
+            logging.debug(f"🔁 Received Remote ID from {sysid}")
             pos = self.pos.get(sysid, None)
             if pos is None:
                 continue
@@ -199,24 +176,22 @@ class Oracle(UAVMonitor):
                 try:
                     other_sock.send(rid)  # type: ignore
                     logging.debug(
-                        f"{self.name}: 🔁 Retransmitted Remote ID from {sysid} "
-                        f"to {other_sysid}"
+                        f"🔁 Retransmitted Remote ID from {sysid} to {other_sysid}"
                     )
                 except Exception:
                     pass
 
-    def remove_gcs(self, gcsid: int):
+    def remove_gcs(self, gcs_name: str):
         """Remove a GCS connection and its associated sockets."""
-        logging.info(
-            f"{self.name}: Removing GCS {gcsid} and its UAVs: {self.gcs_sysids[gcsid]}"
+        logging.debug(
+            f"Removing GCS {gcs_name} and its UAVs: {self.gcs_sysids[gcs_name]}"
         )
-        del self.gcs_socks[gcsid]
-        for sysid in self.gcs_sysids[gcsid]:
-            logging.info(f"{self.name}: Removing UAV {sysid} from tracking")
+        del self.gcs_socks[gcs_name]
+        for sysid in self.gcs_sysids[gcs_name]:
+            logging.debug(f"Removing UAV {sysid} from tracking")
             self.remove_uav(sysid)
         logging.info(
-            f"{self.name}: GCS {gcsid} removal complete. "
-            f"Remaining connections: {len(self.conns)}"
+            f"GCS {gcs_name} removal complete. Remaining connections: {len(self.conns)}"
         )
 
     def remove_uav(self, sysid: int):

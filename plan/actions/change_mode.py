@@ -29,7 +29,7 @@ def make_set_mode(flight_mode: CopterMode, onair: bool = False) -> Action[Step]:
     return action
 
 
-def exec_set_mode(conn: MAVConnection, _verbose: int, mode: CopterMode) -> None:
+def exec_set_mode(conn: MAVConnection, mode: CopterMode) -> None:
     """Send the SET_MODE command to the UAV with the given mode value."""
     conn.mav.command_long_send(
         conn.target_system,
@@ -45,12 +45,8 @@ def exec_set_mode(conn: MAVConnection, _verbose: int, mode: CopterMode) -> None:
         0,
     )
 
-    # conn.set_mode(mode)
 
-
-def check_set_mode(
-    conn: MAVConnection, _verbose: int, mode: CopterMode
-) -> tuple[bool, None]:
+def check_set_mode(conn: MAVConnection, mode: CopterMode) -> tuple[bool, None]:
     """Verify the UAV has switched to the target flight mode."""
     msg = conn.recv_match(type="HEARTBEAT")
     if msg and msg.custom_mode == mode.value:

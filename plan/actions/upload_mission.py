@@ -43,16 +43,14 @@ def make_upload_mission(mission_path: str, from_scratch: bool = True) -> Action[
 
 # TODO: modularize this
 def exec_upload_mission(
-    conn: MAVConnection,
-    verbose: int = 1,
-    mission_path: str = "plan/missions/simple_mission.waypoints",
+    conn: MAVConnection, mission_path: str = "plan/missions/simple_mission.waypoints"
 ):
     """Execute the upload of a mission to the UAV."""
     sysid, compid = conn.target_system, conn.target_component
     mission = MissionLoader(sysid, compid)
     count = mission.load(mission_path)
     logging.info(f"✅ Vehicle {conn.target_system}: {count} waypoints read")
-    
+
     for i in range(count):
         wp = mission.item(i)
         cmd_name = CmdNav(wp.command).name
@@ -72,34 +70,24 @@ def exec_upload_mission(
         logging.debug(f"✅ Vehicle {conn.target_system}: Sent mission item {i}")
 
 
-def check_upload_mission(
-    conn: MAVConnection,
-    verbose: int,
-) -> tuple[bool, None]:
+def check_upload_mission(conn: MAVConnection) -> tuple[bool, None]:
     """Verify that the mission upload was successful."""
     ack = conn.recv_match(type="MISSION_ACK", blocking=True, timeout=5)
     if ack and MissionResult(ack.type) == MissionResult.ACCEPTED:
         logging.info(f"✅ Vehicle {conn.target_system}: Mission upload successful!")
         return True, None
-    if verbose:
-        logging.warning(f"⚠️ Mission upload failed or timed out: {ack}")
+    logging.warning(f"⚠️ Mission upload failed or timed out: {ack}")
     return False, None
 
 
-# Clear missioins step
-def exec_clear_mission(
-    conn: MAVConnection,
-    verbose: int = 1,
-):
+# Clear missions step
+def exec_clear_mission(conn: MAVConnection) -> None:
     """Execute the clear mission."""
     conn.mav.mission_clear_all_send(conn.target_system, conn.target_component)
 
 
-def check_clear_mission(
-    conn: MAVConnection,
-    verbose: int,
-) -> tuple[bool, None]:
-    """Verify that cleared mission was succesful."""
+def check_clear_mission(conn: MAVConnection) -> tuple[bool, None]:
+    """Verify that cleared mission was successful."""
     msg = conn.recv_match(type="STATUSTEXT")
     if msg and msg.text == "ArduPilot Ready":
         logging.info(f"🧹 Vehicle {conn.target_system}: Cleared previous mission")

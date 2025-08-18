@@ -19,7 +19,7 @@ from plan.core import Step
 
 def make_monitoring(items: list[int] = []) -> Action[Step]:
     """Monitor mission items."""
-    monitoring = Action[Step](name=ActionNames.MONITOR_MISSION, emoji="🧭")
+    monitoring = Action[Step](name=ActionNames.MONITOR_MISSION, emoji="👁️")
     for i in items:
         monitoring.add(
             Step(
@@ -40,42 +40,34 @@ def make_monitoring(items: list[int] = []) -> Action[Step]:
     return monitoring
 
 
-def check_item(
-    conn: MAVConnection,
-    verbose: int,
-    seq: int,
-) -> tuple[bool, None]:
+def check_item(conn: MAVConnection, seq: int) -> tuple[bool, None]:
     """Check if a item is reached."""
     msg = conn.recv_match(type="MISSION_ITEM_REACHED", blocking=True)
     if msg:
         if msg.seq == seq:
-            logging.info(f"Vehicle {conn.target_system}: Reached waypoint: {msg.seq}")
+            logging.info(
+                f"Vehicle {conn.target_system}: ⭐ Reached waypoint: {msg.seq}"
+            )
             return True, None
     else:
-        logging.warning(f"Vehicle {conn.target_system}: loss reached item {seq} message")
+        logging.warning(
+            f"Vehicle {conn.target_system}: loss reached item {seq} message"
+        )
     return False, None
 
 
-def check_endmission(
-    conn: MAVConnection,
-    verbose: int,
-) -> tuple[bool, None]:
-    """Check missioin completion."""
+def check_endmission(conn: MAVConnection) -> tuple[bool, None]:
+    """Check mission completion."""
     msg = conn.recv_match(type="STATUSTEXT", blocking=True)
     if msg:
         text = msg.text.strip().lower()
         if "disarming" in text:
             logging.info(f"Vehicle {conn.target_system}: Mission completed")
-            if verbose > 1:
-                stop_msg(conn, msg_id=MsgID.GLOBAL_POSITION_INT)
+            stop_msg(conn, msg_id=MsgID.GLOBAL_POSITION_INT)
             return True, None
     return False, None
 
 
-def exec_monitoring(
-    conn: MAVConnection,
-    verbose: int,
-) -> None:
+def exec_monitoring(conn: MAVConnection) -> None:
     """Start monitoring the UAV by requesting periodic GLOBAL_POSITION_INT."""
-    if verbose > 1:
-        ask_msg(conn, verbose, msg_id=MsgID.GLOBAL_POSITION_INT, interval=100_000)
+    ask_msg(conn, msg_id=MsgID.GLOBAL_POSITION_INT, interval=100_000)

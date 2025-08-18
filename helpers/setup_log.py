@@ -25,8 +25,9 @@ def setup_logging(filename: str, verbose: int = 1, console_output: bool = True):
 
     # Create formatter
     file_formatter = logging.Formatter(
-        '%(asctime)s.%(msecs)03d - PID:%(process)d - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%H:%M:%S'
+        "%(asctime)s.%(msecs)03d - PID:%(process)d - %(name)s - "
+        "%(levelname)s - %(message)s",
+        datefmt="%H:%M:%S",
     )
 
     # File handler (always log everything to file)

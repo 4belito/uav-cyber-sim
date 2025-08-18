@@ -12,6 +12,7 @@ def create_process(
     title: str = "Terminal",
     env_cmd: str | None = None,
     suppress_output: bool = False,
+    terminal_geometry: str = "80x10",
 ) -> Popen[bytes]:
     """Launch a subprocess, optionally in a visible terminal."""
     redirect = " > /dev/null 2>&1" if suppress_output else ""
@@ -31,11 +32,18 @@ def create_process(
 
         if "SSH_CONNECTION" in env:
             return Popen(
-                ["xterm", "-T", title, "-geometry", "100x24", "-e"] + bash_cmd, env=env
+                ["xterm", "-T", title, "-geometry", terminal_geometry, "-e"] + bash_cmd,
+                env=env,
             )
         else:
             return Popen(
-                ["gnome-terminal", "--title", title, "--geometry=71x10", "--"]
+                [
+                    "gnome-terminal",
+                    "--title",
+                    title,
+                    f"--geometry={terminal_geometry}",
+                    "--",
+                ]
                 + bash_cmd,
                 env=env,
             )

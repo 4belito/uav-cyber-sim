@@ -21,13 +21,9 @@ class UAVMonitor:
     positions, and listens for plan-completion signals.
     """
 
-    def __init__(
-        self, conns: dict[int, MAVConnection], name: str, verbose: int = 1
-    ) -> None:
+    def __init__(self, conns: dict[int, MAVConnection]) -> None:
         self.pos: dict[int, GRA] = {}
         self.conns = conns
-        self.name = name
-        self.verbose = verbose
 
     def remove_uav(self, sysid: int):
         """Remove vehicles from the environment."""
@@ -55,11 +51,7 @@ class UAVMonitor:
         self, msg: mavlink.MAVLink_global_position_int_message, sysid: int
     ):
         """Get the current global position of the specified vehicle."""
-        self.pos[sysid] = get_GRA_position(
-            msg,
-            sysid,
-            verbose=self.verbose,
-        )
+        self.pos[sysid] = get_GRA_position(msg, sysid)
 
     def is_plan_done(self, sysid: int) -> bool:
         """Listen for a STATUSTEXT("DONE") message and respond with COMMAND_ACK."""
@@ -75,7 +67,6 @@ class UAVMonitor:
             conn.mav.command_ack_send(
                 command=CustomCmd.PLAN_DONE, result=mavlink2.MAV_RESULT_ACCEPTED
             )
-            if self.verbose:
-                logging.info(f"{self.name}: ✅ Vehicle {sysid} completed its mission")
+            logging.info(f"✅ Vehicle {sysid} completed its mission")
             return True
         return False

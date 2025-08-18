@@ -23,7 +23,10 @@ from proxy import create_udp_conn
 def main():
     """Run a GCS instance to monitor UAVs."""
     config_path, verbose = parse_arguments()
-    gcs = GCS(config_path, verbose=verbose)
+    with open(config_path) as f:
+        config: GCSConfig = json.load(f)
+    setup_logging(f"GCS_{config['name']}", verbose=verbose, console_output=True)
+    gcs = GCS(**config)
     gcs.run()
 
 
@@ -50,29 +53,32 @@ class GCSConfig(TypedDict):
 class GCS(UAVMonitor):
     """Ground Control Station class extending Oracle with trajectory logging."""
 
-    def __init__(self, config_path: str, verbose: int = 1):
+    def __init__(
+        self,
+        uavs: list[UAVGCSConfig],
+        name: str,
+        port_offset: int,
+        terminals: list[str],
+        suppress: list[str],
+    ) -> None:
         # Configure logging for this GCS process
-
-        with open(config_path) as f:
-            self.config: GCSConfig = json.load(f)
-        self.verbose = verbose
-        self.n_uavs = len(self.config["uavs"])
-        self.terminals = set(self.config["terminals"])
-        self.suppress = set(self.config["suppress"])
+        self.name = name
+        self.uavs = uavs
+        self.n_uavs = len(uavs)
+        self.terminals = set(terminals)
+        self.suppress = set(suppress)
         self._launch_vehicles()
 
         self.zmq_ctx = zmq.Context()
         self.orc_sock = self.zmq_ctx.socket(zmq.PUB)
-        self.orc_sock.bind(
-            f"tcp://127.0.0.1:{BasePort.GCS_ZMQ + self.config['port_offset']}"
-        )
+        self.orc_sock.bind(f"tcp://127.0.0.1:{BasePort.GCS_ZMQ + port_offset}")
         self.orc_sock.setsockopt(zmq.SNDTIMEO, 100)
 
-        super().__init__(self.conns, name=f"GCS {self.config['name']}", verbose=verbose)
+        super().__init__(self.conns)
         self.paths: dict[int, GRAs] = {sysid: [] for sysid in self.conns}
-        setup_logging(self.config["name"], verbose=verbose, console_output=True)
-        logging.debug(f"{self.config['name']} GCS initialized with {self.n_uavs} UAVs")
-        logging.info(f"GCS {self.config['name']} started with {self.n_uavs} UAVs")
+
+        logging.debug(f" initialized with {self.n_uavs} UAVs")
+        logging.info(f" started with {self.n_uavs} UAVs")
 
     def run(self):
         """Run the GCS monitoring loop until all UAVs complete their missions."""
@@ -83,19 +89,17 @@ class GCS(UAVMonitor):
                 if self.is_plan_done(sysid):
                     self.remove_uav(sysid)
 
-        logging.info(
-            f"All UAVs assigned to GCS {self.config['name']} have completed their mission"
-        )
-        logging.info(f"GCS {self.config['name']}: Sending DONE message to Oracle...")
+        logging.info("All UAVs assigned have completed their missions")
+        logging.info("Sending DONE message to Oracle...")
         self.orc_sock.send_string("DONE")  # type: ignore
-        logging.info(f"GCS {self.config['name']}: DONE message sent to Oracle")
+        logging.info("DONE message sent to Oracle")
 
         # Small delay to ensure the message is sent before process termination
         import time
 
         time.sleep(0.1)
 
-        trajectory_file = DATA_PATH / f"trajectories_{self.config['name']}.pkl"
+        trajectory_file = DATA_PATH / f"trajectories_{self.name}.pkl"
         with open(trajectory_file, "wb") as file:
             pickle.dump(self.paths, file)
         logging.info(f"Trajectories saved to '{trajectory_file}'")
@@ -116,7 +120,7 @@ class GCS(UAVMonitor):
             )
 
     def _launch_uav(self, i: int):
-        uav_config = self.config["uavs"][i]
+        uav_config = self.uavs[i]
         sysid = uav_config["sysid"]
 
         p = create_process(
@@ -154,7 +158,7 @@ class GCS(UAVMonitor):
             offset=uav_config["port_offset"],
             mode="receiver",
         )
-        logging.info(f"UAV {sysid} connected to GCS {self.config['name']}")
+        logging.info(f"UAV {sysid} connected")
         return conn
 
     @staticmethod

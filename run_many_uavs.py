@@ -10,16 +10,12 @@ Run from command line for faster output than notebooks:
     python multi_uav_launcher.py
 """
 
-import logging
 import random
 import signal
 
 from config import Color
 from helpers import clean
-
-# from helpers.check_resources import PsutilResourceLogger
 from helpers.cleanup import ALL_PROCESSES
-from helpers.setup_log import setup_logging
 from mavlink.customtypes.location import ENUPose, GRAPose
 from plan import Plan
 from simulator import (
@@ -32,9 +28,6 @@ from simulator import (
     Simulator,
 )
 
-# logger = PsutilResourceLogger(logfile="usage.log", interval=0.01, include_children=True)
-
-
 signal.signal(signal.SIGTTIN, signal.SIG_IGN)
 ALL_PROCESSES.remove("run_many_uavs.py")
 
@@ -45,27 +38,26 @@ def main():
     """Launch a multi-UAV simulation and monitors mission completion."""
     clean(ALL_PROCESSES)
 
-    setup_logging("main")
-    logging.info("Starting simulation...")
-
     # Create Plans
     gra_origin = GRAPose(lat=-35.3633280, lon=149.1652241, alt=0, heading=90)
     enu_origin = ENUPose(x=0, y=0, z=gra_origin.alt, heading=gra_origin.heading)
 
-    gcs = [Color.RED, Color.ORANGE, Color.GREEN, Color.BLUE]
-    n_uavs_per_gcs = 60
-    side_len = 10
+    gcs = [Color.RED, Color.ORANGE, Color.GREEN, Color.BLUE]  #
+    n_uavs_per_gcs = 4
+    side_len = 100
     altitude = 5
     max_delay = 0  # sec
 
+    # novis (i * 50 * side_len, j * 50 * side_len, 0, 0)
+    # gaz (i * 50, j * 3 * side_len, 0, 0)
+    # qgc (i * side_len / 10, j * side_len / 3, 0, 0)
     base_homes = ENUPose.list(
         [
-            (i * 50 * side_len, j * 50 * side_len, 0, 0)
+            (i * 50, j * 3 * side_len, 0, 0)
             for i in range(len(gcs))
             for j in range(n_uavs_per_gcs)
         ]
     )
-
     base_paths = [
         Plan.create_square_path(side_len=side_len, alt=altitude, heading=0)
         for _ in base_homes
@@ -110,7 +102,7 @@ def main():
 
     # Launch Simulator
     simulator = Simulator(
-        visualizers=[novis],
+        visualizers=[gaz],
         gcs_names=gcs_names,
         gcs_sysids=gcs_sysids,
         missions=[veh.mission for veh in qgc_config.vehicles],
@@ -120,12 +112,7 @@ def main():
 
     orac = simulator.launch()
 
-    # Main loop: check all UAVs for completion
-    logging.info("Starting Oracle monitoring...")
     orac.run()
-    logging.info("🎉 Oracle monitoring completed!")
-    logging.info("🎉 All UAVs have completed their missions!")
-    logging.info("🎯 Main simulation process terminating...")
 
 
 if __name__ == "__main__":

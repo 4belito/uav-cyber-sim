@@ -6,6 +6,7 @@ QGroundControl and configures it to connect to multiple ArduPilot UAV instances 
 It modifies the QGroundControl.ini file to set up connection links for each UAV.
 """
 
+import logging
 import os
 import subprocess
 
@@ -41,7 +42,7 @@ class QGC(Visualizer[QGCVehicle]):
         homes_str = ",".join(map(str, self.config.vehicles[i].home))
         return f" --custom-location={homes_str}"
 
-    def launch(self, port_offsets: list[int], verbose: int = 1):
+    def launch(self, port_offsets: list[int]):
         """Launch the Gazebo."""
         self._delete_all_links()  # delete TCP
         if CONNECT_GCS_TO_ARP:
@@ -55,11 +56,10 @@ class QGC(Visualizer[QGCVehicle]):
             stderr=subprocess.DEVNULL,  # Suppress error output
             shell=False,  # Ensure safety when passing arguments
         )
-        if verbose:
-            print(
-                "🗺️ QGroundControl launched for 2D visualization — simulation powered "
-                "by ArduPilot SITL."
-            )
+        logging.info(
+            "🗺️ QGroundControl launched for 2D visualization — simulation powered "
+            "by ArduPilot SITL."
+        )
 
     def _delete_all_links(self):
         with open(QGC_INI_PATH, "r", encoding="utf-8") as f:

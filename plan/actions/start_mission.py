@@ -22,7 +22,7 @@ def make_start_mission() -> Action[Step]:
     return arm
 
 
-def exec_start_mission(conn: MAVConnection, _verbose: int) -> None:
+def exec_start_mission(conn: MAVConnection) -> None:
     """Send MISSION_START command to begin executing the mission."""
     conn.mav.command_long_send(
         conn.target_system,
@@ -39,7 +39,7 @@ def exec_start_mission(conn: MAVConnection, _verbose: int) -> None:
     )
 
 
-def check_start_mission(conn: MAVConnection, verbose: int) -> tuple[bool, None]:
+def check_start_mission(conn: MAVConnection) -> tuple[bool, None]:
     """Check if the mission has started by listening for a STATUSTEXT message."""
     msg = conn.recv_match(type="STATUSTEXT")
     if msg:

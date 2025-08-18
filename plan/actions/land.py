@@ -26,7 +26,6 @@ def make_land(final_wp: ENU) -> Action[Step]:
 
 def exec_land(
     conn: MAVConnection,
-    verbose: int,
     ask_pos_interval: int = 100_000,
     ask_land_interval: int = 100_000,
 ):
@@ -44,11 +43,11 @@ def exec_land(
         0,
         0,
     )
-    ask_msg(conn, verbose, MsgID.EXTENDED_SYS_STATE, interval=ask_land_interval)
-    ask_msg(conn, verbose, MsgID.LOCAL_POSITION_NED, interval=ask_pos_interval)
+    ask_msg(conn, MsgID.EXTENDED_SYS_STATE, interval=ask_land_interval)
+    ask_msg(conn, MsgID.LOCAL_POSITION_NED, interval=ask_pos_interval)
 
 
-def check_land(conn: MAVConnection, verbose: int):
+def check_land(conn: MAVConnection):
     """Check if the UAV has landed using EXTENDED_SYS_STATE."""
     # parameter 4 is confirmation(it may be increased)
     msg = conn.recv_match(type="EXTENDED_SYS_STATE")
