@@ -120,16 +120,6 @@ class GCS(UAVMonitor):
         sysid = uav_config["sysid"]
 
         p = create_process(
-            uav_config["ardupilot_cmd"],
-            after="exec bash",
-            visible="launcher" in self.terminals,
-            suppress_output="launcher" in self.suppress,
-            title=f"ArduPilot SITL Launcher: Vehicle {sysid}",
-            env_cmd=ENV_CMD_ARP,
-        )  # "exit"
-        logging.debug(f"ArduPilot SITL vehicle {sysid} launched (PID {p.pid})")
-
-        p = create_process(
             uav_config["logic_cmd"],
             after="exec bash",
             visible="logic" in self.terminals,
@@ -148,6 +138,16 @@ class GCS(UAVMonitor):
             env_cmd=ENV_CMD_PYT,
         )  # "exit"
         logging.debug(f"Proxy for vehicle {sysid} launched (PID {p.pid})")
+
+        p = create_process(
+            uav_config["ardupilot_cmd"],
+            after="exec bash",
+            visible="launcher" in self.terminals,
+            suppress_output="launcher" in self.suppress,
+            title=f"ArduPilot SITL Launcher: Vehicle {sysid}",
+            env_cmd=ENV_CMD_ARP,
+        )  # "exit"
+        logging.debug(f"ArduPilot SITL vehicle {sysid} launched (PID {p.pid})")
 
         conn = create_udp_conn(
             base_port=BasePort.GCS,

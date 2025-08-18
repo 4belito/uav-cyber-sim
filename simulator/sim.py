@@ -13,14 +13,14 @@ from typing import Callable, Literal, TypeVar
 from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
 
 from config import (
+    ARDU_LOGS_PATH,
     ARDUPILOT_VEHICLE_PATH,
     DATA_PATH,
     ENV_CMD_PYT,
-    LOGS_PATH,
     VEH_PARAMS_PATH,
     BasePort,
 )
-from helpers import create_process, reset_folder
+from helpers import create_process
 from mavlink.customtypes.connection import MAVConnection
 from mavlink.util import save_mission
 from oracle import Oracle
@@ -82,7 +82,6 @@ class Simulator:
 
     def launch(self) -> Oracle:
         """Launch vehicle instances and visualizer."""
-        reset_folder(DATA_PATH)
         self.save_missions()
         self.uav_port_offsets = self._find_uav_port_offsets()
         self.gcs_port_offsets = self._find_gcs_port_offsets()
@@ -133,7 +132,7 @@ class Simulator:
                         "ardupilot_cmd": (
                             f"python3 {ARDUPILOT_VEHICLE_PATH}"
                             f" -v ArduCopter -I{sysid - 1} --sysid {sysid} --no-rebuild"
-                            f" --use-dir={LOGS_PATH} --add-param-file {VEH_PARAMS_PATH}"
+                            f" --use-dir={ARDU_LOGS_PATH} --add-param-file {VEH_PARAMS_PATH}"
                             f" --no-mavproxy"
                             f" --port-offset={self.uav_port_offsets[sysid - 1]}"
                             + (" --terminal" if "veh" in self.terminals else "")
@@ -208,12 +207,25 @@ class Simulator:
     def _connect_to_vehicle(self, i: int) -> MAVConnection:
         """Connect to a UAV through MAVLink."""
         port = BasePort.ORC + self.uav_port_offsets[i]
-        conn: MAVConnection = connect(f"udp:127.0.0.1:{port}")  # type: ignore
+        conn: MAVConnection = connect(f"udp:127.0.0.1:{port}", source_system=i + 1)  # type: ignore
         conn.wait_heartbeat()
         logging.info(f"🔗 UAV logic {i + 1} is connected to {self.oracle_name}")
         return conn
 
-    def _find_uav_port_offsets(self):
+    # def _find_uav_port_offsets(self):
+    #     base_ports = [
+    #         BasePort.ARP,
+    #         BasePort.GCS,
+    #         BasePort.ORC,
+    #         BasePort.QGC,
+    #         BasePort.VEH,
+    #         BasePort.RID_UP,
+    #         BasePort.RID_DOWN,
+    #         BasePort.RID_DATA,
+    #     ]
+    #     return self._find_port_offsets(base_ports, self.n_vehs)
+
+    def _find_uav_port_offsets(self) -> int:
         base_ports = [
             BasePort.ARP,
             BasePort.GCS,
@@ -224,7 +236,27 @@ class Simulator:
             BasePort.RID_DOWN,
             BasePort.RID_DATA,
         ]
-        return self._find_port_offsets(base_ports, self.n_vehs)
+        # Exclude offset 160 (which would result in port 5920 for ARP)
+        excluded_offset = 160
+        offsets = []
+        cur_offset = 0
+        while len(offsets) < self.n_vehs:
+            if cur_offset == excluded_offset:
+                cur_offset += 10
+                continue
+            for base_port in base_ports:
+                port = base_port + cur_offset
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(0.01)
+                try:
+                    s.bind(("127.0.0.1", port))
+                    s.close()
+                except Exception:
+                    break
+            else:
+                offsets.append(cur_offset)
+            cur_offset += 10
+        return offsets
 
     def _find_gcs_port_offsets(self):
         base_ports = [BasePort.GCS_ZMQ]
@@ -237,7 +269,7 @@ class Simulator:
         offsets = list[int]()
 
         cur_offset = 0
-        while len(offsets) < self.n_vehs:
+        while len(offsets) < n_ports:
             for base_port in base_ports:
                 port = base_port + cur_offset
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

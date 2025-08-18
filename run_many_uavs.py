@@ -16,6 +16,8 @@ import signal
 
 from config import Color
 from helpers import clean
+
+# from helpers.check_resources import PsutilResourceLogger
 from helpers.cleanup import ALL_PROCESSES
 from helpers.setup_log import setup_logging
 from mavlink.customtypes.location import ENUPose, GRAPose
@@ -30,8 +32,13 @@ from simulator import (
     Simulator,
 )
 
+# logger = PsutilResourceLogger(logfile="usage.log", interval=0.01, include_children=True)
+
+
 signal.signal(signal.SIGTTIN, signal.SIG_IGN)
 ALL_PROCESSES.remove("run_many_uavs.py")
+
+# with logger.running():
 
 
 def main():

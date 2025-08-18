@@ -3,6 +3,8 @@
 import logging
 import os
 
+from config import LOGS_PATH
+
 
 def setup_logging(filename: str, verbose: int = 1, console_output: bool = True):
     """
@@ -15,7 +17,7 @@ def setup_logging(filename: str, verbose: int = 1, console_output: bool = True):
 
     """
     # Use process ID to create unique log files for each process
-    os.makedirs("log", exist_ok=True)
+    os.makedirs(LOGS_PATH, exist_ok=True)
 
     # Remove existing handlers to avoid conflicts
     for handler in logging.root.handlers[:]:
@@ -23,12 +25,12 @@ def setup_logging(filename: str, verbose: int = 1, console_output: bool = True):
 
     # Create formatter
     file_formatter = logging.Formatter(
-        "%(asctime)s - PID:%(process)d - %(name)s - %(levelname)s - %(message)s",
-        datefmt="%H:%M:%S",
+        '%(asctime)s.%(msecs)03d - PID:%(process)d - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%H:%M:%S'
     )
 
     # File handler (always log everything to file)
-    file_handler = logging.FileHandler(f"log/{filename}.log", mode="w")
+    file_handler = logging.FileHandler(f"{LOGS_PATH}/{filename}.log", mode="w")
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(file_formatter)
 

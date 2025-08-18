@@ -311,7 +311,10 @@ def start_proxy(sysid: int, port_offset: int, verbose: int = 1) -> None:
     """Start bidirectional proxy for a given UAV system_id."""
     logging.debug(f"Proxy {sysid}: Creating connections...")
 
-    logging.debug(f"Proxy {sysid}: Creating ArduPilot TCP connection...")
+    logging.debug(
+        f"Proxy {sysid}: Creating ArduPilot TCP connection on port "
+        f"{BasePort.ARP + port_offset}..."
+    )
     ap_conn = create_tcp_conn(
         base_port=BasePort.ARP, offset=port_offset, role="client", sysid=sysid
     )

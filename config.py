@@ -18,13 +18,14 @@ ARDUPILOT_GAZEBO_MODELS = HOME / "ardupilot_gazebo" / "models"
 
 # --- Local Paths ---
 ROOT = Path(__file__).parent
-LOGS_PATH = (ROOT / "ardupilot_logs").resolve()
+ARDU_LOGS_PATH = (ROOT / "ardupilot_logs").resolve()
+LOGS_PATH = (ROOT / "logs").resolve()
 VEH_PARAMS_PATH = (ROOT / "params/vehicle.parm").resolve()
 SIM_PARAMS_PATH = (ROOT / "params/simulation.py").resolve()
 DATA_PATH = (ROOT / "data").resolve()
 
 # Ensure logs directory exists (can be cleaned later)
-LOGS_PATH.mkdir(parents=True, exist_ok=True)
+ARDU_LOGS_PATH.mkdir(parents=True, exist_ok=True)
 
 
 # --- Base Communication Ports ---

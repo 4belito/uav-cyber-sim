@@ -3,5 +3,5 @@
 ardupilot_logs/
 data/
 vehicle_logic.py
-log/
+logs/
 # plan/missions/mission_*.waypoints

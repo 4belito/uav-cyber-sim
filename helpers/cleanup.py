@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 from typing import List, Literal
 
-from config import LOGS_PATH
+from config import ARDU_LOGS_PATH, DATA_PATH, LOGS_PATH
 
 ALL_PROCESSES = [
     "QGroundControl",
@@ -39,9 +39,10 @@ def delete_logs():
 def clean(victims: All | List[str] = "all", sim_out: bool = True):
     """End the simulation."""
     kill_processes(victims)
-    delete_logs()
-    if sim_out and LOGS_PATH.exists():
-        shutil.rmtree(LOGS_PATH)
+    reset_folder(DATA_PATH)
+    reset_folder(LOGS_PATH)
+    if sim_out and ARDU_LOGS_PATH.exists():
+        shutil.rmtree(ARDU_LOGS_PATH)
 
 
 def reset_folder(path: str | Path):

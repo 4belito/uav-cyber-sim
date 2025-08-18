@@ -19,12 +19,20 @@ from mavlink.customtypes.location import ENU, GRA, NED, GRAs
 from mavlink.enums import CmdNav, CmdSet, DataStream, Frame, MsgID
 
 
-def connect(device: str) -> MAVConnection:
+def connect(
+    device: str, source_system: int = 255, source_component: int = 0
+) -> MAVConnection:
     """
     Wrap `mavlink_connection` with a type cast to `MAVConnection`
     to enable clean static typing.
+    Pass source_system and source_component to ensure correct sysid assignment.
     """
-    return cast(MAVConnection, mavutil.mavlink_connection(device))  # type: ignore[arg-type]
+    return cast(
+        MAVConnection,
+        mavutil.mavlink_connection(  # type: ignore[arg-type]
+            device, source_system=source_system, source_component=source_component
+        ),
+    )
 
 
 class CustomCmd(IntEnum):
