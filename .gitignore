@@ -1,7 +1,5 @@
 **/__pycache__/
-# *.pkl
 ardupilot_logs/
 data/
 vehicle_logic.py
 logs/
-# plan/missions/mission_*.waypoints

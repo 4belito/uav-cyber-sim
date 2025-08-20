@@ -31,8 +31,6 @@ from simulator import (
 signal.signal(signal.SIGTTIN, signal.SIG_IGN)
 ALL_PROCESSES.remove("run_many_uavs.py")
 
-# with logger.running():
-
 
 def main():
     """Launch a multi-UAV simulation and monitors mission completion."""
@@ -43,17 +41,17 @@ def main():
     enu_origin = ENUPose(x=0, y=0, z=gra_origin.alt, heading=gra_origin.heading)
 
     gcs = [Color.RED, Color.ORANGE, Color.GREEN, Color.BLUE]  #
-    n_uavs_per_gcs = 4
+    n_uavs_per_gcs = 60
     side_len = 100
     altitude = 5
-    max_delay = 0  # sec
+    max_delay = 3  # sec
 
-    # novis (i * 50 * side_len, j * 50 * side_len, 0, 0)
-    # gaz (i * 50, j * 3 * side_len, 0, 0)
-    # qgc (i * side_len / 10, j * side_len / 3, 0, 0)
+    # novis (i * 50 * side_len, j * 50 * side_len, 0, 0)  4x60 100
+    # qgc (i * side_len / 10, j * side_len / 3, 0, 0)     4x30 100
+    # gaz (i * 50, j * 3 * side_len, 0, 0)                 3x3 10
     base_homes = ENUPose.list(
         [
-            (i * 50, j * 3 * side_len, 0, 0)
+            (i * side_len / 10, j * side_len / 3, 0, 0)
             for i in range(len(gcs))
             for j in range(n_uavs_per_gcs)
         ]
@@ -68,7 +66,7 @@ def main():
     msn_delays = [random.randint(0, max_delay) for _ in base_homes]
 
     ## Assign vehicles to GCS (by color)
-    gcs_names = [f"{color.name} {color.emoji}" for color in gcs]
+    gcs_names = [f"{color.name}_{color.emoji}" for color in gcs]
     gcs_sysids = [
         list(range(i * n_uavs_per_gcs + 1, (i + 1) * n_uavs_per_gcs + 1))
         for i in range(len(gcs))
@@ -81,7 +79,7 @@ def main():
 
     for path, home, c in zip(base_paths, base_homes, colors):
         gaz_config.add(base_path=path, base_home=home, color=c)
-    # gaz_config.show()
+    gaz_config.show()
 
     # QGroundControl Configuration
     qgc_config = ConfigQGC(origin=gra_origin)
@@ -102,7 +100,7 @@ def main():
 
     # Launch Simulator
     simulator = Simulator(
-        visualizers=[gaz],
+        visualizers=[novis],
         gcs_names=gcs_names,
         gcs_sysids=gcs_sysids,
         missions=[veh.mission for veh in qgc_config.vehicles],
@@ -113,6 +111,8 @@ def main():
     orac = simulator.launch()
 
     orac.run()
+    orac.wait_for_trajectory_files()
+    orac.plot_trajectories(gra_origin)
 
 
 if __name__ == "__main__":

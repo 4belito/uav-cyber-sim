@@ -97,6 +97,7 @@ class Color(StrEnum):
         }[self]
 
 
+Colors = list[Color]
 # --- Environment Setup Commands ---
 ENV_CMD_PYT = None
 ENV_CMD_ARP = "source ~/.profile"

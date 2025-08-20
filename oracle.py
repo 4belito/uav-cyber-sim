@@ -6,16 +6,21 @@ Currently provides basic global position tracking and mission completion detecti
 """
 
 import logging
+import pickle
 import threading
+import time
+from pathlib import Path
 from queue import Queue
 from typing import cast
 
+import matplotlib.pyplot as plt
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 import zmq
 
-from config import BasePort
-from helpers.change_coordinates import GRA
+from config import DATA_PATH, BasePort, Color
+from helpers.change_coordinates import GRA, GRAs_to_ENUs
 from mavlink.customtypes.connection import MAVConnection
+from mavlink.customtypes.location import GRAPose
 from mavlink.enums import MsgID
 from mavlink.util import ask_msg
 from monitor import UAVMonitor
@@ -199,3 +204,51 @@ class Oracle(UAVMonitor):
         super().remove_uav(sysid)
         del self.rid_in_socks[sysid]
         del self.rid_out_socks[sysid]
+
+    @staticmethod
+    def plot_trajectories(gra_origin: GRAPose):
+        """Plot trajectories of UAVs for each GCS color."""
+        traj_files = list(Path(DATA_PATH).glob("trajectories_*.pkl"))
+        for file in traj_files:
+            with open(file, "rb") as f:
+                trajs = pickle.load(f)
+            # Extract color name from filename: trajectories_COLOR_EMOJI.pkl
+            stem_parts = file.stem.split("_")
+            color_name = stem_parts[1]
+            gcs_color = Color(color_name.lower())
+            fig = plt.figure(figsize=(8, 8))  # type: ignore
+            ax = fig.add_subplot(projection="3d", proj_type="ortho")  # type: ignore
+            ax.set_title(f"{gcs_color} ENU Trajectories")  # type: ignore
+            ax.set_xlabel("East (m)")  # type: ignore
+            ax.set_ylabel("North (m)")  # type: ignore
+            ax.set_zlabel("Up (m)")  # type: ignore
+
+            for sysid, gra_path in trajs.items():
+                gra_valid = [p for p in gra_path if abs(p.alt) > 0.5]
+                enu = GRAs_to_ENUs(GRA(*gra_origin[:3]), gra_valid)
+                xs = [p.x for p in enu]
+                ys = [p.y for p in enu]
+                zs = [p.z for p in enu]
+                ax.scatter(  # type: ignore
+                    xs,
+                    ys,
+                    zs,
+                    c=[gcs_color.value],  # Use the actual color value
+                    s=12,  # type: ignore
+                    alpha=0.8,
+                    label=f"UAV {sysid}",
+                    depthshade=True,
+                )
+            ax.set_aspect(aspect="equalxy")  # type: ignore
+            plt.tight_layout()
+        plt.show(block=True)  # type: ignore
+
+    def wait_for_trajectory_files(self, poll_interval: float = 0.1):
+        """Wait until n_expected trajectory files exist in DATA_PATH, or timeout."""
+        n_expected = len(self.gcs_sysids)
+        while True:
+            traj_files = list(Path(DATA_PATH).glob("trajectories_*.pkl"))
+            if len(traj_files) == n_expected:
+                logging.info(f"Found {len(traj_files)} trajectory files")
+                return True
+            time.sleep(poll_interval)
