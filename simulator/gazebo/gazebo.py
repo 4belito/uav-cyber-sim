@@ -55,8 +55,15 @@ class Gazebo(Visualizer[GazVehicle]):
         base_models = [f"{veh.model}_{veh.color}" for veh in self.config.vehicles]
         self._generate_drone_models_from_bases(base_models, base_port_in=9002, step=10)
         updated_world = self._update_world(self.config.world_path)
-        create_process(f"gazebo {updated_world}", visible=False, env_cmd=ENV_CMD_GAZ)
-        logging.info("🖥️ Gazebo launched for realistic simulation and 3D visualization.")
+        create_process(
+            f"gazebo {updated_world}",
+            visible=False,
+            env_cmd=ENV_CMD_GAZ,
+            suppress_output=True,
+        )
+        logging.info(
+            "🖥️  Gazebo launched for realistic simulation and 3D visualization."
+        )
 
     def _generate_drone_models_from_bases(
         self,

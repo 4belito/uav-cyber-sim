@@ -226,7 +226,9 @@ class Simulator:
             BasePort.RID_DOWN,
             BasePort.RID_DATA,
         ]
-        return self._find_port_offsets(base_ports, self.n_vehs, excluded_offsets=[160])
+        return self._find_port_offsets(base_ports, self.n_vehs)
+
+    # excluded_offsets=[160]
 
     def _find_gcs_port_offsets(self) -> list[int]:
         base_ports = [BasePort.GCS_ZMQ]

@@ -8,9 +8,9 @@ It modifies the QGroundControl.ini file to set up connection links for each UAV.
 
 import logging
 import os
-import subprocess
 
 from config import QGC_INI_PATH, QGC_PATH, BasePort
+from helpers.processes import create_process
 
 # find_spawns
 from params.simulation import CONNECT_GCS_TO_ARP
@@ -49,15 +49,14 @@ class QGC(Visualizer[QGCVehicle]):
             # self._disable_autoconnect_udp()
             self._add_tcp_links(port_offsets)
         sim_cmd = [os.path.expanduser(QGC_PATH), "--appimage-extract-and-run"]
-        # pylint: disable=consider-using-with
-        subprocess.Popen(
-            sim_cmd,
-            stdout=subprocess.DEVNULL,  # Suppress standard output
-            stderr=subprocess.DEVNULL,  # Suppress error output
-            shell=False,  # Ensure safety when passing arguments
+        create_process(
+            cmd=" ".join(sim_cmd),
+            visible=False,
+            title="QGroundControl",
+            suppress_output=True,
         )
         logging.info(
-            "🗺️ QGroundControl launched for 2D visualization — simulation powered "
+            "🗺️  QGroundControl launched for 2D visualization — simulation powered "
             "by ArduPilot SITL."
         )
 

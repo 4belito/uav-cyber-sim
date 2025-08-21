@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 import folium
+from IPython.display import display  # type: ignore
 
 from config import Color
 from helpers.change_coordinates import draw_grapose, pose, poses
@@ -103,6 +104,7 @@ class ConfigQGC(ConfigVis[QGCVehicle]):
 
         # Plot origin
         draw_grapose(m, self.origin, "Origin", origin_color)
+        display(m)
         return m
 
     @staticmethod

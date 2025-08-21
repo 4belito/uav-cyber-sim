@@ -83,8 +83,10 @@ class Oracle(UAVMonitor):
         ]
         rid_out_thread = threading.Thread(target=self.retransmit_remote_ids)
 
-        logging.info(f"🏁 Starting Oracle with {len(self.conns)} vehicles")
-        logging.info(f"Monitoring {len(self.gcs_socks)} GCS processes")
+        logging.info(
+            f"🏁 Starting Oracle with {len(self.conns)} vehicles and "
+            f"{len(self.gcs_socks)} GCSs"
+        )
 
         for thread in rid_in_threads:
             thread.start()
