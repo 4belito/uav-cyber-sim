@@ -177,11 +177,6 @@ class Simulator:
             )  # "exit"
             logging.info(f"🚀 GCS {gcs_name} launched (PID {p.pid})")
 
-        # Wait for GCS processes to launch their vehicles before connecting
-        import time
-
-        logging.info("⏳ Waiting for GCS processes to launch vehicles...")
-        time.sleep(5)  # Give GCS processes time to launch all their vehicles
         logging.info("🔗 Starting Oracle connections to vehicles...")
 
         ## Connect to oracle

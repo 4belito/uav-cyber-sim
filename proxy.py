@@ -102,18 +102,13 @@ def create_tcp_conn(
 
     try:
         conn = connect(connection_string)
-        # Set the source system ID for this connection
-        conn.mav.srcSystem = sysid
         send_heartbeat(conn, sysid)
         conn.wait_heartbeat()
-        # After receiving heartbeat, the target_system should be set correctly
-        # But if it's still 0, we can force it to the expected sysid
-        if hasattr(conn, "target_system") and conn.target_system == 0:
-            conn.target_system = sysid
+        conn.target_system = sysid
         return conn
     except Exception as e:
         logging.error(f"Failed to create TCP connection on port {port}: {e}")
-        logging.error(f"TCP connection error traceback:\n{traceback.format_exc()}")
+        # logging.error(f"TCP connection error traceback:\n{traceback.format_exc()}")
         raise
 
 
