@@ -34,12 +34,14 @@ class Oracle(UAVMonitor):  # UAVMonitor
         uav_port_offsets: dict[int, int],
         gcs_port_offsets: dict[str, int],
         gcs_sysids: dict[str, list[int]],
+        transmission_range: float = 100.0,
     ) -> None:
         self.pos: dict[int, GRA] = {}
         self.gcs_sysids = gcs_sysids
         self.sysids = list(uav_port_offsets)
         self.rid_queue = Queue[tuple[int, dict[str, float]]]()
         self.zmq_ctx = zmq.Context()
+        self.range = transmission_range
 
         self.rid_in_socks = dict[int, zmq.Socket[bytes]]()
         self.rid_out_socks = dict[int, zmq.Socket[bytes]]()
@@ -147,7 +149,7 @@ class Oracle(UAVMonitor):  # UAVMonitor
                 if other_pos is None:
                     continue
                 dist = GRA.distance(pos, other_pos)
-                if dist > 100:
+                if dist > self.range:
                     continue
                 try:
                     other_sock.send_json(rid)  # type: ignore
