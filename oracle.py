@@ -26,7 +26,7 @@ from mavlink.util import ask_msg
 from monitor import UAVMonitor
 
 
-class Oracle(UAVMonitor):
+class Oracle(UAVMonitor):  # UAVMonitor
     """
     Oracle class for vehicle-to-vehicle communication and simulation coordination.
 
@@ -48,31 +48,30 @@ class Oracle(UAVMonitor):
 
         self.rid_in_socks = dict[int, zmq.Socket[bytes]]()
         self.rid_out_socks = dict[int, zmq.Socket[bytes]]()
-        for sysid in conns.keys():
+        for sysid, offset in uav_port_offsets.items():
             self.rid_in_socks[sysid] = self.zmq_ctx.socket(zmq.SUB)
             self.rid_in_socks[sysid].connect(
-                f"tcp://127.0.0.1:{BasePort.RID_UP + uav_port_offsets[sysid]}"
+                f"tcp://127.0.0.1:{BasePort.RID_UP + offset}"
             )
             self.rid_in_socks[sysid].setsockopt_string(zmq.SUBSCRIBE, "")
             self.rid_in_socks[sysid].setsockopt(zmq.RCVTIMEO, 100)
+
             self.rid_out_socks[sysid] = self.zmq_ctx.socket(zmq.PUB)
             self.rid_out_socks[sysid].bind(
-                f"tcp://127.0.0.1:{BasePort.RID_DOWN + uav_port_offsets[sysid]}"
+                f"tcp://127.0.0.1:{BasePort.RID_DOWN + offset}"
             )
             self.rid_out_socks[sysid].setsockopt(zmq.SNDTIMEO, 100)
 
         self.gcs_socks = dict[str, zmq.Socket[bytes]]()
-        for gcs_name in gcs_port_offsets.keys():
+        for gcs_name, offset in gcs_port_offsets.items():
             self.gcs_socks[gcs_name] = self.zmq_ctx.socket(zmq.SUB)
             self.gcs_socks[gcs_name].connect(
-                f"tcp://127.0.0.1:{BasePort.GCS_ZMQ + gcs_port_offsets[gcs_name]}"
+                f"tcp://127.0.0.1:{BasePort.GCS_ZMQ + offset}"
             )
             self.gcs_socks[gcs_name].setsockopt_string(zmq.SUBSCRIBE, "")
             self.gcs_socks[gcs_name].setsockopt(zmq.RCVTIMEO, 100)
 
         # Small delay to ensure ZMQ connections are established
-        import time
-
         time.sleep(0.2)
 
     def run(self):

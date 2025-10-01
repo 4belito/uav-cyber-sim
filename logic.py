@@ -16,12 +16,12 @@ from pymavlink.dialects.v20 import ardupilotmega as mavlink
 # First Party imports
 from config import DATA_PATH, BasePort
 from helpers.setup_log import setup_logging
+from mavlink.connections import create_tcp_conn, create_udp_conn, send_heartbeat
 from mavlink.customtypes.connection import MAVConnection
 from mavlink.customtypes.location import ENU
 from mavlink.util import CustomCmd
 from params.simulation import HEARTBEAT_PERIOD
 from plan import Action, Plan, State, Step
-from proxy import create_tcp_conn, create_udp_conn, send_heartbeat
 
 ######################################################################
 # NOTE: The plans have to only be hardcoded when using the GUIDED mode.

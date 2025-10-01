@@ -10,7 +10,7 @@ import threading
 import time
 import traceback
 from queue import Queue
-from typing import Literal, TextIO
+from typing import TextIO
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 import zmq
@@ -19,9 +19,10 @@ from pymavlink import mavutil
 # First Party imports
 from config import DATA_PATH, BasePort
 from helpers.setup_log import setup_logging
+from mavlink.connections import create_tcp_conn, create_udp_conn
 from mavlink.customtypes.connection import MAVConnection
-from mavlink.enums import Autopilot, DataStream, Type
-from mavlink.util import connect, request_sensor_streams
+from mavlink.enums import DataStream
+from mavlink.util import request_sensor_streams
 from params.simulation import HEARTBEAT_PERIOD
 
 heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
@@ -65,51 +66,6 @@ def parse_arguments() -> tuple[int, int, int]:
     )
     args = parser.parse_args()
     return (args.sysid, args.port_offset, args.verbose)
-
-
-# taken from mavproxy
-def send_heartbeat(conn: MAVConnection, sysid: int = 255) -> None:
-    """Send a GCS heartbeat message to the UAV."""
-    # Set the source system ID for this connection
-    conn.mav.srcSystem = sysid
-    conn.mav.heartbeat_send(Type.GCS, Autopilot.INVALID, 0, 0, 0)
-
-
-def create_udp_conn(
-    base_port: int,
-    offset: int,
-    mode: Literal["receiver", "sender"],
-) -> MAVConnection:
-    """Create a MAVLink-over-UDP connection."""
-    port = base_port + offset
-    if mode == "receiver":
-        conn = connect(f"udp:127.0.0.1:{port}")  # listen for incoming
-        conn.wait_heartbeat()
-    else:  # mode == "sender"
-        conn = connect(f"udpout:127.0.0.1:{port}")  # send-only
-    return conn
-
-
-def create_tcp_conn(
-    base_port: int,
-    offset: int,
-    role: Literal["client", "server"] = "client",
-    sysid: int = 255,
-) -> MAVConnection:
-    """Create and in or out connection and wait for geting the hearbeat in."""
-    port = base_port + offset
-    connection_string = f"tcp{'in' if role == 'server' else ''}:127.0.0.1:{port}"
-
-    try:
-        conn = connect(connection_string)
-        send_heartbeat(conn, sysid)
-        conn.wait_heartbeat()
-        conn.target_system = sysid
-        return conn
-    except Exception as e:
-        logging.error(f"Failed to create TCP connection on port {port}: {e}")
-        # logging.error(f"TCP connection error traceback:\n{traceback.format_exc()}")
-        raise
 
 
 class MessageRouter(threading.Thread):
@@ -302,53 +258,41 @@ def write_and_log_with_sensors(
 def start_proxy(sysid: int, port_offset: int) -> None:
     """Start bidirectional proxy for a given UAV system_id."""
     logging.debug(f"Proxy {sysid}: Creating connections...")
-
-    logging.debug(
-        f"Proxy {sysid}: Creating ArduPilot TCP connection on port "
-        f"{BasePort.ARP + port_offset}..."
-    )
     ap_conn = create_tcp_conn(
         base_port=BasePort.ARP, offset=port_offset, role="client", sysid=sysid
     )
-    logging.debug(f"Proxy {sysid}: ArduPilot connection created")
+    logging.debug(f"Proxy {sysid}: ArduPilot TCP connection created")
 
-    logging.debug(f"Proxy {sysid}: Creating GCS UDP connection...")
     cs_conn = create_udp_conn(base_port=BasePort.GCS, offset=port_offset, mode="sender")
-    logging.debug(f"Proxy {sysid}: GCS connection created")
+    logging.debug(f"Proxy {sysid}: GCS UDP connection created")
 
     oc_conn = create_udp_conn(base_port=BasePort.ORC, offset=port_offset, mode="sender")
+    logging.debug(f"Proxy {sysid}: Oracle UDP connection created")
 
-    logging.debug(f"Proxy {sysid}: Creating Vehicle TCP connection...")
     vh_conn = create_tcp_conn(
         base_port=BasePort.VEH, offset=port_offset, role="client", sysid=sysid
     )
-    logging.debug(f"Proxy {sysid}: Vehicle connection created")
+    logging.debug(f"Proxy {sysid}: Vehicle TCP connection created")
 
-    logging.debug(f"Proxy {sysid}: Requesting sensor streams...")
     request_sensor_streams(
         ap_conn, stream_ids=DATA_STREAM_IDS, rate_hz=DATA_STREAM_RATE
     )
     logging.debug(f"Proxy {sysid}: Sensor streams requested")
 
-    logging.debug(f"Proxy {sysid}: Creating message queues...")
     ap_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
     cs_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
     oc_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
     vh_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
     logging.debug(f"Proxy {sysid}: Message queues created")
 
-    logging.debug(f"Proxy {sysid}: Setting up ZMQ...")
     zmq_ctx = zmq.Context()
     rid_sock = zmq_ctx.socket(zmq.PUB)
     rid_sock.bind(f"tcp://127.0.0.1:{BasePort.RID_DATA + port_offset}")
     logging.debug(f"Proxy {sysid}: ZMQ setup complete")
 
-    logging.debug(f"Starting Proxy {sysid}")
-
     stop_event = threading.Event()
 
-    logging.debug(f"Proxy {sysid}: Creating MessageRouter threads...")
-    # ARP → ORC + VEH  X(+GCS)
+    # ARP → ORC + VEH + GCS
     router1 = MessageRouter(
         source=ap_conn,
         targets=[cs_queue, oc_queue, vh_queue],
@@ -389,7 +333,6 @@ def start_proxy(sysid: int, port_offset: int) -> None:
     )
     logging.debug(f"Proxy {sysid}: MessageRouter threads created")
 
-    logging.debug(f"Proxy {sysid}: Creating CSV log file...")
     log_file = open(DATA_PATH / f"proxy_{sysid}.log", "w")
     log_writer = csv.writer(log_file)
     log_writer.writerow(
@@ -398,14 +341,10 @@ def start_proxy(sysid: int, port_offset: int) -> None:
     sensor_log_files: dict[str, TextIO] = {}
     logging.debug(f"Proxy {sysid}: CSV log file created")
     try:
-        logging.debug(f"Proxy {sysid}: Starting router threads...")
         router1.start()
-        logging.debug(f"Proxy {sysid}: Router1 (ARP) started")
         router2.start()
-        logging.debug(f"Proxy {sysid}: Router2 (GCS) started")
         router3.start()
         router4.start()
-        logging.debug(f"Proxy {sysid}: Router4 (VEH) started")
 
         logging.debug(f"Proxy {sysid}: Entering main message processing loop")
         while not stop_event.is_set():
@@ -472,16 +411,11 @@ def start_proxy(sysid: int, port_offset: int) -> None:
                 logging.error(f"Exception traceback:\n{traceback.format_exc()}")
                 break
     finally:
-        logging.info(f"Proxy {sysid}: Starting cleanup...")
-
-        logging.debug(f"Proxy {sysid}: Waiting for router threads to stop...")
         router1.join()
         router2.join()
         router3.join()
         router4.join()
         logging.debug(f"Proxy {sysid}: All router threads stopped")
-
-        logging.debug(f"Proxy {sysid}: Closing connections...")
         try:
             cs_conn.close()
             logging.debug(f"Proxy {sysid}: GCS connection closed")
@@ -505,9 +439,6 @@ def start_proxy(sysid: int, port_offset: int) -> None:
             logging.debug(f"Proxy {sysid}: Vehicle connection closed")
         except Exception as e:
             logging.error(f"Proxy {sysid}: Error closing Vehicle connection: {e}")
-
-        # rid_sock.close()
-        # zmq_ctx.term()
 
         try:
             log_file.close()

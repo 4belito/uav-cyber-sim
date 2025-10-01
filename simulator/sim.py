@@ -10,8 +10,6 @@ from concurrent import futures
 from pathlib import Path
 from typing import Callable, Literal, TypeVar
 
-from pymavlink.mavutil import mavlink_connection as connect  # type: ignore
-
 from config import (
     ARDU_LOGS_PATH,
     ARDUPILOT_VEHICLE_PATH,
@@ -21,6 +19,7 @@ from config import (
     BasePort,
 )
 from helpers import create_process, setup_logging
+from mavlink.connections import create_udp_conn
 from mavlink.customtypes.connection import MAVConnection
 from mavlink.util import save_mission
 from oracle import Oracle
@@ -45,8 +44,7 @@ class Simulator:
         self,
         visualizers: list[Visualizer[V]],
         missions: Missions,
-        gcs_names: list[str],
-        gcs_sysids: list[list[int]],
+        gcs_system_ids: dict[str, list[int]],
         logic_cmd: Callable[[int, str, int], str] = lambda _, config_path, verbose: (
             f'python3 logic.py --config-path "{config_path}" --verbose {verbose} '
         ),
@@ -62,17 +60,23 @@ class Simulator:
         self.visuals = visualizers
         self.terminals = set(terminals)
         self.suppress = set(supress_output)
-        self.n_vehs = visualizers[0].config.n_vehicles
-        self.n_gcss = len(gcs_names)
+        self.sysids = [sysid for sysids in gcs_system_ids.values() for sysid in sysids]
+        self.gcs_names = list(gcs_system_ids.keys())
+        self.n_vehs = len(self.sysids)
+        self.n_gcss = len(self.gcs_names)
         self.verbose = verbose
-        self.gcs_names = gcs_names
-        self.gcs_sysids = gcs_sysids
+        self.gcs_sysids = gcs_system_ids
         self.missions = missions
         self.logic_cmd = logic_cmd
         self.gcs_cmd = gcs_cmd
         self.monitored_items = monitored_mission_items or [
             list(range(1, mission.n_items - 1)) for mission in missions
         ]
+
+        assert len(self.missions) == self.n_vehs, (
+            "Number of missions must match number of vehicles"
+        )
+
         setup_logging(self.oracle_name, verbose=verbose, console_output=True)
         logging.debug(
             (
@@ -91,7 +95,8 @@ class Simulator:
         for visual in self.visuals:
             if not visual.delay:
                 visual.launch(self.uav_port_offsets)
-        oracle = self._launch_gcses()
+        self._launch_gcses()
+        oracle = self._launch_oracle()
         for visual in self.visuals:
             if visual.delay:
                 visual.launch(self.uav_port_offsets)
@@ -108,6 +113,46 @@ class Simulator:
                 delay=mission.delay,
             )
 
+    def _launch_gcses(self):
+        """Launch each GCS process and create an Oracle instance."""
+        for i, gcs_name in enumerate(self.gcs_names):
+            gcsid = i + 1
+            gcs_cmd = self.gcs_cmd(
+                gcsid, str(DATA_PATH / f"gcs_config_{gcsid}.json"), self.verbose
+            )
+            p = create_process(
+                gcs_cmd,
+                after="exec bash",
+                visible="gcs" in self.terminals,
+                suppress_output="gcs" in self.suppress,
+                title=f"GCS: {gcs_name}",
+                env_cmd=ENV_CMD_PYT,
+            )  # "exit"
+            logging.info(f"🚀 GCS {gcs_name} launched (PID {p.pid})")
+
+    def _launch_oracle(self) -> Oracle:
+        logging.info("🔗 Starting Oracle connections to vehicles...")
+        with futures.ThreadPoolExecutor() as executor:
+            orc_conns = dict(
+                zip(
+                    self.sysids,
+                    executor.map(self._connect_to_vehicle, range(self.n_vehs)),
+                )
+            )
+        uav_port_offsets = dict(zip(self.sysids, self.uav_port_offsets))
+        gcs_port_offsets = dict(zip(self.gcs_names, self.gcs_port_offsets))
+        return Oracle(orc_conns, uav_port_offsets, gcs_port_offsets, self.gcs_sysids)
+
+    def _connect_to_vehicle(self, i: int) -> MAVConnection:
+        """Connect to a UAV through MAVLink."""
+        conn = create_udp_conn(
+            base_port=BasePort.ORC,
+            offset=self.uav_port_offsets[i],
+            mode="receiver",
+        )
+        logging.info(f"🔗 UAV logic {i + 1} is connected to {self.oracle_name}")
+        return conn
+
     def _save_logic_configs(self, folder_name: Path):
         """Save the logic configurations for each UAV."""
         for i in range(self.n_vehs):
@@ -122,7 +167,7 @@ class Simulator:
                 json.dump(logic_config, f, indent=2)
 
     def _save_gcs_configs(self, folder_name: Path):
-        for i, (gcs_name, sysids) in enumerate(zip(self.gcs_names, self.gcs_sysids)):
+        for i, (gcs_name, sysids) in enumerate(self.gcs_sysids.items()):
             gcs_config = {
                 "name": gcs_name,
                 "port_offset": self.gcs_port_offsets[i],
@@ -159,56 +204,6 @@ class Simulator:
             config_path = folder_name / f"gcs_config_{i + 1}.json"
             with config_path.open("w") as f:
                 json.dump(gcs_config, f, indent=2)
-
-    def _launch_gcses(self) -> Oracle:
-        """Launch each GCS process and create an Oracle instance."""
-        for i, gcs_name in enumerate(self.gcs_names):
-            gcsid = i + 1
-            gcs_cmd = self.gcs_cmd(
-                gcsid, str(DATA_PATH / f"gcs_config_{gcsid}.json"), self.verbose
-            )
-            p = create_process(
-                gcs_cmd,
-                after="exec bash",
-                visible="gcs" in self.terminals,
-                suppress_output="gcs" in self.suppress,
-                title=f"GCS: {gcs_name}",
-                env_cmd=ENV_CMD_PYT,
-            )  # "exit"
-            logging.info(f"🚀 GCS {gcs_name} launched (PID {p.pid})")
-
-        logging.info("🔗 Starting Oracle connections to vehicles...")
-
-        ## Connect to oracle
-        with futures.ThreadPoolExecutor() as executor:
-            orc_conns = dict(
-                zip(
-                    range(1, self.n_vehs + 1),
-                    executor.map(self._connect_to_vehicle, range(self.n_vehs)),
-                )
-            )
-        oracle = Oracle(
-            orc_conns,
-            uav_port_offsets={
-                i + 1: offset for i, offset in enumerate(self.uav_port_offsets)
-            },
-            gcs_port_offsets={
-                name: offset
-                for name, offset in zip(self.gcs_names, self.gcs_port_offsets)
-            },
-            gcs_sysids={
-                name: sysids for name, sysids in zip(self.gcs_names, self.gcs_sysids)
-            },
-        )
-        return oracle
-
-    def _connect_to_vehicle(self, i: int) -> MAVConnection:
-        """Connect to a UAV through MAVLink."""
-        port = BasePort.ORC + self.uav_port_offsets[i]
-        conn: MAVConnection = connect(f"udp:127.0.0.1:{port}", source_system=i + 1)  # type: ignore
-        conn.wait_heartbeat()
-        logging.info(f"🔗 UAV logic {i + 1} is connected to {self.oracle_name}")
-        return conn
 
     def _find_uav_port_offsets(self):
         base_ports = [
