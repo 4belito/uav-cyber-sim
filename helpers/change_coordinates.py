@@ -87,6 +87,14 @@ def GRAPoses_to_ENUPoses(origin: GRAPose, points: GRAPoses) -> ENUPoses:
     return [GRA_to_ENU(origin, point) for point in points]
 
 
+def GLOBAL_INT_to_GRA(lat: float, lon: float, alt: float) -> GRA:
+    """Convert GLOBAL_POSITION_INT coordinates to GRA."""
+    lat = lat / 1e7
+    lon = lon / 1e7
+    alt = alt / 1000
+    return GRA(lat, lon, alt)
+
+
 @overload
 def GRA_to_ENU(origin: GRA, point: GRA) -> ENU: ...
 @overload

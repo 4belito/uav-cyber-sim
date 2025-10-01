@@ -147,8 +147,6 @@ class MessageRouter(threading.Thread):
                 self.stop_event.set()
                 break
 
-        logging.debug(f"MessageRouter ({self.sender}): Thread exiting")
-
     def dispatch_message(self, msg: mavlink.MAVLink_message):
         """Send a message to all targets with timestamp and sender."""
         time_received = time.time()
@@ -274,10 +272,10 @@ def start_proxy(sysid: int, port_offset: int) -> None:
     )
     logging.debug(f"Proxy {sysid}: Vehicle TCP connection created")
 
+    # Request sensor streams from ArduPilot and Global Position messages for Remote_id
     request_sensor_streams(
         ap_conn, stream_ids=DATA_STREAM_IDS, rate_hz=DATA_STREAM_RATE
     )
-    logging.debug(f"Proxy {sysid}: Sensor streams requested")
 
     ap_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
     cs_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()

@@ -51,12 +51,12 @@ class BasePort(IntEnum):
     # variable QGC_UDP is not actually being used because QGround control connects
     # automatically to UDP 14550
     QGC = QGC_TCP if CONNECT_GCS_TO_ARP else QGC_UDP
-    ARP = 5760  # Ardupilot Vehicle(TCP)
-    GCS = 14551  # Ground Control Station(UDP)
-    ORC = 14552  # Oracle(UDP)
-    VEH = 14553  # Vehicle(TCP)
-    RID_UP = 14554  # Remote ID (UAV->ORC)
-    RID_DOWN = 14555  # Remote ID (ORC->UAV)
+    ARP = 5760  # Ardupilot Vehicle(TCP: PROXY->ARP)
+    GCS = 14551  # Ground Control Station(UDP: PROXY,LOGIC->GCS)
+    ORC = 14552  # Oracle(UDP: PROXY->ORC)
+    VEH = 14553  # Vehicle(TCP: PROXY->LOGIC)
+    RID_UP = 14554  # Remote ID (LOGIC->ORC)
+    RID_DOWN = 14555  # Remote ID (ORC->LOGIC)
     RID_DATA = 14556  # Remote ID (PROXY->LOGIC) internal
 
     # ONE-PER-GCS PORTS
@@ -64,8 +64,6 @@ class BasePort(IntEnum):
 
 
 # --- UAV Visualization Colors ---
-
-
 class Color(StrEnum):
     """Enum for supported UAV marker colors in visualizations."""
 

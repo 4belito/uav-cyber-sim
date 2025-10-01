@@ -7,7 +7,7 @@ import logging
 import threading
 import time
 from enum import StrEnum
-from typing import Any, TypedDict
+from typing import TypedDict
 
 import zmq
 from pymavlink import mavutil
@@ -64,13 +64,14 @@ def collect_rid_data(
     global rid_data
     while not stop_event.is_set():
         try:
-            msg: dict[str, Any] = rid_sock.recv_json()  # type: ignore
+            msg: dict[str, str | float] = rid_sock.recv_json()  # type: ignore
+            logging.debug(f"Collect Remote ID data: {msg}")
             update_rid_data(msg, lock)
         except Exception:
             pass
 
 
-def update_rid_data(new_data: dict[str, Any], lock: threading.Lock):
+def update_rid_data(new_data: dict[str, str | float], lock: threading.Lock):
     """Update the global Remote ID data with new values."""
     global rid_data
     with lock:
@@ -83,10 +84,12 @@ def receive_rids(rid_sock: zmq.Socket[bytes], stop_event: threading.Event):
     """Receive Remote ID data from the ZMQ socket and optionally log it."""
     while not stop_event.is_set():
         try:
-            msg: dict[str, Any] = rid_sock.recv_json()  # type: ignore
+            msg: dict[str, float] = rid_sock.recv_json()  # type: ignore
             logging.debug(f"Received Remote ID data: {msg}")
-        except Exception:
-            pass
+        except zmq.Again:
+            continue
+        except Exception as e:
+            logging.error(f"Error receiving Remote ID data {e}")
             # No additional code needed here.
 
 

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 
-from helpers.change_coordinates import NED_to_ENU
+from helpers.change_coordinates import GLOBAL_INT_to_GRA, NED_to_ENU
 from mavlink.customtypes.connection import MAVConnection
 from mavlink.customtypes.location import ENU, GRA, NED, GRAs
 from mavlink.enums import CmdNav, CmdSet, DataStream, Frame, MsgID
@@ -95,13 +95,9 @@ def get_GRA_position(
     msg: mavlink.MAVLink_global_position_int_message, sysid: int
 ) -> GRA:
     """Request and return the UAV's current local NED position."""
-    lat = msg.lat / 1e7
-    lon = msg.lon / 1e7
-    alt = msg.relative_alt / 1000.0
-    logging.debug(
-        f"Vehicle {sysid}: 📍 Position: lat={lat:.7f}, lon={lon:.7f}, alt={alt:.2f} m"
-    )
-    return GRA(lat, lon, alt)
+    gra = GLOBAL_INT_to_GRA(msg.lat, msg.lon, msg.relative_alt)
+    logging.debug(f"Vehicle {sysid}: 📍 Position: {gra} m")
+    return gra
 
 
 def save_mission(path: Path, poses: GRAs, delay: int = 0) -> None:

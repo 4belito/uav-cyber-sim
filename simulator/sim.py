@@ -6,7 +6,6 @@ and optional visualization.
 import json
 import logging
 import socket
-from concurrent import futures
 from pathlib import Path
 from typing import Callable, Literal, TypeVar
 
@@ -131,17 +130,9 @@ class Simulator:
             logging.info(f"🚀 GCS {gcs_name} launched (PID {p.pid})")
 
     def _launch_oracle(self) -> Oracle:
-        logging.info("🔗 Starting Oracle connections to vehicles...")
-        with futures.ThreadPoolExecutor() as executor:
-            orc_conns = dict(
-                zip(
-                    self.sysids,
-                    executor.map(self._connect_to_vehicle, range(self.n_vehs)),
-                )
-            )
         uav_port_offsets = dict(zip(self.sysids, self.uav_port_offsets))
         gcs_port_offsets = dict(zip(self.gcs_names, self.gcs_port_offsets))
-        return Oracle(orc_conns, uav_port_offsets, gcs_port_offsets, self.gcs_sysids)
+        return Oracle(uav_port_offsets, gcs_port_offsets, self.gcs_sysids)
 
     def _connect_to_vehicle(self, i: int) -> MAVConnection:
         """Connect to a UAV through MAVLink."""

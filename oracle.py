@@ -11,18 +11,13 @@ import threading
 import time
 from pathlib import Path
 from queue import Queue
-from typing import cast
 
 import matplotlib.pyplot as plt
-import pymavlink.dialects.v20.ardupilotmega as mavlink
 import zmq
 
 from config import DATA_PATH, BasePort, Color
-from helpers.change_coordinates import GRA, GRAs_to_ENUs
-from mavlink.customtypes.connection import MAVConnection
+from helpers.change_coordinates import GRA, GLOBAL_INT_to_GRA, GRAs_to_ENUs
 from mavlink.customtypes.location import GRAPose
-from mavlink.enums import MsgID
-from mavlink.util import ask_msg
 from monitor import UAVMonitor
 
 
@@ -36,14 +31,14 @@ class Oracle(UAVMonitor):  # UAVMonitor
 
     def __init__(
         self,
-        conns: dict[int, MAVConnection],
         uav_port_offsets: dict[int, int],
         gcs_port_offsets: dict[str, int],
         gcs_sysids: dict[str, list[int]],
     ) -> None:
-        super().__init__(conns)
+        self.pos: dict[int, GRA] = {}
         self.gcs_sysids = gcs_sysids
-        self.rid_queue = Queue[tuple[int, bytes]]()
+        self.sysids = list(uav_port_offsets)
+        self.rid_queue = Queue[tuple[int, dict[str, float]]]()
         self.zmq_ctx = zmq.Context()
 
         self.rid_in_socks = dict[int, zmq.Socket[bytes]]()
@@ -78,53 +73,24 @@ class Oracle(UAVMonitor):  # UAVMonitor
         """Run the Oracle to manage UAV connections and communication."""
         rid_in_threads = [
             threading.Thread(target=self.enqueue_remote_ids, args=(sysid,))
-            for sysid in self.conns.keys()
+            for sysid in self.sysids
         ]
         rid_out_thread = threading.Thread(target=self.retransmit_remote_ids)
 
         logging.info(
-            f"🏁 Starting Oracle with {len(self.conns)} vehicles and "
+            f"🏁 Starting Oracle with {len(self.sysids)} vehicles and "
             f"{len(self.gcs_socks)} GCSs"
         )
 
         for thread in rid_in_threads:
             thread.start()
         rid_out_thread.start()
-
-        for conn in self.conns.values():
-            ask_msg(conn, msg_id=MsgID.GLOBAL_POSITION_INT, interval=100_000)
-
         logging.debug("Entering main monitoring loop...")
 
-        while self.conns:
-            logging.debug(
-                f"Loop iteration - {len(self.conns)} UAV connections remaining"
-            )
-
-            for sysid, conn in list(self.conns.items()):
-                try:
-                    msg = conn.recv_msg()
-                    if not msg:
-                        continue
-                except Exception:
-                    continue
-                match msg.get_type():
-                    case "GLOBAL_POSITION_INT":
-                        self._get_global_pos(
-                            cast(mavlink.MAVLink_global_position_int_message, msg),
-                            sysid,
-                        )
-                    case _:
-                        pass
-
-            # Check for GCS completion messages
-            logging.debug(f"Checking {len(self.gcs_socks)} GCS sockets for messages...")
-
-            messages_received = 0
+        while self.sysids:
             for gcs_name, sock in list(self.gcs_socks.items()):
                 try:
                     msg = sock.recv_string(flags=zmq.NOBLOCK)
-                    messages_received += 1
                     logging.info(f"Received message '{msg}' from GCS {gcs_name}")
                     if msg == "DONE":
                         self.remove_gcs(gcs_name)
@@ -137,11 +103,6 @@ class Oracle(UAVMonitor):  # UAVMonitor
                     logging.error(f"Error receiving from GCS {gcs_name}: {e}")
                     continue
 
-            if messages_received == 0:
-                logging.debug("No messages received from any GCS this iteration")
-            else:
-                logging.debug(f"Received {messages_received} messages this iteration")
-
         logging.info("✅ Main monitoring loop completed - all connections closed")
 
         for thread in rid_in_threads:
@@ -152,16 +113,25 @@ class Oracle(UAVMonitor):  # UAVMonitor
 
     def enqueue_remote_ids(self, sysid: int):
         """Receive Remote ID messages from one UAV and add them to the queue."""
-        while sysid in self.rid_in_socks:
+        while sysid in self.sysids:
             try:
-                rid = self.rid_in_socks[sysid].recv()
+                rid: dict[str, float] = self.rid_in_socks[sysid].recv_json()  # type: ignore
+                raw_lat = rid.get("lat")
+                raw_lon = rid.get("lon")
+                raw_alt = rid.get("alt")
+                if raw_lat and raw_lon and raw_alt:
+                    self.pos[sysid] = GLOBAL_INT_to_GRA(raw_lat, raw_lon, raw_alt)
+                logging.debug(f"Remote ID from {sysid} and msg {rid}")
+            except zmq.Again:
+                continue
             except Exception:
+                logging.error(f"Error receiving Remote ID from {sysid}")
                 continue
             self.rid_queue.put((sysid, rid))
 
     def retransmit_remote_ids(self):
         """Retransmit Remote IDs to other UAVs."""
-        while self.rid_out_socks:
+        while self.sysids:
             try:
                 sysid, rid = self.rid_queue.get(timeout=0.1)
             except Exception:
@@ -180,12 +150,17 @@ class Oracle(UAVMonitor):  # UAVMonitor
                 if dist > 100:
                     continue
                 try:
-                    other_sock.send(rid)  # type: ignore
+                    other_sock.send_json(rid)  # type: ignore
                     logging.debug(
                         f"🔁 Retransmitted Remote ID from {sysid} to {other_sysid}"
                     )
-                except Exception:
-                    pass
+                except Exception as e:
+                    logging.error(
+                        (
+                            f"Error retransmitting Remote ID from {sysid} "
+                            f"to {other_sysid}: {e}"
+                        )
+                    )
 
     def remove_gcs(self, gcs_name: str):
         """Remove a GCS connection and its associated sockets."""
@@ -196,13 +171,12 @@ class Oracle(UAVMonitor):  # UAVMonitor
         for sysid in self.gcs_sysids[gcs_name]:
             logging.debug(f"Removing UAV {sysid} from tracking")
             self.remove_uav(sysid)
-        logging.info(
-            f"GCS {gcs_name} removal complete. Remaining connections: {len(self.conns)}"
-        )
+        logging.info(f"GCS {gcs_name} removED. Remaining GCS: {len(self.gcs_socks)}")
 
     def remove_uav(self, sysid: int):
         """Remove a UAV connection and its associated sockets."""
-        super().remove_uav(sysid)
+        # super().remove_uav(sysid)
+        self.sysids.remove(sysid)
         del self.rid_in_socks[sysid]
         del self.rid_out_socks[sysid]
 
