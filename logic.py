@@ -23,6 +23,7 @@ from helpers.connections.mavlink.conn import (
 from helpers.connections.mavlink.customtypes.location import ENU
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import CmdCustom
+from helpers.connections.zeromq import create_zmq_socket
 from helpers.setup_log import setup_logging
 from params.simulation import HEARTBEAT_PERIOD
 from plan import Action, Plan, State, Step
@@ -130,17 +131,9 @@ def start_logic(config: LogicConfig):
     )
 
     zmq_ctx = zmq.Context()
-    rid_in_sock = zmq_ctx.socket(zmq.SUB)
-    rid_in_sock.connect(f"tcp://127.0.0.1:{BasePort.RID_DOWN + port_offset}")
-    rid_in_sock.setsockopt(zmq.SUBSCRIBE, b"")
-    rid_in_sock.setsockopt(zmq.RCVTIMEO, 100)
-    rid_out_sock = zmq_ctx.socket(zmq.PUB)
-    rid_out_sock.bind(f"tcp://127.0.0.1:{BasePort.RID_UP + port_offset}")
-    rid_out_sock.setsockopt(zmq.SNDTIMEO, 100)
-    rid_data_sock = zmq_ctx.socket(zmq.SUB)
-    rid_data_sock.connect(f"tcp://127.0.0.1:{BasePort.RID_DATA + port_offset}")
-    rid_data_sock.setsockopt(zmq.SUBSCRIBE, b"")
-    rid_data_sock.setsockopt(zmq.RCVTIMEO, 100)
+    rid_in_sock = create_zmq_socket(zmq_ctx, zmq.SUB, BasePort.RID_DOWN, port_offset)
+    rid_out_sock = create_zmq_socket(zmq_ctx, zmq.PUB, BasePort.RID_UP, port_offset)
+    rid_data_sock = create_zmq_socket(zmq_ctx, zmq.SUB, BasePort.RID_DATA, port_offset)
     rid_lock = threading.Lock()
     stop_event = threading.Event()
     rid_data_thread = threading.Thread(
@@ -180,10 +173,7 @@ def start_logic(config: LogicConfig):
                     pass
 
             if logic.plan.state == State.DONE:
-                # Original working behavior for GCS/monitor
                 send_done_until_ack(cs_conn, sysid)
-
-                # Additional signal for immediate proxy termination
                 msg_proxy = mavlink.MAVLink_statustext_message(
                     severity=6, text=b"LOGIC_DONE"
                 )
@@ -199,9 +189,9 @@ def start_logic(config: LogicConfig):
         cs_conn.close()
         vh_conn.close()
 
-        rid_in_sock.close()
-        rid_out_sock.close()
-        rid_data_sock.close()
+        rid_in_sock.close(linger=0)
+        rid_out_sock.close(linger=0)
+        rid_data_sock.close(linger=0)
         rid_data_thread.join()
         rid_recv_thread.join()
         zmq_ctx.term()

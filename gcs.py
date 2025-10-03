@@ -15,6 +15,7 @@ import zmq
 from config import DATA_PATH, ENV_CMD_ARP, ENV_CMD_PYT, BasePort
 from helpers.connections.mavlink.conn import create_udp_conn
 from helpers.connections.mavlink.customtypes.location import GRAs
+from helpers.connections.zeromq import create_zmq_socket
 from helpers.processes import create_process
 from helpers.setup_log import setup_logging
 from monitor import UAVMonitor
@@ -70,9 +71,9 @@ class GCS(UAVMonitor):
         self._launch_vehicles()
 
         self.zmq_ctx = zmq.Context()
-        self.orc_sock = self.zmq_ctx.socket(zmq.PUB)
-        self.orc_sock.bind(f"tcp://127.0.0.1:{BasePort.GCS_ZMQ + port_offset}")
-        self.orc_sock.setsockopt(zmq.SNDTIMEO, 100)
+        self.orc_sock = create_zmq_socket(
+            self.zmq_ctx, zmq.PUB, BasePort.GCS_ZMQ, port_offset
+        )
 
         super().__init__(self.conns)
         self.paths: dict[int, GRAs] = {sysid: [] for sysid in self.conns}
@@ -94,11 +95,8 @@ class GCS(UAVMonitor):
         self.orc_sock.send_string("DONE")  # type: ignore
         logging.info("DONE message sent to Oracle")
 
-        # Small delay to ensure the message is sent before process termination
-        import time
-
-        time.sleep(0.1)
-
+        self.orc_sock.close(linger=0)
+        self.zmq_ctx.term()
         trajectory_file = DATA_PATH / f"trajectories_{self.name}.pkl"
         with open(trajectory_file, "wb") as file:
             pickle.dump(self.paths, file)
