@@ -19,6 +19,7 @@ from config import DATA_PATH, BasePort, Color
 from helpers.change_coordinates import GRA, GLOBAL_INT_to_GRA, GRAs_to_ENUs
 from helpers.connections.mavlink.customtypes.location import GRAPose
 from helpers.connections.zeromq import create_zmq_sockets
+from logic import RIDData
 
 
 class Oracle:  # UAVMonitor
@@ -40,7 +41,7 @@ class Oracle:  # UAVMonitor
         self.sysids = list(uav_port_offsets)
         self.pos: dict[int, GRA | None] = {sysid: None for sysid in self.sysids}
         self.sysids_lock = threading.Lock()
-        self.rid_queues = {sysid: Queue[dict[str, float]]() for sysid in self.sysids}
+        self.rid_queues = {sysid: Queue[RIDData]() for sysid in self.sysids}
         self.zmq_ctx = zmq.Context()
         self.range = transmission_range
 
@@ -62,7 +63,7 @@ class Oracle:  # UAVMonitor
             for sysid in self.sysids
         }
         # Small delay to ensure ZMQ connections are established
-        time.sleep(0.2)
+        # time.sleep(0.2)
 
     def run(self):
         """Run the Oracle to manage UAV connections and communication."""
@@ -102,12 +103,9 @@ class Oracle:  # UAVMonitor
         """Receive Remote ID messages from one UAV and add them to the queue."""
         while sysid not in self.sysids:
             try:
-                rid: dict[str, float] = self.rid_in_socks[sysid].recv_json()  # type: ignore
-                raw_lat = rid.get("lat")
-                raw_lon = rid.get("lon")
-                raw_alt = rid.get("alt")
-                if raw_lat and raw_lon and raw_alt:
-                    self.pos[sysid] = GLOBAL_INT_to_GRA(raw_lat, raw_lon, raw_alt)
+                rid: RIDData = self.rid_in_socks[sysid].recv_pyobj()  # type: ignore
+                if rid.lat and rid.lon and rid.alt:
+                    self.pos[sysid] = GLOBAL_INT_to_GRA(rid.lat, rid.lon, rid.alt)
                 logging.debug(f"Remote ID from {sysid} and msg {rid}")
             except zmq.Again:
                 continue

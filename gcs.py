@@ -78,7 +78,6 @@ class GCS(UAVMonitor):
         super().__init__(self.conns)
         self.paths: dict[int, GRAs] = {sysid: [] for sysid in self.conns}
 
-        logging.debug(f" initialized with {self.n_uavs} UAVs")
         logging.info(f" started with {self.n_uavs} UAVs")
 
     def run(self):
@@ -91,12 +90,11 @@ class GCS(UAVMonitor):
                     self.remove_uav(sysid)
 
         logging.info("All UAVs assigned have completed their missions")
-        logging.info("Sending DONE message to Oracle...")
         self.orc_sock.send_string("DONE")  # type: ignore
         logging.info("DONE message sent to Oracle")
-
         self.orc_sock.close(linger=0)
         self.zmq_ctx.term()
+
         trajectory_file = DATA_PATH / f"trajectories_{self.name}.pkl"
         with open(trajectory_file, "wb") as file:
             pickle.dump(self.paths, file)

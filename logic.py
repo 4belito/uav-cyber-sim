@@ -1,19 +1,20 @@
 """Multi-UAV MAVLink Proxy."""
 
-# Third Party imports
+from __future__ import annotations
+
 import argparse
 import json
 import logging
 import threading
 import time
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import TypedDict
+from typing import TypedDict, cast
 
 import zmq
 from pymavlink import mavutil
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
-# First Party imports
 from config import DATA_PATH, BasePort
 from helpers.connections.mavlink.conn import (
     create_tcp_conn,
@@ -58,44 +59,103 @@ class LogicConfig(TypedDict):
     monitored_items: list[int]
 
 
-rid_data = dict[str, str | float]()
-rid_fields = {"lat", "lon", "alt", "vel", "cog"}
+@dataclass
+class RIDData:
+    """Data class for Remote ID information."""
+
+    sysid: int
+    lat: float | None = None
+    lon: float | None = None
+    alt: float | None = None
+    vel: float | None = None
+    cog: float | None = None
+    last_update: float | None = None  # optional, handy for freshness checks
 
 
-def collect_rid_data(
-    rid_sock: zmq.Socket[bytes], lock: threading.Lock, stop_event: threading.Event
-):
-    """Collect Remote ID data from the ZMQ socket."""
-    global rid_data
-    while not stop_event.is_set():
-        try:
-            msg: dict[str, str | float] = rid_sock.recv_json()  # type: ignore
-            logging.debug(f"Collect Remote ID data: {msg}")
-            update_rid_data(msg, lock)
-        except Exception:
-            pass
+class RIDManager:
+    """Owns Remote ID state, ZMQ sockets, and background threads for one UAV."""
 
+    def __init__(self, sysid: int, port_offset: int):
+        self.data = RIDData(sysid=sysid)
+        self._lock = threading.Lock()
+        self._stop = threading.Event()
 
-def update_rid_data(new_data: dict[str, str | float], lock: threading.Lock):
-    """Update the global Remote ID data with new values."""
-    global rid_data
-    with lock:
-        for key, value in new_data.items():
-            if key in rid_fields:
-                rid_data[key] = value
+        # ZMQ setup
+        self._ctx = zmq.Context()
+        self._in_sock = create_zmq_socket(
+            self._ctx, zmq.SUB, BasePort.RID_DOWN, port_offset
+        )
+        self._out_sock = create_zmq_socket(
+            self._ctx, zmq.PUB, BasePort.RID_UP, port_offset
+        )
+        self._data_sock = create_zmq_socket(
+            self._ctx, zmq.SUB, BasePort.RID_DATA, port_offset
+        )
 
+        self._threads: list[threading.Thread] = []
 
-def receive_rids(rid_sock: zmq.Socket[bytes], stop_event: threading.Event):
-    """Receive Remote ID data from the ZMQ socket and optionally log it."""
-    while not stop_event.is_set():
-        try:
-            msg: dict[str, float] = rid_sock.recv_json()  # type: ignore
-            logging.debug(f"Received Remote ID data: {msg}")
-        except zmq.Again:
-            continue
-        except Exception as e:
-            logging.error(f"Error receiving Remote ID data {e}")
-            # No additional code needed here.
+    # --- lifecycle -------------------------------------------------------------
+
+    def start(self) -> None:
+        """Start background collectors."""
+        self._threads = [
+            threading.Thread(
+                target=self._collect, args=(self._data_sock,), daemon=True
+            ),
+            threading.Thread(target=self._receive, args=(self._in_sock,), daemon=True),
+        ]
+        for t in self._threads:
+            t.start()
+
+    def stop(self) -> None:
+        """Stop threads and close sockets."""
+        self._stop.set()
+        for t in self._threads:
+            t.join()
+        self._in_sock.close(linger=0)
+        self._out_sock.close(linger=0)
+        self._data_sock.close(linger=0)
+        self._ctx.term()
+
+    # --- state update / publish -----------------------------------------------
+
+    def update(self, payload: dict[str, float]) -> None:
+        """Atomic snapshot policy: overwrite with None when a key is missing."""
+        with self._lock:
+            self.data.lat = payload.get("lat")
+            self.data.lon = payload.get("lon")
+            self.data.alt = payload.get("alt")
+            self.data.vel = payload.get("vel")
+            self.data.cog = payload.get("cog")
+            self.data.last_update = time.time()
+
+    def publish(self) -> None:
+        """Send current RID snapshot (pyobj) to subscribers."""
+        # You can switch to send_json easily if you prefer portability.
+        self._out_sock.send_pyobj(self.data)  # type: ignore
+
+    # --- background loops ------------------------------------------------------
+
+    def _collect(self, sock: zmq.Socket[bytes]) -> None:
+        while not self._stop.is_set():
+            try:
+                msg = cast(dict[str, float], sock.recv_json())  # type: ignore
+                logging.debug(f"RID({self.data.sysid}) collect: {msg}")
+                self.update(msg)
+            except zmq.Again:
+                continue
+            except Exception as e:
+                logging.debug(f"RID collector noise: {e}")
+
+    def _receive(self, sock: zmq.Socket[bytes]) -> None:
+        while not self._stop.is_set():
+            try:
+                msg = cast(dict[str, float], sock.recv_json())  # type: ignore
+                logging.debug(f"RID({self.data.sysid}) inbound: {msg}")
+            except zmq.Again:
+                continue
+            except Exception as e:
+                logging.error(f"RID receiver error: {e}")
 
 
 def start_logic(config: LogicConfig):
@@ -103,9 +163,6 @@ def start_logic(config: LogicConfig):
     sysid = config["sysid"]
     port_offset = config["port_offset"]
     monitored_items = config["monitored_items"]
-
-    global rid_data
-    rid_data["sysid"] = sysid
 
     i = sysid - 1
     try:
@@ -129,23 +186,8 @@ def start_logic(config: LogicConfig):
         f"Vehicle {sysid}: MAVLink connection target_component = "
         f"{vh_conn.target_component}"
     )
-
-    zmq_ctx = zmq.Context()
-    rid_in_sock = create_zmq_socket(zmq_ctx, zmq.SUB, BasePort.RID_DOWN, port_offset)
-    rid_out_sock = create_zmq_socket(zmq_ctx, zmq.PUB, BasePort.RID_UP, port_offset)
-    rid_data_sock = create_zmq_socket(zmq_ctx, zmq.SUB, BasePort.RID_DATA, port_offset)
-    rid_lock = threading.Lock()
-    stop_event = threading.Event()
-    rid_data_thread = threading.Thread(
-        target=collect_rid_data,
-        args=(rid_data_sock, rid_lock, stop_event),
-    )
-    rid_data_thread.start()
-    rid_recv_thread = threading.Thread(
-        target=receive_rids,
-        args=(rid_in_sock, stop_event),
-    )
-    rid_recv_thread.start()
+    rid_mnng = RIDManager(sysid, port_offset)
+    rid_mnng.start()
 
     logic = VehicleLogic(
         vh_conn,
@@ -167,7 +209,7 @@ def start_logic(config: LogicConfig):
 
             if remote_id_period.trigger():
                 try:
-                    rid_out_sock.send_json(rid_data)  # type: ignore
+                    rid_mnng.publish()
                 except Exception as e:
                     logging.error(f"Error sending RID data: {e}")
                     pass
@@ -185,17 +227,9 @@ def start_logic(config: LogicConfig):
             logic.act()
             time.sleep(0.01)
     finally:
-        stop_event.set()
         cs_conn.close()
         vh_conn.close()
-
-        rid_in_sock.close(linger=0)
-        rid_out_sock.close(linger=0)
-        rid_data_sock.close(linger=0)
-        rid_data_thread.join()
-        rid_recv_thread.join()
-        zmq_ctx.term()
-
+        rid_mnng.stop()
         logging.info(f"Vehicle {sysid} logic stopped")
 
 
