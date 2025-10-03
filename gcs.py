@@ -13,11 +13,11 @@ from typing import TypedDict
 import zmq
 
 from config import DATA_PATH, ENV_CMD_ARP, ENV_CMD_PYT, BasePort
+from helpers.connections.mavlink.conn import create_udp_conn
+from helpers.connections.mavlink.customtypes.location import GRAs
 from helpers.processes import create_process
 from helpers.setup_log import setup_logging
-from mavlink.customtypes.location import GRAs
 from monitor import UAVMonitor
-from proxy import create_udp_conn
 
 
 def main():

@@ -18,9 +18,9 @@ from config import (
     BasePort,
 )
 from helpers import create_process, setup_logging
-from mavlink.connections import create_udp_conn
-from mavlink.customtypes.connection import MAVConnection
-from mavlink.util import save_mission
+from helpers.connections.mavlink.conn import create_udp_conn
+from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
+from helpers.connections.mavlink.mission_io import save_mission
 from oracle import Oracle
 from simulator.visualizer import Visualizer
 

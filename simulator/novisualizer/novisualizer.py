@@ -4,7 +4,7 @@ import logging
 from dataclasses import dataclass
 
 from helpers.change_coordinates import pose
-from mavlink.customtypes.location import ENUPose, GRAPose
+from helpers.connections.mavlink.customtypes.location import ENUPose, GRAPose
 from simulator.visualizer import ConfigVis, Visualizer
 
 

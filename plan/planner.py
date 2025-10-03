@@ -8,7 +8,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import overload
 
-from mavlink.customtypes.location import (
+from helpers.connections.mavlink.customtypes.location import (
     ENU,
     XY,
     ENUPose,
@@ -16,7 +16,7 @@ from mavlink.customtypes.location import (
     ENUs,
     XYs,
 )
-from mavlink.enums import CopterMode
+from helpers.connections.mavlink.enums import CopterMode
 from plan.actions import (
     make_arm,
     make_change_nav_speed,

@@ -18,11 +18,12 @@ from pymavlink import mavutil
 
 # First Party imports
 from config import DATA_PATH, BasePort
+from helpers.connections.mavlink.conn import create_tcp_conn, create_udp_conn
+from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
+from helpers.connections.mavlink.enums import DataStream
+from helpers.connections.mavlink.streams import request_sensor_streams
+from helpers.connections.zeromq import create_zmq_socket
 from helpers.setup_log import setup_logging
-from mavlink.connections import create_tcp_conn, create_udp_conn
-from mavlink.customtypes.connection import MAVConnection
-from mavlink.enums import DataStream
-from mavlink.util import request_sensor_streams
 from params.simulation import HEARTBEAT_PERIOD
 
 heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
@@ -178,11 +179,9 @@ def write_and_log_message(
             )
     except (ConnectionResetError, OSError, EOFError) as e:
         logging.debug(f"Connection closed while writing to {recipient}: {e}")
-        # Don't re-raise, just skip this message
     except Exception as e:
         logging.error(f"Unexpected error writing to {recipient}: {e}")
         logging.error(f"Exception traceback:\n{traceback.format_exc()}")
-        # Don't re-raise, just skip this message
 
 
 def write_and_log_with_sensors(
@@ -224,7 +223,7 @@ def write_and_log_with_sensors(
     )
 
     # Check if it's a sensor message to log separately
-    if msg_type in {"RAW_IMU", "SCALED_PRESSURE", "GPS_RAW_INT"}:
+    if msg_type in {"GPS_RAW_INT", "RAW_IMU", "SCALED_PRESSURE"}:  # ,
         data = msg.to_dict()
         try:
             rid_sock.send_json(data, flags=zmq.NOBLOCK)  # type: ignore
@@ -264,9 +263,6 @@ def start_proxy(sysid: int, port_offset: int) -> None:
     cs_conn = create_udp_conn(base_port=BasePort.GCS, offset=port_offset, mode="sender")
     logging.debug(f"Proxy {sysid}: GCS UDP connection created")
 
-    oc_conn = create_udp_conn(base_port=BasePort.ORC, offset=port_offset, mode="sender")
-    logging.debug(f"Proxy {sysid}: Oracle UDP connection created")
-
     vh_conn = create_tcp_conn(
         base_port=BasePort.VEH, offset=port_offset, role="client", sysid=sysid
     )
@@ -279,22 +275,19 @@ def start_proxy(sysid: int, port_offset: int) -> None:
 
     ap_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
     cs_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
-    oc_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
     vh_queue = Queue[tuple[str, float, mavlink.MAVLink_message]]()
     logging.debug(f"Proxy {sysid}: Message queues created")
 
-    zmq_ctx = zmq.Context()
-    rid_sock = zmq_ctx.socket(zmq.PUB)
-    rid_sock.bind(f"tcp://127.0.0.1:{BasePort.RID_DATA + port_offset}")
+    rid_sock = create_zmq_socket(zmq.Context(), BasePort.RID_DATA, zmq.PUB, port_offset)
     logging.debug(f"Proxy {sysid}: ZMQ setup complete")
 
     stop_event = threading.Event()
 
-    # ARP → ORC + VEH + GCS
+    # ARP → VEH + GCS
     router1 = MessageRouter(
         source=ap_conn,
-        targets=[cs_queue, oc_queue, vh_queue],
-        labels=["⬅️ GCS ← ARP", "⬅️ ORC ← ARP", "⬅️ VEH ← ARP"],
+        targets=[cs_queue, vh_queue],  # oc_queue,
+        labels=["⬅️ GCS ← ARP", "⬅️ VEH ← ARP"],  # "⬅️ ORC ← ARP"
         sysid=sysid,
         sender="ARP",
         stop_event=stop_event,
@@ -310,18 +303,8 @@ def start_proxy(sysid: int, port_offset: int) -> None:
         stop_event=stop_event,
     )
 
-    # ORC → ARP
-    router3 = MessageRouter(
-        source=oc_conn,
-        targets=[ap_queue],
-        labels=["➡️ ORC → ARP"],
-        sysid=sysid,
-        sender="ORC",
-        stop_event=stop_event,
-    )
-
     # VEH → ARP
-    router4 = MessageRouter(
+    router3 = MessageRouter(
         source=vh_conn,
         targets=[ap_queue],
         labels=["➡️ VEH → ARP"],
@@ -342,20 +325,15 @@ def start_proxy(sysid: int, port_offset: int) -> None:
         router1.start()
         router2.start()
         router3.start()
-        router4.start()
 
         logging.debug(f"Proxy {sysid}: Entering main message processing loop")
         while not stop_event.is_set():
             try:
-                # Check if we should continue processing queues
                 if stop_event.is_set():
                     logging.debug(
                         f"Proxy {sysid}: Stop event set, breaking from main loop"
                     )
                     break
-
-                while not oc_queue.empty():
-                    write_and_log_message(oc_queue, oc_conn, log_writer, "ORC")
 
                 while not cs_queue.empty() and not stop_event.is_set():
                     write_and_log_message(cs_queue, cs_conn, log_writer, "GCS")
@@ -412,19 +390,12 @@ def start_proxy(sysid: int, port_offset: int) -> None:
         router1.join()
         router2.join()
         router3.join()
-        router4.join()
         logging.debug(f"Proxy {sysid}: All router threads stopped")
         try:
             cs_conn.close()
             logging.debug(f"Proxy {sysid}: GCS connection closed")
         except Exception as e:
             logging.error(f"Proxy {sysid}: Error closing GCS connection: {e}")
-
-        try:
-            oc_conn.close()
-            logging.debug(f"Proxy {sysid}: Oracle connection closed")
-        except Exception as e:
-            logging.error(f"Proxy {sysid}: Error closing Oracle connection: {e}")
 
         try:
             ap_conn.close()

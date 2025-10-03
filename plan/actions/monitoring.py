@@ -10,9 +10,9 @@ format.
 import logging
 from functools import partial
 
-from mavlink.customtypes.connection import MAVConnection
-from mavlink.enums import MsgID
-from mavlink.util import ask_msg, stop_msg
+from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
+from helpers.connections.mavlink.enums import MsgID
+from helpers.connections.mavlink.streams import ask_msg, stop_msg
 from plan import Action, ActionNames
 from plan.core import Step
 

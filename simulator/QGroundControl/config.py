@@ -7,7 +7,7 @@ from IPython.display import display  # type: ignore
 
 from config import Color
 from helpers.change_coordinates import draw_grapose, pose, poses
-from mavlink.customtypes.location import (
+from helpers.connections.mavlink.customtypes.location import (
     GRA,
     ENUPose,
     ENUPoses,

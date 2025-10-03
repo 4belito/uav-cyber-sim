@@ -11,9 +11,9 @@ Includes:
 from functools import partial
 from typing import Tuple
 
-from ardupilot.enums import WPNav
-from mavlink.customtypes.connection import MAVConnection
-from mavlink.enums import ParamType
+from helpers.ardupilot.enums import WPNav
+from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
+from helpers.connections.mavlink.enums import ParamType
 from plan.core import Action, ActionNames, Step
 
 

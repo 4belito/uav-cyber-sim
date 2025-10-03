@@ -6,7 +6,12 @@ import plotly.graph_objects as go  # type: ignore
 
 from config import Color
 from helpers.change_coordinates import pose, poses
-from mavlink.customtypes.location import ENU, ENUPose, ENUPoses, ENUs
+from helpers.connections.mavlink.customtypes.location import (
+    ENU,
+    ENUPose,
+    ENUPoses,
+    ENUs,
+)
 from simulator.visualizer import ConfigVis
 
 COLOR_MAP: dict[Color, str] = {

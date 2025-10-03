@@ -9,8 +9,9 @@ import pymavlink.dialects.v20.ardupilotmega as mavlink
 from pymavlink.dialects.v20 import common as mavlink2  # type: ignore
 
 from helpers.change_coordinates import GRA  # ,global2local
-from mavlink.customtypes.connection import MAVConnection
-from mavlink.util import CustomCmd, get_GRA_position
+from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
+from helpers.connections.mavlink.enums import CmdCustom
+from helpers.connections.mavlink.streams import get_GRA_position
 
 
 class UAVMonitor:
@@ -22,7 +23,7 @@ class UAVMonitor:
     """
 
     def __init__(self, conns: dict[int, MAVConnection]) -> None:
-        self.pos: dict[int, GRA] = {}
+        self.pos: dict[int, GRA] = {sysid: GRA.nan() for sysid in self.conns}
         self.conns = conns
 
     def remove_uav(self, sysid: int):
@@ -57,7 +58,7 @@ class UAVMonitor:
         """Listen for a STATUSTEXT("DONE") message and respond with COMMAND_ACK."""
         conn = self.conns[sysid]
         msg = conn.recv_match(type="STATUSTEXT", blocking=False)
-        return bool(msg and self._is_plan_done(conn, msg, sysid))
+        return bool(msg) and self._is_plan_done(conn, msg, sysid)
 
     def _is_plan_done(
         self, conn: MAVConnection, msg: mavlink.MAVLink_statustext_message, sysid: int
@@ -65,7 +66,7 @@ class UAVMonitor:
         """Check for a STATUSTEXT("DONE") message and respond with COMMAND_ACK."""
         if msg.text == "DONE":
             conn.mav.command_ack_send(
-                command=CustomCmd.PLAN_DONE, result=mavlink2.MAV_RESULT_ACCEPTED
+                command=CmdCustom.PLAN_DONE, result=mavlink2.MAV_RESULT_ACCEPTED
             )
             logging.info(f"✅ Vehicle {sysid} completed its mission")
             return True

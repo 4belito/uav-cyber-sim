@@ -11,9 +11,9 @@ import logging
 import time
 from functools import partial
 
-from mavlink.customtypes.connection import MAVConnection
-from mavlink.customtypes.mission import MissionLoader
-from mavlink.enums import CmdNav, MissionResult
+from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
+from helpers.connections.mavlink.customtypes.mission import MissionLoader
+from helpers.connections.mavlink.enums import CmdNav, MissionResult
 from plan import Action, ActionNames
 from plan.core import Step
 

@@ -14,7 +14,7 @@ from typing import List
 import numpy as np
 from numpy.typing import NDArray
 
-from helpers.math import manhattan_distance
+from .math import manhattan_distance
 
 
 def in_same_orthant(

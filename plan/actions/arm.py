@@ -8,8 +8,8 @@ into mission plans.
 
 from functools import partial
 
-from mavlink.customtypes.connection import MAVConnection
-from mavlink.enums import Cmd, ModeFlag
+from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
+from helpers.connections.mavlink.enums import Cmd, ModeFlag
 from plan.core import Action, ActionNames, Step, StepFailed
 
 

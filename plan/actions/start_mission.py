@@ -3,8 +3,8 @@
 import logging
 from functools import partial
 
-from mavlink.customtypes.connection import MAVConnection
-from mavlink.enums import Cmd
+from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
+from helpers.connections.mavlink.enums import Cmd
 from plan.core import Action, ActionNames, Step
 
 

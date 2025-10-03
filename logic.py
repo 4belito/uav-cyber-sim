@@ -15,11 +15,15 @@ from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
 # First Party imports
 from config import DATA_PATH, BasePort
+from helpers.connections.mavlink.conn import (
+    create_tcp_conn,
+    create_udp_conn,
+    send_heartbeat,
+)
+from helpers.connections.mavlink.customtypes.location import ENU
+from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
+from helpers.connections.mavlink.enums import CmdCustom
 from helpers.setup_log import setup_logging
-from mavlink.connections import create_tcp_conn, create_udp_conn, send_heartbeat
-from mavlink.customtypes.connection import MAVConnection
-from mavlink.customtypes.location import ENU
-from mavlink.util import CustomCmd
 from params.simulation import HEARTBEAT_PERIOD
 from plan import Action, Plan, State, Step
 
@@ -219,7 +223,7 @@ def send_done_until_ack(conn: MAVConnection, idx: int, max_tries: float = float(
         start = time.time()
         while time.time() - start < 0.05:
             ack = conn.recv_match(type="COMMAND_ACK", blocking=False)
-            if ack and ack.command == CustomCmd.PLAN_DONE:
+            if ack and ack.command == CmdCustom.PLAN_DONE:
                 logging.info("ACK received. DONE message acknowledged")
                 return
             time.sleep(0.001)

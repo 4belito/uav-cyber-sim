@@ -10,8 +10,7 @@ from pymap3d import geodetic2enu  # type: ignore
 from pymavlink import mavextra  # type: ignore
 
 from config import Color
-from helpers.math import rotate_mapcoord
-from mavlink.customtypes.location import (
+from helpers.connections.mavlink.customtypes.location import (
     ENU,
     GRA,
     NED,
@@ -23,6 +22,7 @@ from mavlink.customtypes.location import (
     GRAPoses,
     GRAs,
 )
+from helpers.math import rotate_mapcoord
 
 T = TypeVar("T", ENU, ENUPose, GRAPose)
 G = TypeVar("G", GRA, GRAPose)

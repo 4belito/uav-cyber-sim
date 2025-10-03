@@ -5,7 +5,7 @@ import math
 import numpy as np
 from numpy.typing import NDArray
 
-from mavlink.customtypes.location import XY
+from .connections.mavlink.customtypes.location import XY
 
 
 def manhattan_distance(

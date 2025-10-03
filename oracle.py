@@ -17,11 +17,11 @@ import zmq
 
 from config import DATA_PATH, BasePort, Color
 from helpers.change_coordinates import GRA, GLOBAL_INT_to_GRA, GRAs_to_ENUs
-from mavlink.customtypes.location import GRAPose
-from monitor import UAVMonitor
+from helpers.connections.mavlink.customtypes.location import GRAPose
+from helpers.connections.zeromq import create_zmq_sockets
 
 
-class Oracle(UAVMonitor):  # UAVMonitor
+class Oracle:  # UAVMonitor
     """
     Oracle class for vehicle-to-vehicle communication and simulation coordination.
 
@@ -36,57 +36,45 @@ class Oracle(UAVMonitor):  # UAVMonitor
         gcs_sysids: dict[str, list[int]],
         transmission_range: float = 100.0,
     ) -> None:
-        self.pos: dict[int, GRA] = {}
         self.gcs_sysids = gcs_sysids
         self.sysids = list(uav_port_offsets)
-        self.rid_queue = Queue[tuple[int, dict[str, float]]]()
+        self.pos: dict[int, GRA | None] = {sysid: None for sysid in self.sysids}
+        self.sysids_lock = threading.Lock()
+        self.rid_queues = {sysid: Queue[dict[str, float]]() for sysid in self.sysids}
         self.zmq_ctx = zmq.Context()
         self.range = transmission_range
 
-        self.rid_in_socks = dict[int, zmq.Socket[bytes]]()
-        self.rid_out_socks = dict[int, zmq.Socket[bytes]]()
-        for sysid, offset in uav_port_offsets.items():
-            self.rid_in_socks[sysid] = self.zmq_ctx.socket(zmq.SUB)
-            self.rid_in_socks[sysid].connect(
-                f"tcp://127.0.0.1:{BasePort.RID_UP + offset}"
-            )
-            self.rid_in_socks[sysid].setsockopt_string(zmq.SUBSCRIBE, "")
-            self.rid_in_socks[sysid].setsockopt(zmq.RCVTIMEO, 100)
-
-            self.rid_out_socks[sysid] = self.zmq_ctx.socket(zmq.PUB)
-            self.rid_out_socks[sysid].bind(
-                f"tcp://127.0.0.1:{BasePort.RID_DOWN + offset}"
-            )
-            self.rid_out_socks[sysid].setsockopt(zmq.SNDTIMEO, 100)
-
-        self.gcs_socks = dict[str, zmq.Socket[bytes]]()
-        for gcs_name, offset in gcs_port_offsets.items():
-            self.gcs_socks[gcs_name] = self.zmq_ctx.socket(zmq.SUB)
-            self.gcs_socks[gcs_name].connect(
-                f"tcp://127.0.0.1:{BasePort.GCS_ZMQ + offset}"
-            )
-            self.gcs_socks[gcs_name].setsockopt_string(zmq.SUBSCRIBE, "")
-            self.gcs_socks[gcs_name].setsockopt(zmq.RCVTIMEO, 100)
-
+        self.rid_in_socks = create_zmq_sockets(
+            self.zmq_ctx, BasePort.RID_UP, zmq.SUB, uav_port_offsets
+        )
+        self.rid_out_socks = create_zmq_sockets(
+            self.zmq_ctx, BasePort.RID_DOWN, zmq.PUB, uav_port_offsets
+        )
+        self.gcs_socks = create_zmq_sockets(
+            self.zmq_ctx, BasePort.GCS_ZMQ, zmq.SUB, gcs_port_offsets
+        )
+        self.rid_in_threads = {
+            sysid: threading.Thread(target=self.enqueue_remote_ids, args=(sysid,))
+            for sysid in self.sysids
+        }
+        self.rid_out_threads = {
+            sysid: threading.Thread(target=self.retransmit_remote_ids, args=(sysid,))
+            for sysid in self.sysids
+        }
         # Small delay to ensure ZMQ connections are established
         time.sleep(0.2)
 
     def run(self):
         """Run the Oracle to manage UAV connections and communication."""
-        rid_in_threads = [
-            threading.Thread(target=self.enqueue_remote_ids, args=(sysid,))
-            for sysid in self.sysids
-        ]
-        rid_out_thread = threading.Thread(target=self.retransmit_remote_ids)
-
         logging.info(
             f"🏁 Starting Oracle with {len(self.sysids)} vehicles and "
             f"{len(self.gcs_socks)} GCSs"
         )
 
-        for thread in rid_in_threads:
+        for thread in self.rid_in_threads.values():
             thread.start()
-        rid_out_thread.start()
+        for thread in self.rid_out_threads.values():
+            thread.start()
         logging.debug("Entering main monitoring loop...")
 
         while self.sysids:
@@ -95,7 +83,8 @@ class Oracle(UAVMonitor):  # UAVMonitor
                     msg = sock.recv_string(flags=zmq.NOBLOCK)
                     logging.info(f"Received message '{msg}' from GCS {gcs_name}")
                     if msg == "DONE":
-                        self.remove_gcs(gcs_name)
+                        with self.sysids_lock:
+                            self.remove_gcs(gcs_name)
                     else:
                         logging.debug(f"Ignoring non-DONE message: {msg}")
                 except zmq.Again:
@@ -107,15 +96,11 @@ class Oracle(UAVMonitor):  # UAVMonitor
 
         logging.info("✅ Main monitoring loop completed - all connections closed")
 
-        for thread in rid_in_threads:
-            thread.join()
-        rid_out_thread.join()
-
         logging.info("🎉 Oracle shutdown complete!")
 
     def enqueue_remote_ids(self, sysid: int):
         """Receive Remote ID messages from one UAV and add them to the queue."""
-        while sysid in self.sysids:
+        while sysid not in self.sysids:
             try:
                 rid: dict[str, float] = self.rid_in_socks[sysid].recv_json()  # type: ignore
                 raw_lat = rid.get("lat")
@@ -129,40 +114,41 @@ class Oracle(UAVMonitor):  # UAVMonitor
             except Exception:
                 logging.error(f"Error receiving Remote ID from {sysid}")
                 continue
-            self.rid_queue.put((sysid, rid))
+            self.rid_queues[sysid].put(rid)
 
-    def retransmit_remote_ids(self):
+    def retransmit_remote_ids(self, sysid: int):
         """Retransmit Remote IDs to other UAVs."""
-        while self.sysids:
-            try:
-                sysid, rid = self.rid_queue.get(timeout=0.1)
-            except Exception:
-                continue
-            logging.debug(f"🔁 Received Remote ID from {sysid}")
-            pos = self.pos.get(sysid, None)
-            if pos is None:
-                continue
-            for other_sysid, other_sock in list(self.rid_out_socks.items()):
-                if other_sysid == sysid:
-                    continue
-                other_pos = self.pos.get(other_sysid, None)
-                if other_pos is None:
-                    continue
-                dist = GRA.distance(pos, other_pos)
-                if dist > self.range:
-                    continue
+        with self.sysids_lock:
+            while sysid not in self.sysids:
                 try:
-                    other_sock.send_json(rid)  # type: ignore
-                    logging.debug(
-                        f"🔁 Retransmitted Remote ID from {sysid} to {other_sysid}"
-                    )
-                except Exception as e:
-                    logging.error(
-                        (
-                            f"Error retransmitting Remote ID from {sysid} "
-                            f"to {other_sysid}: {e}"
+                    rid = self.rid_queues[sysid].get(timeout=0.1)
+                except Exception:
+                    continue
+                logging.debug(f"🔁 Received Remote ID from {sysid}")
+                pos = self.pos.get(sysid, None)
+                if pos is None:
+                    continue
+                for other_sysid, other_sock in list(self.rid_out_socks.items()):
+                    if other_sysid == sysid:
+                        continue
+                    other_pos = self.pos.get(other_sysid, None)
+                    if other_pos is None:
+                        continue
+                    dist = GRA.distance(pos, other_pos)
+                    if dist > self.range:
+                        continue
+                    try:
+                        other_sock.send_json(rid)  # type: ignore
+                        logging.debug(
+                            f"🔁 Retransmitted Remote ID from {sysid} to {other_sysid}"
                         )
-                    )
+                    except Exception as e:
+                        logging.error(
+                            (
+                                f"Error retransmitting Remote ID from {sysid} "
+                                f"to {other_sysid}: {e}"
+                            )
+                        )
 
     def remove_gcs(self, gcs_name: str):
         """Remove a GCS connection and its associated sockets."""
@@ -179,6 +165,10 @@ class Oracle(UAVMonitor):  # UAVMonitor
         """Remove a UAV connection and its associated sockets."""
         # super().remove_uav(sysid)
         self.sysids.remove(sysid)
+        self.rid_in_threads[sysid].join()
+        self.rid_out_threads[sysid].join()
+        self.rid_queues[sysid].queue.clear()
+        del self.rid_queues[sysid]
         del self.rid_in_socks[sysid]
         del self.rid_out_socks[sysid]
 

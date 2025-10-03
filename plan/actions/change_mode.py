@@ -7,8 +7,8 @@ steps based on HEARTBEAT messages and supported flight modes.
 
 from functools import partial
 
-from mavlink.customtypes.connection import MAVConnection
-from mavlink.enums import CmdDo, CopterMode, ModeFlag
+from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
+from helpers.connections.mavlink.enums import CmdDo, CopterMode, ModeFlag
 from plan.core import Action, ActionNames, Step
 
 
