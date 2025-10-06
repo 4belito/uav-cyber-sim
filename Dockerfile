@@ -128,14 +128,24 @@ RUN mkdir ~/miniconda3 && \
 
 # ENVIRONMENT SETUP
 RUN source ~/miniconda3/bin/activate && \
+	conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
+    conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r && \
     conda create -n uav-cyber-sim python=3.11 && \
     conda activate uav-cyber-sim && \
-    pip install numpy pymavlink plotly nbformat notebook
+    pip install \
+		folium \
+		geopy \
+		matplotlib \
+		nbformat \
+		notebook \
+		numpy \
+		plotly \
+		pymap3d \
+		pymavlink
 
 # CLONE THE REPO
-RUN git clone https://github.com/4belito/uav-cyber-sim.git && \
-	cd uav-cyber-sim && \
-	git checkout parallel-simulation
+RUN git clone https://github.com/4belito/uav-cyber-sim.git
+
 WORKDIR /home/ubuntu/uav-cyber-sim
 
 ENTRYPOINT [ "tail", "-f", "/dev/null" ]
