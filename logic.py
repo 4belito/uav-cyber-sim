@@ -20,7 +20,7 @@ from helpers.connections.mavlink.conn import (
 )
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import CmdCustom
-from helpers.coordinates import ENU
+from helpers.coordinates import ENU, GRA
 from helpers.rid import RIDManager
 from helpers.setup_log import setup_logging
 from params.simulation import HEARTBEAT_FREQUENCY, REMOTE_ID_FREQUENCY
@@ -53,6 +53,7 @@ def start_logic(config: LogicConfig):
     sysid = config["sysid"]
     port_offset = config["port_offset"]
     monitored_items = config["monitored_items"]
+    gra_orign = GRA(**config["gra_origin_dict"])
 
     i = sysid - 1
     lg_conn = create_tcp_conn(
@@ -61,7 +62,7 @@ def start_logic(config: LogicConfig):
 
     cs_conn = create_udp_conn(base_port=BasePort.GCS, offset=port_offset, mode="sender")
 
-    rid_mnng = RIDManager(sysid, port_offset)
+    rid_mnng = RIDManager(sysid, port_offset, gra_orign)
     rid_mnng.start()
 
     plan = Plan.auto(
@@ -106,6 +107,7 @@ class LogicConfig(TypedDict):
     """UAV logic configuration."""
 
     sysid: int
+    gra_origin_dict: dict[str, float]
     port_offset: int
     monitored_items: list[int]
 

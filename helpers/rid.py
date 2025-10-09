@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
 from dataclasses import dataclass
@@ -13,7 +14,7 @@ import zmq
 from pymavlink import mavutil
 
 from config import BasePort
-from helpers.coordinates import GRA
+from helpers.coordinates import ENU, GRA
 
 from .connections.zeromq import create_zmq_socket
 
@@ -34,11 +35,14 @@ class RIDData:
     """Data class for Remote ID information."""
 
     sysid: int
-    lat: float | None = None
-    lon: float | None = None
-    alt: float | None = None
-    vel: float | None = None
-    cog: float | None = None
+    gra_pos: GRA | None = None
+    enu_pos: ENU | None = None  # m/s relative to origin
+    enu_vel: ENU | None = None  # m/s relative to uav
+    speed: float | None = None  # m/s
+    cog: float | None = None  # angle of course over ground,(0° = North, 90° = East)
+    ele: float | None = None  # elevation angle,(0° = North, 90° = Up)
+    rel_alt: float | None = None  # meters relative to takeoff
+    hdg: float | None = None  # degrees - like cog but for uav heading
     last_update: float | None = None  # optional, handy for freshness checks
 
     @classmethod
@@ -50,7 +54,8 @@ class RIDData:
 class RIDManager:
     """Owns Remote ID state, ZMQ sockets, and background threads for one UAV."""
 
-    def __init__(self, sysid: int, port_offset: int):
+    def __init__(self, sysid: int, port_offset: int, gra_origin: GRA) -> None:
+        self.gra_origin = gra_origin
         self.sysid = sysid
         self.data = RIDData(sysid=sysid)
         self._lock = threading.Lock()  # ???
@@ -95,19 +100,33 @@ class RIDManager:
         self._ctx.term()
 
     # --- state update / publish -----------------------------------------------
-
     def update(self, payload: dict[str, str | float | int]) -> None:
         """Atomic snapshot policy: overwrite with None when a key is missing."""
         lat_int = cast(int, payload.get("lat"))
         lon_int = cast(int, payload.get("lon"))
         alt_int = cast(int, payload.get("alt"))
-        lat, lon, alt = GRA.from_global_int(lat_int, lon_int, alt_int)
+        vx_cm = cast(int, payload.get("vx"))
+        vy_cm = cast(int, payload.get("vy"))
+        vz_cm = cast(int, payload.get("vz"))
+        rel_alt = cast(int, payload.get("relative_alt"))
+        hdg_centdegree = cast(int, payload.get("hdg"))
+        gra_pos = GRA.from_global_int(lat_int, lon_int, alt_int)
+        enu_pos = self.gra_origin.to_rel(gra_pos)
+        enu_vel = ENU.from_ned(vx_cm / 100, vy_cm / 100, vz_cm / 100)
+        ve, vn, vu = enu_vel
+        cog = (math.degrees(math.atan2(ve, vn)) + 360) % 360
+        ele = (math.degrees(math.atan2(vu, vn)) + 360) % 360
+        speed = math.sqrt(ve**2 + vn**2 + vu**2)
+        hdg = hdg_centdegree / 100.0
         with self._lock:
-            self.data.lat = lat
-            self.data.lon = lon
-            self.data.alt = alt
-            self.data.vel = cast(float, payload.get("vel"))
-            self.data.cog = cast(float, payload.get("cog"))
+            self.data.gra_pos = gra_pos
+            self.data.enu_pos = enu_pos
+            self.data.enu_vel = enu_vel
+            self.data.speed = speed
+            self.data.cog = cog
+            self.data.ele = ele
+            self.data.rel_alt = rel_alt
+            self.data.hdg = hdg
             self.data.last_update = time.time()
 
     def publish(self) -> None:
@@ -124,7 +143,12 @@ class RIDManager:
             try:
                 buf = sock.recv()
                 msg = parse_one(buf)
-                if msg and msg.get_type() == "GPS_RAW_INT" and msg.fix_type > 2:
+                # if msg and msg.get_type() == "GPS_RAW_INT" and msg.fix_type > 2:
+                if (
+                    msg
+                    and msg.get_type() == "GLOBAL_POSITION_INT"
+                    and (msg.lat != 0 or msg.lon != 0)
+                ):
                     logging.debug(f"RID({self.sysid}) collect: {msg.to_dict()}")
                     self.update(msg.to_dict())
             except zmq.Again:

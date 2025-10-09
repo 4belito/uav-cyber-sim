@@ -305,7 +305,7 @@ class GRA(LLA):
         """Relative ENU of `p` w.r.t. this origin (drops heading if GRAPose)."""
         if isinstance(p, GRAPose):
             p = p.unpose()
-        e, n, u = geodetic2enu(*p, *self, deg=True)  # type: ignore
+        e, n, u = map(float, geodetic2enu(*p, *self, deg=True))  # type: ignore
         return ENU(e, n, u)
 
     def to_abs(self, point: ENU | ENUPose) -> GRA:
@@ -449,14 +449,17 @@ class GRAPose(LLAPose):
         if isinstance(p, GRA):
             p = p.pose()
         # world ENU from self to p
-        e, n, u = geodetic2enu(  # type: ignore
-            p.lat,
-            p.lon,
-            p.alt,
-            self.lat,
-            self.lon,
-            self.alt,
-            deg=True,
+        e, n, u = map(
+            float,
+            geodetic2enu(  # type: ignore
+                p.lat,
+                p.lon,
+                p.alt,
+                self.lat,
+                self.lon,
+                self.alt,
+                deg=True,
+            ),
         )
         # rotate back into the origin's local frame
         xl, yl = XY(e, n).rotate(-self.heading)

@@ -22,7 +22,7 @@ import zmq
 
 from config import DATA_PATH, BasePort, Color
 from helpers.connections.zeromq import create_zmq_sockets
-from helpers.coordinates import ENU, GRA, GRAPose
+from helpers.coordinates import ENU, GRAPose
 from helpers.rid import RIDData
 
 CellKey = tuple[int, int, int]
@@ -34,21 +34,25 @@ RX_LOOP_SLEEP = 0.10
 class RID:
     """Thread-safe single-slot buffer for latest RIDData + derived ENU position."""
 
-    def __init__(self, riddata: RIDData, gra_origin: GRA):
-        self._pos: ENU = self.ridata2pos(riddata, gra_origin)
-        self._data: RIDData | None = riddata
+    def __init__(self):
+        self._pos: (
+            ENU  # | None = riddata.enu_pos  # self.ridata2pos(riddata, gra_origin)
+        )
+        self._data: RIDData | None  # = riddata
         self.lock = threading.Lock()
 
-    @staticmethod
-    def ridata2pos(rid: RIDData, origin: GRA) -> ENU:
-        """Compute ENU position from RIDData using the given origin in GRA."""
-        if rid.lat is None or rid.lon is None or rid.alt is None:
-            raise ValueError("RIDData has None for lat, lon, or alt")
-        return origin.to_rel(GRA(rid.lat, rid.lon, rid.alt))
+    # @staticmethod
+    # def ridata2pos(rid: RIDData, origin: GRA) -> ENU:
+    #     """Compute ENU position from RIDData using the given origin in GRA."""
+    #     if rid.lat is None or rid.lon is None or rid.alt is None:
+    #         raise ValueError("RIDData has None for lat, lon, or alt")
+    #     return origin.to_rel(GRA(rid.lat, rid.lon, rid.alt))
 
-    def put(self, riddata: RIDData, gra_origin: GRA) -> None:
+    def put(self, riddata: RIDData) -> None:
         """Store the latest RIDData and update ENU position."""
-        pos = self.ridata2pos(riddata, gra_origin)
+        if riddata.enu_pos is None:
+            raise ValueError("RIDData has None for enu_pos")
+        pos = riddata.enu_pos
         with self.lock:
             self._pos = pos
             self._data = riddata
@@ -285,7 +289,8 @@ class Oracle:  # UAVMonitor
                     logging.info(f"UAV {sysid} completed mission and exited")
                     break
                 logging.debug(f"Received rid msg {msg}")
-                rid = RID(msg, self.gra_origin)
+                rid = RID()
+                rid.put(msg)
                 if sysid in self._seen_in_grid:
                     self.grid.update(sysid, rid)
                 else:

@@ -143,6 +143,11 @@ class Simulator:
             sysid = i + 1
             logic_config = {
                 "sysid": sysid,
+                "gra_origin_dict": {
+                    "lat": self.gra_origin.lat,
+                    "lon": self.gra_origin.lon,
+                    "alt": self.gra_origin.alt,
+                },
                 "port_offset": self.uav_port_offsets[i],
                 "monitored_items": self.monitored_items[i],
             }

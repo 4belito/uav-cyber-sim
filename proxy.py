@@ -18,11 +18,15 @@ import zmq
 from config import DATA_PATH, BasePort
 from helpers.connections.mavlink.conn import create_tcp_conn
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
-from helpers.connections.mavlink.enums import DataStream
-from helpers.connections.mavlink.streams import request_sensor_streams
+from helpers.connections.mavlink.enums import DataStream, MsgID
+from helpers.connections.mavlink.streams import (
+    ask_msg,
+    request_sensor_streams,
+    stop_msg,
+)
 from helpers.connections.zeromq import create_zmq_socket
 from helpers.setup_log import setup_logging
-from params.simulation import DATA_STREAM_FREQUENCY
+from params.simulation import DATA_STREAM_FREQUENCY, REMOTE_ID_FREQUENCY
 
 DATA_STREAM_IDS = [
     DataStream.RAW_SENSORS,
@@ -31,6 +35,7 @@ DATA_STREAM_IDS = [
     DataStream.EXTRA1,
     DataStream.EXTRA2,
 ]
+RID_INTERVAL = int(1_000_000 / REMOTE_ID_FREQUENCY)
 
 
 def main() -> None:
@@ -48,6 +53,8 @@ def start_proxy(sysid: int, port_offset: int) -> None:
     lg_conn = create_tcp_conn(
         base_port=BasePort.LOG, offset=port_offset, role="client", sysid=sysid
     )
+    ## ASK NED POSITION for REMOTE ID
+    ask_msg(ap_conn, MsgID.GLOBAL_POSITION_INT, interval=RID_INTERVAL)
     request_sensor_streams(
         ap_conn, stream_ids=DATA_STREAM_IDS, rate_hz=DATA_STREAM_FREQUENCY
     )
@@ -119,6 +126,8 @@ def start_proxy(sysid: int, port_offset: int) -> None:
             except Exception as e:
                 logging.error(f"Unexpected error (sysid {sysid}): {e}")
     finally:
+        ## This is to stop the NED POSITION REQUEST
+        stop_msg(ap_conn, MsgID.LOCAL_POSITION_NED)
         router1.join()
         router2.join()
         log_file.close()
@@ -154,6 +163,7 @@ class MessageRouter(threading.Thread):
         while not self.stop_event.is_set():
             msg = self.source.recv_match(blocking=True, timeout=0.1)
             if msg and not self.stop_event.is_set():
+                logging.debug(f"UAV ({self.sysid}): Received {msg}")
                 if (
                     msg.get_type() == "STATUSTEXT"
                     and hasattr(msg, "text")
@@ -169,7 +179,7 @@ class MessageRouter(threading.Thread):
         """Send a message to all targets with timestamp and sender."""
         time_received = time.time()
         for q, label in zip(self.targets, self.labels):
-            logging.debug(f"{label} {self.sysid}: {msg.get_type()}")
+            logging.debug(f"{label} {self.sysid}: {msg}")
             q.put((self.sender, time_received, msg))
 
 
@@ -230,7 +240,8 @@ def write_and_resend_sensor_readings(
     msg_type = msg.get_type()
     # Check if it's a sensor message to log separately
     # This are other sensors measurements "RAW_IMU", "SCALED_PRESSURE"
-    if msg_type in {"GPS_RAW_INT"}:
+    if msg_type in {"GPS_RAW_INT", "GLOBAL_POSITION_INT"}:
+        # logging.debug(f"Proxy {sysid}: Logging sensor {msg_record[2]} data")
         try:
             rid_sock.send(msg.get_msgbuf(), copy=False, flags=zmq.NOBLOCK)  # type: ignore
         except Exception as e:
