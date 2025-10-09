@@ -25,48 +25,36 @@ from helpers.connections.zeromq import create_zmq_sockets
 from helpers.coordinates import ENU, GRA, GRAPose
 from helpers.rid import RIDData
 
-# from params.simulation import REMOTE_ID_FREQUENCY
-
 CellKey = tuple[int, int, int]
+
+TX_LOOP_SLEEP = 0.01
+RX_LOOP_SLEEP = 0.10
 
 
 class RID:
-    """Thread-safe container for the latest RIDData and GRA position."""
+    """Thread-safe single-slot buffer for latest RIDData + derived ENU position."""
 
     def __init__(self, riddata: RIDData, gra_origin: GRA):
         self._pos: ENU = self.ridata2pos(riddata, gra_origin)
         self._data: RIDData | None = riddata
-        # self._pending: RIDData | None = riddata
         self.lock = threading.Lock()
-        # self._event = mavutil.periodic_event(REMOTE_ID_FREQUENCY)
 
     @staticmethod
     def ridata2pos(rid: RIDData, origin: GRA) -> ENU:
-        """Convert RIDData to ENU position using the given GRA origin."""
+        """Compute ENU position from RIDData using the given origin in GRA."""
         if rid.lat is None or rid.lon is None or rid.alt is None:
             raise ValueError("RIDData has None for lat, lon, or alt")
-        return origin.to_rel(GRA(rid.lat, rid.lon, rid.alt))  # type: ignore
+        return origin.to_rel(GRA(rid.lat, rid.lon, rid.alt))
 
     def put(self, riddata: RIDData, gra_origin: GRA) -> None:
-        """
-        Store the latest RIDData and GRA position,
-        and notify any waiting threads.
-        """
-        pos = self.ridata2pos(riddata, gra_origin)  # type: ignore
+        """Store the latest RIDData and update ENU position."""
+        pos = self.ridata2pos(riddata, gra_origin)
         with self.lock:
             self._pos = pos
             self._data = riddata
 
-    # def data(self) -> RIDData:
-    #     """
-    #     Wait for new data and retrieve the latest RIDData and GRA
-    #     position.
-    #     """
-    #     with self.lock:
-    #         return self._data
-
     def pos(self) -> ENU:
-        """Get a snapshot of the current RIDData and GRA position."""
+        """Snapshot of current ENU position."""
         with self.lock:
             return self._pos
 
@@ -78,12 +66,12 @@ class RID:
             return pkt
 
     def pending(self) -> bool:
-        """Check if there is pending RIDData to be sent."""
+        """Whether there is pending RIDData to send once."""
         with self.lock:
             return self._data is not None
 
 
-Cell = list[int]
+Cell = set[int]
 
 
 class Grid:
@@ -92,9 +80,8 @@ class Grid:
     def __init__(self, cell_size: float) -> None:
         assert cell_size > 0
         self.cell_size = cell_size
-        self._cell: Dict[CellKey, Cell] = defaultdict(list)
+        self._cell: Dict[CellKey, Cell] = defaultdict(set)
         self._rid: Dict[int, RID] = {}
-        # map sysid -> cellkey
         self._key: Dict[int, CellKey] = {}
         self._lock = threading.RLock()  # single structure lock
 
@@ -106,7 +93,7 @@ class Grid:
         return (self._idx(pos.x), self._idx(pos.y), self._idx(pos.z))
 
     def get_rid(self, sysid: int) -> RID | None:
-        """Get the RID object for a given sysid, or False if not found or not pending."""
+        """Return RID object only if it exists and has pending data."""
         with self._lock:
             rid = self._rid.get(sysid)
             if rid is not None and rid.pending():
@@ -124,7 +111,7 @@ class Grid:
         with self._lock:
             if sysid in self._rid:
                 raise ValueError(f"sysid {sysid} already exists in grid")
-            self._cell[k].append(sysid)
+            self._cell[k].add(sysid)
             self._key[sysid] = k
             self._rid[sysid] = rid
 
@@ -137,10 +124,7 @@ class Grid:
                 return
             cell = self._cell.get(k)
             if cell:
-                try:
-                    cell.remove(sysid)
-                except ValueError:
-                    pass
+                cell.discard(sysid)
                 if not cell:
                     self._cell.pop(k, None)
 
@@ -155,14 +139,11 @@ class Grid:
                 if k_old is not None:
                     old_cell = self._cell.get(k_old)  # get avoids new cell
                     if old_cell:
-                        try:
-                            old_cell.remove(sysid)
-                        except ValueError:
-                            pass
+                        old_cell.discard(sysid)
                         if not old_cell:
                             self._cell.pop(k_old, None)
                 # Add to new cell
-                self._cell[k_new].append(sysid)
+                self._cell[k_new].add(sysid)
                 self._key[sysid] = k_new
             self._rid[sysid] = rid
 
@@ -227,7 +208,7 @@ class Oracle:  # UAVMonitor
         self.grid = Grid(cell_size=transmission_range * 1.01)
         self._seen_in_grid: set[int] = set()
 
-        # Sockers
+        # Sockets
         zmq_ctx = zmq.Context()
         self.rid_in_socks = create_zmq_sockets(
             zmq_ctx, BasePort.RID_UP, zmq.SUB, uav_port_offsets
@@ -267,14 +248,6 @@ class Oracle:  # UAVMonitor
             thread.start()
         for thread in self.gcs_threads.values():
             thread.start()
-        logging.info("✅ All background threads started")
-
-        # while any(thread.is_alive() for thread in self.rid_in_threads.values()):
-        #     time.sleep(0.1)
-        # logging.info("✅ All RID input threads completed")
-        # while any(thread.is_alive() for thread in self.rid_out_threads.values()):
-        #     time.sleep(0.1)
-        # logging.info("✅ All RID output threads completed")
 
         while any(thread.is_alive() for thread in self.gcs_threads.values()):
             time.sleep(0.1)
@@ -286,7 +259,7 @@ class Oracle:  # UAVMonitor
         """Wait for a DONE message from one GCS, then stop all UAV threads."""
         while True:
             try:
-                msg = self.gcs_socks[gcs_name].recv_string(flags=zmq.NOBLOCK)  # type: ignore
+                msg = self.gcs_socks[gcs_name].recv_string(flags=zmq.NOBLOCK)
                 if msg == "DONE":
                     logging.info(f"Received DONE from GCS {gcs_name}")
                     for sysid in self.gcs_sysids[gcs_name]:
@@ -305,11 +278,11 @@ class Oracle:  # UAVMonitor
         """Receive Remote ID messages from one UAV and update the store."""
         while True:
             try:
-                msg: RIDData | Literal["DONE"] = self.rid_in_socks[sysid].recv_pyobj()  # type: ignore
+                msg: RIDData | Literal["DONE"] = self.rid_in_socks[sysid].recv_pyobj()
                 if msg == "DONE":
                     if sysid in self._seen_in_grid:
                         self.grid.remove_sysid(sysid)
-                    logging.info(f"Received DONE from UAV {sysid}")
+                    logging.info(f"UAV {sysid} completed mission and exited")
                     break
                 logging.debug(f"Received rid msg {msg}")
                 rid = RID(msg, self.gra_origin)
@@ -319,31 +292,30 @@ class Oracle:  # UAVMonitor
                     self.grid.add_rid(sysid, rid)
                     self._seen_in_grid.add(sysid)
             except zmq.Again:
-                continue
+                pass
             except Exception as e:
                 logging.error(f"RID error {sysid}: {e}")
-            time.sleep(0.1)
+            time.sleep(RX_LOOP_SLEEP)
 
     def retransmit_rid(self, sysid: int):
-        """Retransmit Remote IDs to other UAVs."""
+        """Retransmit Remote IDs to neighbor UAVs (one-shot per update)."""
         while self.rid_in_threads[sysid].is_alive():
             if sysid not in self._seen_in_grid:
-                time.sleep(0.01)
+                time.sleep(TX_LOOP_SLEEP)
                 continue
             try:
                 rid = self.grid.get_rid(sysid)
                 if rid is None:
-                    time.sleep(0.01)
+                    time.sleep(TX_LOOP_SLEEP)
                     continue
                 pkt = rid.pop_data()
-                logging.debug(f"Retransmit check for {sysid}: {rid}")
                 for o_sysid in self.grid.iter_neighbors_within(
                     sysid, rid.pos(), radius=None
                 ):
                     self.rid_out_socks[o_sysid].send_pyobj(pkt)  # type: ignore
             except Exception as e:
                 logging.error(f"Retransmit error for {sysid}: {e}")
-            time.sleep(0.01)
+            time.sleep(TX_LOOP_SLEEP)
 
     @staticmethod
     def plot_trajectories(gra_origin: GRAPose):
