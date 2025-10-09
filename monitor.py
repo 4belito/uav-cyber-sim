@@ -8,10 +8,10 @@ import logging
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 from pymavlink.dialects.v20 import common as mavlink2  # type: ignore
 
-from helpers.change_coordinates import GRA  # ,global2local
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import CmdCustom
 from helpers.connections.mavlink.streams import get_GRA_position
+from helpers.coordinates import GRA  # ,global2local
 
 
 class UAVMonitor:
@@ -23,18 +23,13 @@ class UAVMonitor:
     """
 
     def __init__(self, conns: dict[int, MAVConnection]) -> None:
-        self.pos: dict[int, GRA] = {sysid: GRA.nan() for sysid in self.conns}
+        self.pos: dict[int, GRA] = {sysid: GRA.nan() for sysid in conns}
         self.conns = conns
 
     def remove_uav(self, sysid: int):
         """Remove vehicles from the environment."""
         del self.conns[sysid]
         del self.pos[sysid]
-
-    def gather_broadcasts(self):
-        """Collect and store broadcasts (global positions so far) from all vehicles."""
-        for sysid in self.conns:
-            self.get_global_pos(sysid)
 
     def get_global_pos(self, sysid: int):
         """Get the current global position of the specified vehicle."""

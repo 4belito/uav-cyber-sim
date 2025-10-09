@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from .customtypes.location import GRAs
+from ...coordinates import GRAs
 from .enums import CmdNav, Frame
 
 

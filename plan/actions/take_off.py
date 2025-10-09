@@ -9,10 +9,10 @@ Includes:
 
 from functools import partial
 
-from helpers.connections.mavlink.customtypes.location import ENU
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import CmdNav, LandState, MsgID
 from helpers.connections.mavlink.streams import ask_msg, stop_msg
+from helpers.coordinates import ENU
 from plan.core import Action, ActionNames, Step
 
 

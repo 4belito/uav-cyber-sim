@@ -18,9 +18,8 @@ from config import (
     BasePort,
 )
 from helpers import create_process, setup_logging
-from helpers.connections.mavlink.conn import create_udp_conn
-from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.mission_io import save_mission
+from helpers.coordinates import GRAPose
 from oracle import Oracle
 from simulator.visualizer import Visualizer
 
@@ -41,6 +40,7 @@ class Simulator:
 
     def __init__(
         self,
+        gra_origin: GRAPose,
         visualizers: list[Visualizer[V]],
         missions: Missions,
         gcs_system_ids: dict[str, list[int]],
@@ -56,6 +56,7 @@ class Simulator:
         supress_output: list[SimProcess] = ["launcher"],
         verbose: int = 1,
     ):
+        self.gra_origin = gra_origin
         self.visuals = visualizers
         self.terminals = set(terminals)
         self.suppress = set(supress_output)
@@ -132,17 +133,9 @@ class Simulator:
     def _launch_oracle(self) -> Oracle:
         uav_port_offsets = dict(zip(self.sysids, self.uav_port_offsets))
         gcs_port_offsets = dict(zip(self.gcs_names, self.gcs_port_offsets))
-        return Oracle(uav_port_offsets, gcs_port_offsets, self.gcs_sysids)
-
-    def _connect_to_vehicle(self, i: int) -> MAVConnection:
-        """Connect to a UAV through MAVLink."""
-        conn = create_udp_conn(
-            base_port=BasePort.ORC,
-            offset=self.uav_port_offsets[i],
-            mode="receiver",
+        return Oracle(
+            self.gra_origin, uav_port_offsets, gcs_port_offsets, self.gcs_sysids
         )
-        logging.info(f"🔗 UAV logic {i + 1} is connected to {self.oracle_name}")
-        return conn
 
     def _save_logic_configs(self, folder_name: Path):
         """Save the logic configurations for each UAV."""
@@ -200,9 +193,8 @@ class Simulator:
         base_ports = [
             BasePort.ARP,
             BasePort.GCS,
-            BasePort.ORC,
             BasePort.QGC,
-            BasePort.VEH,
+            BasePort.LOG,
             BasePort.RID_UP,
             BasePort.RID_DOWN,
             BasePort.RID_DATA,

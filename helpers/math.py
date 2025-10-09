@@ -5,8 +5,6 @@ import math
 import numpy as np
 from numpy.typing import NDArray
 
-from .connections.mavlink.customtypes.location import XY
-
 
 def manhattan_distance(
     x: NDArray[np.float64], y: NDArray[np.float64]
@@ -19,22 +17,6 @@ def manhattan_distance(
     return np.sum(np.abs(x - y), axis=-1).squeeze()
 
 
-def rotate_mapcoord(point: XY, angle_deg: float) -> XY:
-    """
-    Rotate a single (x, y) point counter-clockwise by angle_deg degrees.
-
-    Args:
-        point: (x, y) coordinate
-        angle_deg: Rotation angle in degrees
-
-    Returns:
-        Rotated (x, y) coordinate
-
-    """
-    x, y = point
-    theta = math.radians(angle_deg)
-    cos_t = math.cos(theta)
-    sin_t = math.sin(theta)
-    x_rot = x * cos_t - y * sin_t
-    y_rot = x * sin_t + y * cos_t
-    return XY(x_rot, y_rot)
+def heading_to_yaw(heading_deg: float) -> float:
+    """Convert compass heading (deg) to yaw (rad)."""
+    return -math.radians(heading_deg)

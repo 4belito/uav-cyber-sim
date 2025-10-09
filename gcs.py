@@ -7,25 +7,30 @@ import argparse
 import json
 import logging
 import pickle
+import time
 from concurrent import futures
 from typing import TypedDict
 
 import zmq
+from pymavlink import mavutil
 
 from config import DATA_PATH, ENV_CMD_ARP, ENV_CMD_PYT, BasePort
 from helpers.connections.mavlink.conn import create_udp_conn
-from helpers.connections.mavlink.customtypes.location import GRAs
 from helpers.connections.zeromq import create_zmq_socket
+from helpers.coordinates import GRAs
 from helpers.processes import create_process
 from helpers.setup_log import setup_logging
 from monitor import UAVMonitor
+from params.simulation import HEARTBEAT_FREQUENCY
+
+heartbeat_event = mavutil.periodic_event(HEARTBEAT_FREQUENCY)
 
 
 def main():
     """Run a GCS instance to monitor UAVs."""
     config_path, verbose = parse_arguments()
     with open(config_path) as f:
-        config: GCSConfig = json.load(f)
+        config = json.load(f)
     setup_logging(f"GCS_{config['name']}", verbose=verbose, console_output=True)
     gcs = GCS(**config)
     gcs.run()
@@ -68,7 +73,7 @@ class GCS(UAVMonitor):
         self.n_uavs = len(uavs)
         self.terminals = set(terminals)
         self.suppress = set(suppress)
-        self._launch_vehicles()
+        self._launch_vehicles()  # NOTE: add self.conn =
 
         self.zmq_ctx = zmq.Context()
         self.orc_sock = create_zmq_socket(
@@ -78,16 +83,13 @@ class GCS(UAVMonitor):
         super().__init__(self.conns)
         self.paths: dict[int, GRAs] = {sysid: [] for sysid in self.conns}
 
-        logging.info(f" started with {self.n_uavs} UAVs")
+        logging.info(f" GCS {self.name} started with {self.n_uavs} UAVs")
 
+    ###
     def run(self):
         """Run the GCS monitoring loop until all UAVs complete their missions."""
-        while len(self.conns):
-            self.gather_broadcasts()
-            self.save_pos()
-            for sysid in list(self.conns.keys()):
-                if self.is_plan_done(sysid):
-                    self.remove_uav(sysid)
+        with futures.ThreadPoolExecutor() as executor:
+            executor.map(self._monitor_uav, list(self.conns.keys()))
 
         logging.info("All UAVs assigned have completed their missions")
         self.orc_sock.send_string("DONE")  # type: ignore
@@ -104,6 +106,16 @@ class GCS(UAVMonitor):
         """Save the current global position of each UAV to their trajectory path."""
         for sysid, pos in self.pos.items():
             self.paths[sysid].append(pos)
+
+    def _monitor_uav(self, sysid: int):
+        while not self.is_plan_done(sysid):
+            self.get_global_pos(sysid)
+            self.save_pos()
+            # if heartbeat_period.trigger():
+            #     send_heartbeat(self.conns[sysid])
+            time.sleep(0.1)
+        self.remove_uav(sysid)
+        logging.info(f"UAV {sysid} mission completed")
 
     def _launch_vehicles(self):
         """Launch ArduPilot and logic processes for each UAV."""

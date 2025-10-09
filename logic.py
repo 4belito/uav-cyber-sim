@@ -5,13 +5,10 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import threading
 import time
-from dataclasses import dataclass
 from enum import StrEnum
-from typing import TypedDict, cast
+from typing import TypedDict
 
-import zmq
 from pymavlink import mavutil
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
@@ -21,12 +18,12 @@ from helpers.connections.mavlink.conn import (
     create_udp_conn,
     send_heartbeat,
 )
-from helpers.connections.mavlink.customtypes.location import ENU
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import CmdCustom
-from helpers.connections.zeromq import create_zmq_socket
+from helpers.coordinates import ENU
+from helpers.rid import RIDManager
 from helpers.setup_log import setup_logging
-from params.simulation import HEARTBEAT_PERIOD
+from params.simulation import HEARTBEAT_FREQUENCY, REMOTE_ID_FREQUENCY
 from plan import Action, Plan, State, Step
 
 ######################################################################
@@ -39,8 +36,8 @@ if not mission:
     ]
 ########################################
 # TODO: Refactor this module
-heartbeat_period = mavutil.periodic_event(HEARTBEAT_PERIOD)
-remote_id_period = mavutil.periodic_event(1.0)  # 1 hertz for Remote ID
+heartbeat_event = mavutil.periodic_event(HEARTBEAT_FREQUENCY)
+rid_event = mavutil.periodic_event(REMOTE_ID_FREQUENCY)
 
 
 def main():
@@ -51,113 +48,6 @@ def main():
     start_logic(config)
 
 
-class LogicConfig(TypedDict):
-    """UAV logic configuration."""
-
-    sysid: int
-    port_offset: int
-    monitored_items: list[int]
-
-
-@dataclass
-class RIDData:
-    """Data class for Remote ID information."""
-
-    sysid: int
-    lat: float | None = None
-    lon: float | None = None
-    alt: float | None = None
-    vel: float | None = None
-    cog: float | None = None
-    last_update: float | None = None  # optional, handy for freshness checks
-
-
-class RIDManager:
-    """Owns Remote ID state, ZMQ sockets, and background threads for one UAV."""
-
-    def __init__(self, sysid: int, port_offset: int):
-        self.data = RIDData(sysid=sysid)
-        self._lock = threading.Lock()
-        self._stop = threading.Event()
-
-        # ZMQ setup
-        self._ctx = zmq.Context()
-        self._in_sock = create_zmq_socket(
-            self._ctx, zmq.SUB, BasePort.RID_DOWN, port_offset
-        )
-        self._out_sock = create_zmq_socket(
-            self._ctx, zmq.PUB, BasePort.RID_UP, port_offset
-        )
-        self._data_sock = create_zmq_socket(
-            self._ctx, zmq.SUB, BasePort.RID_DATA, port_offset
-        )
-
-        self._threads: list[threading.Thread] = []
-
-    # --- lifecycle -------------------------------------------------------------
-
-    def start(self) -> None:
-        """Start background collectors."""
-        self._threads = [
-            threading.Thread(
-                target=self._collect, args=(self._data_sock,), daemon=True
-            ),
-            threading.Thread(target=self._receive, args=(self._in_sock,), daemon=True),
-        ]
-        for t in self._threads:
-            t.start()
-
-    def stop(self) -> None:
-        """Stop threads and close sockets."""
-        self._stop.set()
-        for t in self._threads:
-            t.join()
-        self._in_sock.close(linger=0)
-        self._out_sock.close(linger=0)
-        self._data_sock.close(linger=0)
-        self._ctx.term()
-
-    # --- state update / publish -----------------------------------------------
-
-    def update(self, payload: dict[str, float]) -> None:
-        """Atomic snapshot policy: overwrite with None when a key is missing."""
-        with self._lock:
-            self.data.lat = payload.get("lat")
-            self.data.lon = payload.get("lon")
-            self.data.alt = payload.get("alt")
-            self.data.vel = payload.get("vel")
-            self.data.cog = payload.get("cog")
-            self.data.last_update = time.time()
-
-    def publish(self) -> None:
-        """Send current RID snapshot (pyobj) to subscribers."""
-        # You can switch to send_json easily if you prefer portability.
-        self._out_sock.send_pyobj(self.data)  # type: ignore
-
-    # --- background loops ------------------------------------------------------
-
-    def _collect(self, sock: zmq.Socket[bytes]) -> None:
-        while not self._stop.is_set():
-            try:
-                msg = cast(dict[str, float], sock.recv_json())  # type: ignore
-                logging.debug(f"RID({self.data.sysid}) collect: {msg}")
-                self.update(msg)
-            except zmq.Again:
-                continue
-            except Exception as e:
-                logging.debug(f"RID collector noise: {e}")
-
-    def _receive(self, sock: zmq.Socket[bytes]) -> None:
-        while not self._stop.is_set():
-            try:
-                msg = cast(dict[str, float], sock.recv_json())  # type: ignore
-                logging.debug(f"RID({self.data.sysid}) inbound: {msg}")
-            except zmq.Again:
-                continue
-            except Exception as e:
-                logging.error(f"RID receiver error: {e}")
-
-
 def start_logic(config: LogicConfig):
     """Start bidirectional proxy for a given UAV system_id."""
     sysid = config["sysid"]
@@ -165,49 +55,29 @@ def start_logic(config: LogicConfig):
     monitored_items = config["monitored_items"]
 
     i = sysid - 1
-    try:
-        logging.debug(f"Vehicle {sysid}: Creating TCP connection to vehicle...")
-        vh_conn = create_tcp_conn(
-            base_port=BasePort.VEH, offset=port_offset, role="server", sysid=sysid
-        )
-        logging.debug(f"Vehicle {sysid}: Creating UDP connection to GCS...")
-        cs_conn = create_udp_conn(
-            base_port=BasePort.GCS, offset=port_offset, mode="sender"
-        )
-    except Exception as e:
-        logging.error(f"Vehicle {sysid}: Failed to create connections: {e}")
-        raise
+    lg_conn = create_tcp_conn(
+        base_port=BasePort.LOG, offset=port_offset, role="server", sysid=sysid
+    )
 
-    # Debug: Check what target_system is after connection
-    logging.debug(
-        f"Vehicle {sysid}: MAVLink connection target_system = {vh_conn.target_system}"
-    )
-    logging.debug(
-        f"Vehicle {sysid}: MAVLink connection target_component = "
-        f"{vh_conn.target_component}"
-    )
+    cs_conn = create_udp_conn(base_port=BasePort.GCS, offset=port_offset, mode="sender")
+
     rid_mnng = RIDManager(sysid, port_offset)
     rid_mnng.start()
 
-    logic = VehicleLogic(
-        vh_conn,
-        plan=(
-            Plan.auto(
-                name="auto",
-                mission_path=str(DATA_PATH / f"mission_{sysid}.waypoints"),
-                monitored_items=monitored_items,
-            )
-            if mission
-            else plans[i]
-        ),
+    plan = Plan.auto(
+        name="auto",
+        mission_path=str(DATA_PATH / f"mission_{sysid}.waypoints"),
+        monitored_items=monitored_items,
     )
+    logic = VehicleLogic(lg_conn, plan=plan if mission else plans[i])
 
     try:
         while True:
-            if heartbeat_period.trigger():
-                send_heartbeat(vh_conn)
+            if heartbeat_event.trigger():
+                send_heartbeat(lg_conn)
+                send_heartbeat(cs_conn)
 
-            if remote_id_period.trigger():
+            if rid_event.trigger():
                 try:
                     rid_mnng.publish()
                 except Exception as e:
@@ -215,22 +85,29 @@ def start_logic(config: LogicConfig):
                     pass
 
             if logic.plan.state == State.DONE:
-                send_done_until_ack(cs_conn, sysid)
                 msg_proxy = mavlink.MAVLink_statustext_message(
                     severity=6, text=b"LOGIC_DONE"
                 )
                 logging.info(f"Proxy ← Logic {sysid}: Sending LOGIC_DONE")
-                vh_conn.mav.send(msg_proxy)
-
+                lg_conn.mav.send(msg_proxy)
+                send_done_until_ack(cs_conn, sysid)
                 break
 
             logic.act()
             time.sleep(0.01)
     finally:
         cs_conn.close()
-        vh_conn.close()
+        lg_conn.close()
         rid_mnng.stop()
         logging.info(f"Vehicle {sysid} logic stopped")
+
+
+class LogicConfig(TypedDict):
+    """UAV logic configuration."""
+
+    sysid: int
+    port_offset: int
+    monitored_items: list[int]
 
 
 def send_done_until_ack(conn: MAVConnection, idx: int, max_tries: float = float("inf")):

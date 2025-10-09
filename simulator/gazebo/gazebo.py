@@ -22,8 +22,8 @@ from pathlib import Path
 
 from config import ARDUPILOT_GAZEBO_MODELS, ENV_CMD_GAZ
 from helpers import create_process
-from helpers.change_coordinates import heading_to_yaw
-from helpers.connections.mavlink.customtypes.location import XYZRPY, GRAPose
+from helpers.coordinates import XYZRPY, GRAPose
+from helpers.math import heading_to_yaw
 from simulator.gazebo.config import COLOR_MAP, ConfigGazebo, GazVehicle, GazWP
 from simulator.visualizer import Visualizer
 

@@ -3,8 +3,7 @@
 import logging
 from dataclasses import dataclass
 
-from helpers.change_coordinates import pose
-from helpers.connections.mavlink.customtypes.location import ENUPose, GRAPose
+from helpers.coordinates import ENUPose, GRAPose
 from simulator.visualizer import ConfigVis, Visualizer
 
 
@@ -30,7 +29,7 @@ class ConfigNovis(ConfigVis[NovisVehicle]):
         base_home: ENUPose,
     ) -> None:
         """Shortcut to add a vehicle from a raw path."""
-        home = pose(self.origin, base_home)
+        home = self.origin.to_abs(base_home)
         self.add_vehicle(NovisVehicle(home=home))
 
 

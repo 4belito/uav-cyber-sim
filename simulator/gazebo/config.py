@@ -5,8 +5,7 @@ from dataclasses import dataclass
 import plotly.graph_objects as go  # type: ignore
 
 from config import Color
-from helpers.change_coordinates import pose, poses
-from helpers.connections.mavlink.customtypes.location import (
+from helpers.coordinates import (
     ENU,
     ENUPose,
     ENUPoses,
@@ -70,9 +69,9 @@ class ConfigGazebo(ConfigVis[GazVehicle]):
         model: str = "iris",
     ) -> None:
         """Shortcut to add a vehicle from a raw path."""
-        home_path = poses(base_home, base_path)
-        path = poses(self.origin, home_path)
-        home = pose(self.origin, base_home)
+        home_path = base_home.to_abs_all(base_path)
+        path = self.origin.to_abs_all(home_path)
+        home = self.origin.to_abs(base_home)
         mtraj = ConfigGazebo.create_mtraj(traj=path, color=color)
         self.add_vehicle(
             GazVehicle(

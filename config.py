@@ -52,9 +52,8 @@ class BasePort(IntEnum):
     # automatically to UDP 14550
     QGC = QGC_TCP if CONNECT_GCS_TO_ARP else QGC_UDP
     ARP = 5760  # Ardupilot Vehicle(TCP: PROXY->ARP)
-    GCS = 14551  # Ground Control Station(UDP: PROXY,LOGIC->GCS)
-    ORC = 14552  # Oracle(UDP: PROXY->ORC)
-    VEH = 14553  # Vehicle(TCP: PROXY->LOGIC)
+    LOG = 14551  # Vehicle(TCP: PROXY->LOGIC)
+    GCS = 14552  # Ground Control Station(UDP: LOGIC->GCS)
     RID_UP = 14554  # Remote ID (LOGIC->ORC)
     RID_DOWN = 14555  # Remote ID (ORC->LOGIC)
     RID_DATA = 14556  # Remote ID (PROXY->LOGIC) internal

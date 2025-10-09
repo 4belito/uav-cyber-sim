@@ -1,5 +1,8 @@
 {
-    "python.defaultInterpreterPath": "/home/ubuntu/miniconda3/envs/uav-cyber-sim11/bin/python",
+    "python.defaultInterpreterPath": "/home/abeldg/.conda/envs/uav-cyber-sim11/bin/python",
+    "jupyter.jupyterServerType": "local",
+    "notebook.lineNumbers": "on",
+    //"python.defaultInterpreterPath": "/home/ubuntu/miniconda3/envs/uav-cyber-sim11/bin/python",
     // ----------------------------
     // Formatter and Code Actions
     // ----------------------------

@@ -11,8 +11,8 @@ from enum import StrEnum
 from functools import partial
 from typing import Callable, Generic, List, Self, TypeVar, cast
 
-from helpers.connections.mavlink.customtypes.location import ENU
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
+from helpers.coordinates import ENU
 
 
 class State(StrEnum):

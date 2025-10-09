@@ -1,12 +1,15 @@
-import psutil
+"""Check total system resources."""
+
 import os
 
+import psutil
+
 # Total number of CPU cores
-cpu_cores = psutil.cpu_count(logical=True)      # logical = includes hyperthreading
+cpu_cores = psutil.cpu_count(logical=True)  # logical = includes hyperthreading
 cpu_physical = psutil.cpu_count(logical=False)  # only physical cores
 
 # Total RAM in GB
-total_ram = psutil.virtual_memory().total / (1024 ** 3)
+total_ram = psutil.virtual_memory().total / (1024**3)
 
 print(f"Physical cores: {cpu_physical}")
 print(f"Logical cores: {cpu_cores}")

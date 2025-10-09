@@ -12,11 +12,10 @@ from functools import partial
 
 from pymavlink import mavutil
 
-from helpers.change_coordinates import ENU_to_NED
-from helpers.connections.mavlink.customtypes.location import ENU, ENUs
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import Frame, MsgID
 from helpers.connections.mavlink.streams import ask_msg, get_ENU_position, stop_msg
+from helpers.coordinates import ENU, ENUs
 from plan.core import Action, ActionNames, Step
 
 
@@ -56,7 +55,7 @@ TYPE_MASK = int(0b110111111000)
 
 def exec_go_local(conn: MAVConnection, wp: ENU, ask_pos_interval: int = 100_000):
     """Send a MAVLink command to move the UAV to a local waypoint."""
-    ned_wp = ENU_to_NED(wp)
+    ned_wp = wp.to_ned()
     go_msg = mavutil.mavlink.MAVLink_set_position_target_local_ned_message(
         10,
         conn.target_system,

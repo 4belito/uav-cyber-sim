@@ -2,7 +2,7 @@
 
 import logging
 
-from helpers.connections.mavlink.customtypes.location import ENU
+from helpers.coordinates import ENU
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import CmdNav, LandState, MsgID
 from helpers.connections.mavlink.streams import ask_msg, get_ENU_position, stop_msg

@@ -6,8 +6,7 @@ import folium
 from IPython.display import display  # type: ignore
 
 from config import Color
-from helpers.change_coordinates import draw_grapose, pose, poses
-from helpers.connections.mavlink.customtypes.location import (
+from helpers.coordinates import (
     GRA,
     ENUPose,
     ENUPoses,
@@ -72,9 +71,9 @@ class ConfigQGC(ConfigVis[QGCVehicle]):
         mission_delay: int = 0,  # sec
     ) -> None:
         """Shortcut to add a vehicle from a raw path."""
-        home_path = poses(base_home, base_path)
-        path = poses(self.origin, home_path)
-        home = pose(self.origin, base_home)
+        home_path = base_home.to_abs_all(base_path)
+        path = self.origin.to_abs_all(home_path)
+        home = self.origin.to_abs(base_home)
         traj = ConfigQGC.create_mtraj(traj=path, color=color)
         n_items = len(traj) + 2 + int(mission_delay > 0)
         mission = Mission(traj=traj, delay=mission_delay, n_items=n_items)
@@ -100,10 +99,10 @@ class ConfigQGC(ConfigVis[QGCVehicle]):
         # Plot each UAV's path
         for veh in self.vehicles:  # add more colors if needed
             for i, wp in enumerate(veh.mission.traj):
-                draw_grapose(m, wp.pos, f"pos_{i}", wp.color)
+                wp.pos.draw(m, f"pos_{i}", wp.color)
 
         # Plot origin
-        draw_grapose(m, self.origin, "Origin", origin_color)
+        self.origin.unpose().draw(m, "Origin", origin_color)
         display(m)
         return m
 
@@ -129,6 +128,6 @@ class ConfigQGC(ConfigVis[QGCVehicle]):
         # Plot each traj
         for mtraj in mtrajs:  # add more colors if needed
             for i, wp in enumerate(mtraj):
-                draw_grapose(m, wp.pos, f"pos_{i}", wp.color)
+                wp.pos.draw(m, f"pos_{i}", wp.color)
 
         return m
