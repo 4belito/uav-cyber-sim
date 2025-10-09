@@ -1,0 +1,23 @@
+{
+  "name": "uav-cyber-sim (X11 over SSH)",
+  "image": "uav-cyber-sim",
+  "runArgs": [
+    "--network",
+    "host"
+  ],
+  "containerEnv": {
+    "DISPLAY": "${env:DISPLAY}",
+    "XAUTHORITY": "/tmp/.Xauthority"
+  },
+  "mounts": [
+    "type=bind,source=${env:HOME}/.Xauthority,target=/tmp/.Xauthority"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-toolsai.jupyter@2025.6.0",
+        "ms-python.python"
+      ]
+    }
+  }
+}
