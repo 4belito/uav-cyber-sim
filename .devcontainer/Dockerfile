@@ -5,73 +5,73 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 # install general packages
 RUN apt-get update && apt-get install --yes --no-install-recommends \
-		build-essential \
-		ca-certificates \
-		dbus-x11 \
-		git \
-		gnome-terminal \
-		locales \
-		sudo \
+    build-essential \
+    ca-certificates \
+    dbus-x11 \
+    git \
+    gnome-terminal \
+    locales \
+    sudo \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # set time and locale
 RUN ln -sf /usr/share/zoneinfo/EST /etc/localtime && \
-	sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
+    sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
     locale-gen
 
 # install QGroundControl dependencies
 RUN apt-get update && apt-get install --yes --no-install-recommends \
-		apt-utils \
-		binutils \
-		ccache \
-		checkinstall \
-		cmake \
-		curl \
-		espeak \
-		fuse \
-		g++ \
-		gcc \
-		git \
-		gosu \
-		kmod \
-		libespeak-dev \
-		libfontconfig1 \
-		libfuse2 \
-		libgstreamer-plugins-base1.0-dev \
-		libgstreamer1.0-0 \
-		libgstreamer1.0-dev \
-		libsdl2-dev \
-		libssl-dev \
-		libudev-dev \
-		locales \
-		make \
-		ninja-build \
-		openssh-client \
-		openssl \
-		patchelf \
-		pkg-config \
-		rsync \
-		speech-dispatcher \
-		wget \
-		xvfb \
-		zlib1g-dev \
+    apt-utils \
+    binutils \
+    ccache \
+    checkinstall \
+    cmake \
+    curl \
+    espeak \
+    fuse \
+    g++ \
+    gcc \
+    git \
+    gosu \
+    kmod \
+    libespeak-dev \
+    libfontconfig1 \
+    libfuse2 \
+    libgstreamer-plugins-base1.0-dev \
+    libgstreamer1.0-0 \
+    libgstreamer1.0-dev \
+    libsdl2-dev \
+    libssl-dev \
+    libudev-dev \
+    locales \
+    make \
+    ninja-build \
+    openssh-client \
+    openssl \
+    patchelf \
+    pkg-config \
+    rsync \
+    speech-dispatcher \
+    wget \
+    xvfb \
+    zlib1g-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # install Ardupilot Gazebo plugin dependencies
 RUN apt-get update && apt-get install --yes --no-install-recommends \
-		gnupg \
-		lsb-release \
+    gnupg \
+    lsb-release \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 RUN wget -qO- https://packages.osrfoundation.org/gazebo.key | gpg --dearmor | tee /usr/share/keyrings/gazebo-archive-keyring.gpg > /dev/null && \
-	echo "deb [signed-by=/usr/share/keyrings/gazebo-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" > /etc/apt/sources.list.d/gazebo-stable.list 
+    echo "deb [signed-by=/usr/share/keyrings/gazebo-archive-keyring.gpg] http://packages.osrfoundation.org/gazebo/ubuntu-stable $(lsb_release -cs) main" > /etc/apt/sources.list.d/gazebo-stable.list 
 RUN apt-get update && apt-get install --yes --no-install-recommends \
-		gazebo \
-		libgazebo-dev \
+    gazebo \
+    libgazebo-dev \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # add sudo user (required for some install scripts to run)
 RUN useradd ubuntu --create-home --home-dir /home/ubuntu --shell /bin/bash && \
-	echo "ubuntu ALL=(ALL:ALL) NOPASSWD: ALL" >> /etc/sudoers
+    echo "ubuntu ALL=(ALL:ALL) NOPASSWD: ALL" >> /etc/sudoers
 USER ubuntu
 ENV USER=ubuntu
 ENV LANG=en_US.UTF-8 \
@@ -98,11 +98,11 @@ ENV QT_VERSION=5.15.2 \
 RUN echo 'export PATH=/usr/lib/ccache:/opt/Qt/5.15.2/gcc_64/bin:$PATH' >> ~/.profile
 RUN git clone https://github.com/4belito/qgroundcontrol.git --recurse-submodules && \
     cd qgroundcontrol && \
-	git checkout v4.4.0 && \
+    git checkout v4.4.0 && \
     git submodule update --init --recursive
 ARG PIP_BREAK_SYSTEM_PACKAGES=1
 RUN cd qgroundcontrol && \
-	sudo ./deploy/docker/install-qt-linux.sh && \
+    sudo ./deploy/docker/install-qt-linux.sh && \
     mkdir build && \
     cd build && \
     qmake .. && \
@@ -110,13 +110,16 @@ RUN cd qgroundcontrol && \
     cd .. && \
     ./deploy/create_linux_appimage.sh . ./build/staging && \
     mv QGroundControl.AppImage ~ && \
-	cd && \
-	rm -rf qgroundcontrol && \
-	chmod a+x QGroundControl.AppImage
+    cd && \
+    rm -rf qgroundcontrol && \
+    chmod a+x QGroundControl.AppImage && \
+    cd /home/ubuntu/.config && \
+    mkdir QGroundControl.org && \
+    touch "QGroundControl.org/QGroundControl Daily.ini"
 
 # INSTALL GAZEBO
 RUN git clone https://github.com/4belito/ardupilot_gazebo.git && \
-	cd ardupilot_gazebo && \
+    cd ardupilot_gazebo && \
     mkdir build && \
     cd build && \
     cmake .. && \
@@ -140,15 +143,15 @@ RUN source ~/miniconda3/bin/activate && \
     conda create -n uav-cyber-sim python=3.11 && \
     conda activate uav-cyber-sim && \
     pip install \
-		folium \
-		geopy \
-		matplotlib \
-		nbformat \
-		notebook \
-		numpy \
-		plotly \
-		pymap3d \
-		pymavlink
+    folium \
+    geopy \
+    matplotlib \
+    nbformat \
+    notebook \
+    numpy \
+    plotly \
+    pymap3d \
+    pymavlink
 
 # CLONE THE REPO
 RUN git clone https://github.com/4belito/uav-cyber-sim.git
