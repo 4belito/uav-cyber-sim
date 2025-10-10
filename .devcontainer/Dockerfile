@@ -170,7 +170,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/* /tmp/manual.txt
 USER ubuntu
 # copy over uli-net-sim source and binaries
-COPY --from=netsim --chown=ubuntu:ubuntu /usr/uli-net-sim /usr/uli-net-sim
+COPY --from=netsim --chown=1005:1005 /usr/uli-net-sim /usr/uli-net-sim
 
 
 WORKDIR /home/ubuntu/uav-cyber-sim
