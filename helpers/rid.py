@@ -7,7 +7,7 @@ import math
 import threading
 import time
 from dataclasses import dataclass
-from typing import Self, cast
+from typing import cast
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 import zmq
@@ -35,20 +35,20 @@ class RIDData:
     """Data class for Remote ID information."""
 
     sysid: int
-    gra_pos: GRA | None = None
-    enu_pos: ENU | None = None  # m/s relative to origin
-    enu_vel: ENU | None = None  # m/s relative to uav
-    speed: float | None = None  # m/s
-    cog: float | None = None  # angle of course over ground,(0° = North, 90° = East)
-    ele: float | None = None  # elevation angle,(0° = North, 90° = Up)
-    rel_alt: float | None = None  # meters relative to takeoff
-    hdg: float | None = None  # degrees - like cog but for uav heading
-    last_update: float | None = None  # optional, handy for freshness checks
+    gra_pos: GRA  # global position
+    enu_pos: ENU  # m/s relative to origin
+    enu_vel: ENU  # m/s relative to uav
+    speed: float  # m/s
+    cog: float  # angle of course over ground,(0° = North, 90° = East)
+    ele: float  # elevation angle,(0° = North, 90° = Up)
+    rel_alt: float  # meters relative to takeoff
+    hdg: float  # degrees - like cog but for uav heading
+    last_update: float  # optional, handy for freshness checks
 
-    @classmethod
-    def none(cls, sysid: int) -> Self:
-        """Create a RIDData instance with all fields set to None except sysid."""
-        return cls(sysid=sysid)
+    # @classmethod
+    # def none(cls, sysid: int) -> Self:
+    #     """Create a RIDData instance with all fields set to None except sysid."""
+    #     return cls(sysid=sysid)
 
 
 class RIDManager:
@@ -57,9 +57,10 @@ class RIDManager:
     def __init__(self, sysid: int, port_offset: int, gra_origin: GRA) -> None:
         self.gra_origin = gra_origin
         self.sysid = sysid
-        self.data = RIDData(sysid=sysid)
+        self.data: RIDData
         self._lock = threading.Lock()  # ???
         self._stop = threading.Event()
+        self.pending = False  # whether there is new data to publish
 
         # ZMQ setup
         self._ctx = zmq.Context()
@@ -119,21 +120,26 @@ class RIDManager:
         speed = math.sqrt(ve**2 + vn**2 + vu**2)
         hdg = hdg_centdegree / 100.0
         with self._lock:
-            self.data.gra_pos = gra_pos
-            self.data.enu_pos = enu_pos
-            self.data.enu_vel = enu_vel
-            self.data.speed = speed
-            self.data.cog = cog
-            self.data.ele = ele
-            self.data.rel_alt = rel_alt
-            self.data.hdg = hdg
-            self.data.last_update = time.time()
+            self.data = RIDData(
+                sysid=self.sysid,
+                gra_pos=gra_pos,
+                enu_pos=enu_pos,
+                enu_vel=enu_vel,
+                speed=speed,
+                cog=cog,
+                ele=ele,
+                rel_alt=rel_alt,
+                hdg=hdg,
+                last_update=time.time(),
+            )
+            self.pending = True
 
     def publish(self) -> None:
         """Send current RID snapshot (pyobj) to oracle."""
         with self._lock:
-            if self.data.last_update:
+            if self.pending:
                 self._out_sock.send_pyobj(self.data)  # type: ignore
+                self.pending = False
 
     # --- background loops ------------------------------------------------------
 

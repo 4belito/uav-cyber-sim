@@ -7,11 +7,8 @@ Currently provides basic global position tracking and mission completion detecti
 
 from __future__ import annotations
 
-from inspect import CO_GENERATOR
-import json
 import logging
 import pickle
-import subprocess
 import threading
 import time
 from collections import defaultdict
@@ -34,55 +31,6 @@ TX_LOOP_SLEEP = 0.01
 RX_LOOP_SLEEP = 0.10
 
 
-class RID:
-    """Thread-safe single-slot buffer for latest RIDData + derived ENU position."""
-
-    def __init__(self):
-        self._pos: (
-            ENU  # | None = riddata.enu_pos  # self.ridata2pos(riddata, gra_origin)
-        )
-        self._data: RIDData | None  # = riddata
-        self.lock = threading.Lock()
-
-    # @staticmethod
-    # def ridata2pos(rid: RIDData, origin: GRA) -> ENU:
-    #     """Compute ENU position from RIDData using the given origin in GRA."""
-    #     if rid.lat is None or rid.lon is None or rid.alt is None:
-    #         raise ValueError("RIDData has None for lat, lon, or alt")
-    #     return origin.to_rel(GRA(rid.lat, rid.lon, rid.alt))
-
-    def put(self, riddata: RIDData) -> None:
-        """Store the latest RIDData and update ENU position."""
-        if riddata.enu_pos is None:
-            raise ValueError("RIDData has None for enu_pos")
-        pos = riddata.enu_pos
-        with self.lock:
-            self._pos = pos
-            self._data = riddata
-
-    def pos(self) -> ENU:
-        """Snapshot of current ENU position."""
-        with self.lock:
-            return self._pos
-    
-    def data(self) -> RIDData:
-        """Snapshot of current data"""
-        with self.lock:
-            return self._data
-
-    def pop_data(self) -> RIDData | None:
-        """Return the pending RIDData once and clear it so it won't be resent."""
-        with self.lock:
-            pkt = self._data
-            self._data = None
-            return pkt
-
-    def pending(self) -> bool:
-        """Whether there is pending RIDData to send once."""
-        with self.lock:
-            return self._data is not None
-
-
 Cell = set[int]
 
 
@@ -93,9 +41,11 @@ class Grid:
         assert cell_size > 0
         self.cell_size = cell_size
         self._cell: Dict[CellKey, Cell] = defaultdict(set)
-        self._rid: Dict[int, RID] = {}
+        self._rid: Dict[int, RIDData] = {}
         self._key: Dict[int, CellKey] = {}
         self._lock = threading.RLock()  # single structure lock
+        self._pending_rid: defaultdict[int, bool] = defaultdict(lambda: False)
+        # track if RID has been retransmitted
 
     # === Core methods ===
     def _idx(self, coor: float) -> int:
@@ -104,21 +54,27 @@ class Grid:
     def _pos2key(self, pos: ENU) -> CellKey:
         return (self._idx(pos.x), self._idx(pos.y), self._idx(pos.z))
 
-    def get_rid(self, sysid: int) -> RID | None:
+    def rid(self, sysid: int) -> RIDData:
         """Return RID object only if it exists and has pending data."""
         with self._lock:
-            rid = self._rid.get(sysid)
-            if rid is not None and rid.pending():
+            return self._rid[sysid]
+
+    def pop_rid(self, sysid: int) -> RIDData | None:
+        """Pop RID object if it has pending data, else return None."""
+        with self._lock:
+            if self._pending_rid.get(sysid):
+                rid = self.rid(sysid)
+                self._pending_rid[sysid] = False
                 return rid
             return None
 
     # === Sysid management ===
-    def add_rid(self, sysid: int, rid: RID) -> None:
+    def add_rid(self, sysid: int, rid: RIDData) -> None:
         """
         Insert a new UAV at the given position.
         It assumes sysid is not already present.
         """
-        pos = rid.pos()
+        pos = rid.enu_pos
         k = self._pos2key(pos)
         with self._lock:
             if sysid in self._rid:
@@ -126,12 +82,14 @@ class Grid:
             self._cell[k].add(sysid)
             self._key[sysid] = k
             self._rid[sysid] = rid
+            self._pending_rid[sysid] = True
 
     def remove_sysid(self, sysid: int) -> None:
         """Completely remove a UAV from the grid."""
         with self._lock:
             k = self._key.pop(sysid, None)
             self._rid.pop(sysid, None)
+            self._pending_rid.pop(sysid, None)
             if k is None:
                 return
             cell = self._cell.get(k)
@@ -140,9 +98,9 @@ class Grid:
                 if not cell:
                     self._cell.pop(k, None)
 
-    def update(self, sysid: int, rid: RID) -> None:
+    def update(self, sysid: int, rid: RIDData) -> None:
         """Incrementally move sysid between cells if needed."""
-        pos = rid.pos()
+        pos = rid.enu_pos
         k_new = self._pos2key(pos)
         with self._lock:
             k_old = self._key.get(sysid)
@@ -158,6 +116,7 @@ class Grid:
                 self._cell[k_new].add(sysid)
                 self._key[sysid] = k_new
             self._rid[sysid] = rid
+            self._pending_rid[sysid] = True
 
     # === Neighbor queries ===
     def _iter_neighbor_keys(self, pos: ENU) -> Iterable[CellKey]:
@@ -193,7 +152,7 @@ class Grid:
                 o_rid = self._rid.get(o_sysid)
             if o_rid is None:
                 continue
-            if r2 is not None and ENU.distance_squared(pos, o_rid.pos()) > r2:
+            if r2 is not None and ENU.distance_squared(pos, o_rid.enu_pos) > r2:
                 continue
             yield o_sysid
 
@@ -296,9 +255,8 @@ class Oracle:  # UAVMonitor
                         self.grid.remove_sysid(sysid)
                     logging.info(f"UAV {sysid} completed mission and exited")
                     break
+                rid: RIDData = msg
                 logging.debug(f"Received rid msg {msg}")
-                rid = RID()
-                rid.put(msg)
                 if sysid in self._seen_in_grid:
                     self.grid.update(sysid, rid)
                 else:
@@ -317,68 +275,84 @@ class Oracle:  # UAVMonitor
                 time.sleep(TX_LOOP_SLEEP)
                 continue
             try:
-                rid = self.grid.get_rid(sysid)
+                rid = self.grid.pop_rid(sysid)
                 if rid is None:
                     time.sleep(TX_LOOP_SLEEP)
                     continue
-                pkt = rid.pop_data()
-
                 # get position and velocity parameters for each drone
-                pos = pkt.enu_pos
-                spd = pkt.speed
-                cog = pkt.cog
-                ele = pkt.ele
-                operands = [
-                    f"{sysid},{round(pos.x,3)},{round(pos.y,3)},{round(pos.z,3)},{round(spd,3)},{round(cog,3)},{round(ele,3)}"
-                ]
-                o_sysids = []
+                # pos = pkt.enu_pos
+                # spd = pkt.speed
+                # cog = pkt.cog
+                # ele = pkt.ele
+                # operands = [
+                #     (
+                #         f"{sysid},{round(pos.x, 3)},{round(pos.y, 3)},"
+                #         f"{round(pos.z, 3)},{round(spd, 3)},"
+                #         f"{round(cog, 3)},{round(ele, 3)}"
+                #     )
+                # ]
+                o_sysids: list[int] = []
                 for o_sysid in self.grid.iter_neighbors_within(
-                    sysid, rid.pos(), radius=None
+                    sysid, rid.enu_pos, radius=None
                 ):
-                    o_rid = self.grid.get_rid(o_sysid)
+                    o_rid = self.grid.rid(o_sysid)
+                    logging.debug(f"{sysid}({o_rid}) -> {o_sysid} ({o_rid})")
                     # TODO: get this information with certainty instead of allowing None
-                    if o_rid is not None:
-                        o_sysids.append(o_sysid)
-                        o_data = o_rid.data()
-                        o_pos = o_data.enu_pos
-                        o_spd = o_data.speed
-                        o_cog = o_data.cog
-                        o_ele = o_data.ele
-                        operands.append(
-                            f"{o_sysid},{round(o_pos.x,3)},{round(o_pos.y,3)},{round(o_pos.z,3)},{round(o_spd,3)},{round(o_cog,3)},{round(o_ele,3)}"
-                        )
+                    o_sysids.append(o_sysid)
+                #     o_data = o_rid.data
+                #     o_pos = o_data.enu_pos
+                #     o_spd = o_data.speed
+                #     o_cog = o_data.cog
+                #     o_ele = o_data.ele
+                #     operands.append(
+                #         (
+                #             f"{o_sysid},{round(o_pos.x, 3)},{round(o_pos.y, 3)},"
+                #             f"{round(o_pos.z, 3)},{round(o_spd, 3)},"
+                #             f"{round(o_cog, 3)},{round(o_ele, 3)}"
+                #         )
+                #     )
 
-                # continue if there not at least two drones to simulate
-                if len(operands) <= 1:
-                    continue
+                # # continue if there not at least two drones to simulate
+                # if len(operands) <= 1:
+                #     continue
 
-                # invoke a one-off uli-net-sim Remote ID broadcast simulation
-                result = subprocess.run(
-                    [
-                        "./rid-one-off.sh",
-                        "-n", f"{sysid}",
-                        # TODO: fill in these RID fields later if needed
-                        "-t", "0",
-                        "-x", "0",
-                        "-y", "0",
-                        "-z", "0",
-                        "-v", "0",
-                        "-g", "0",
-                        "-h", "0",
-                        "-q",
-                        "--",
-                        *operands
-                    ],
-                    cwd="/usr/uli-net-sim",
-                    capture_output=True,
-                    text=True,
-                )
-                logging.debug(f"rid-one-off:\noperands:\n{operands}\n\nstdout:\n{result.stdout}\n\nstderr:\n{result.stderr}")
-                
-                res = json.loads(result.stdout)
+                # # invoke a one-off uli-net-sim Remote ID broadcast simulation
+                # result = subprocess.run(
+                #     [
+                #         "./rid-one-off.sh",
+                #         "-n",
+                #         f"{sysid}",
+                #         # TODO: fill in these RID fields later if needed
+                #         "-t",
+                #         "0",
+                #         "-x",
+                #         "0",
+                #         "-y",
+                #         "0",
+                #         "-z",
+                #         "0",
+                #         "-v",
+                #         "0",
+                #         "-g",
+                #         "0",
+                #         "-h",
+                #         "0",
+                #         "-q",
+                #         "--",
+                #         *operands,
+                #     ],
+                #     cwd="/usr/uli-net-sim",
+                #     capture_output=True,
+                #     text=True,
+                # )
+                # logging.debug(
+                #     f"rid-one-off:\noperands:\n{operands}\n\nstdout:\n{result.stdout}\n\nstderr:\n{result.stderr}"
+                # )
+
+                # res = json.loads(result.stdout)
                 for o_sysid in o_sysids:
-                    if sysid in res["Serial Number"][o_sysid]["values"]:
-                        self.rid_out_socks[o_sysid].send_pyobj(pkt)  # type: ignore
+                    # if sysid in res["Serial Number"][o_sysid]["values"]:
+                    self.rid_out_socks[o_sysid].send_pyobj(rid)  # type: ignore
             except Exception as e:
                 logging.error(f"Retransmit error for {sysid}: {e}")
             time.sleep(TX_LOOP_SLEEP)
