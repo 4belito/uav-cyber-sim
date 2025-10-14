@@ -18,6 +18,7 @@ from config import (
     BasePort,
 )
 from helpers import create_process, setup_logging
+from helpers.cleanup import clean
 from helpers.connections.mavlink.mission_io import save_mission
 from helpers.coordinates import GRAPose
 from oracle import Oracle
@@ -50,7 +51,6 @@ class Simulator:
         gcs_cmd: Callable[[int, str, int], str] = lambda _, config_path, verbose: (
             f'python3 gcs.py --config-path "{config_path}" --verbose {verbose}'
         ),
-        monitored_mission_items: list[list[int]] | None = None,
         # visualization
         terminals: list[SimProcess] = [],
         supress_output: list[SimProcess] = ["launcher"],
@@ -69,9 +69,7 @@ class Simulator:
         self.missions = missions
         self.logic_cmd = logic_cmd
         self.gcs_cmd = gcs_cmd
-        self.monitored_items = monitored_mission_items or [
-            list(range(1, mission.n_items - 1)) for mission in missions
-        ]
+        self.monitored_items: dict[int, list[int]] = {}
 
         assert len(self.missions) == self.n_vehs, (
             "Number of missions must match number of vehicles"
@@ -87,6 +85,7 @@ class Simulator:
 
     def launch(self) -> Oracle:
         """Launch vehicle instances and visualizer."""
+        clean(victim_processes=[])  # Ensure clean start
         self.save_missions()
         self.uav_port_offsets = self._find_uav_port_offsets()
         self.gcs_port_offsets = self._find_gcs_port_offsets()
@@ -105,12 +104,14 @@ class Simulator:
 
     def save_missions(self):
         """Save the missions for all the vehicles."""
-        for i, mission in enumerate(self.missions):
+        for sysid, mission in zip(self.sysids, self.missions):
             traj = [wp.pos for wp in mission.traj]
-            save_mission(
-                path=DATA_PATH / f"mission_{i + 1}.waypoints",
+            self.monitored_items[sysid] = save_mission(
+                path=DATA_PATH / f"mission_{sysid}.waypoints",
                 poses=traj,
                 delay=mission.delay,
+                land=mission.land,
+                speed=mission.speed,
             )
 
     def _launch_gcses(self):
@@ -139,8 +140,7 @@ class Simulator:
 
     def _save_logic_configs(self, folder_name: Path):
         """Save the logic configurations for each UAV."""
-        for i in range(self.n_vehs):
-            sysid = i + 1
+        for i, sysid in enumerate(self.sysids):
             logic_config = {
                 "sysid": sysid,
                 "gra_origin_dict": {
@@ -149,7 +149,8 @@ class Simulator:
                     "alt": self.gra_origin.alt,
                 },
                 "port_offset": self.uav_port_offsets[i],
-                "monitored_items": self.monitored_items[i],
+                "monitored_items": self.monitored_items[sysid],
+                "navegation_speed": self.missions[i].speed,
             }
             config_path = folder_name / f"logic_config_{sysid}.json"
             with config_path.open("w") as f:
@@ -163,16 +164,16 @@ class Simulator:
                 "uavs": [
                     {
                         "sysid": sysid,
-                        "port_offset": self.uav_port_offsets[sysid - 1],
+                        "port_offset": self.uav_port_offsets[i],
                         "ardupilot_cmd": (
                             f"python3 {ARDUPILOT_VEHICLE_PATH}"
-                            f" -v ArduCopter -I{sysid - 1} --sysid {sysid} --no-rebuild"
+                            f" -v ArduCopter -I{i} --sysid {sysid} --no-rebuild"
                             f" --use-dir={ARDU_LOGS_PATH}"
                             f" --add-param-file {VEH_PARAMS_PATH}"
                             f" --no-mavproxy"
-                            f" --port-offset={self.uav_port_offsets[sysid - 1]}"
+                            f" --port-offset={self.uav_port_offsets[i]}"
                             + (" --terminal" if "veh" in self.terminals else "")
-                            + self.visuals[0].add_vehicle_cmd(sysid - 1)
+                            + self.visuals[0].add_vehicle_cmd(i)
                         ),
                         "logic_cmd": self.logic_cmd(
                             sysid,
@@ -181,7 +182,7 @@ class Simulator:
                         ),
                         "proxy_cmd": (
                             f"python3 proxy.py --sysid {sysid} "
-                            f"--port-offset={self.uav_port_offsets[sysid - 1]} "
+                            f"--port-offset={self.uav_port_offsets[i]} "
                             f"--verbose {self.verbose}"
                         ),
                     }

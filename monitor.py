@@ -59,9 +59,9 @@ class UAVMonitor:
         self, conn: MAVConnection, msg: mavlink.MAVLink_statustext_message, sysid: int
     ) -> bool:
         """Check for a STATUSTEXT("DONE") message and respond with COMMAND_ACK."""
-        if msg.text == "DONE":
+        if msg.text == "LOGIC_DONE":
             conn.mav.command_ack_send(
-                command=CmdCustom.PLAN_DONE, result=mavlink2.MAV_RESULT_ACCEPTED
+                command=CmdCustom.LOGIC_DONE, result=mavlink2.MAV_RESULT_ACCEPTED
             )
             logging.info(f"✅ Vehicle {sysid} completed its mission")
             return True

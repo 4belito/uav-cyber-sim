@@ -9,11 +9,10 @@ format.
 
 import logging
 import time
-from functools import partial
 
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.customtypes.mission import MissionLoader
-from helpers.connections.mavlink.enums import CmdNav, MissionResult
+from helpers.connections.mavlink.enums import Cmd, MissionResult
 from plan import Action, ActionNames
 from plan.core import Step
 
@@ -22,22 +21,28 @@ def make_upload_mission(mission_path: str, from_scratch: bool = True) -> Action[
     """Create an upload mission action."""
     upload_mission = Action[Step](name=ActionNames.UPLOAD_MISSION, emoji="📤")
     if from_scratch:
-        upload_mission.add(
-            Step(
-                "clear uav missions",
-                exec_fn=partial(exec_clear_mission),
-                check_fn=partial(check_clear_mission),
-                onair=False,
-            )
-        )
-    upload_mission.add(
-        Step(
-            f"load mission {mission_path}",
-            exec_fn=partial(exec_upload_mission, mission_path=mission_path),
-            check_fn=partial(check_upload_mission),
-            onair=False,
-        )
-    )
+
+        class ClearMission(Step):
+            def exec_fn(self, conn: MAVConnection) -> None:
+                """Execute the clear mission."""
+                exec_clear_mission(conn)
+
+            def check_fn(self, conn: MAVConnection) -> bool:
+                """Verify that cleared mission was successful."""
+                return check_clear_mission(conn)
+
+        upload_mission.add(ClearMission(name="clear previous mission"))
+
+    class UploadMission(Step):
+        def exec_fn(self, conn: MAVConnection) -> None:
+            """Execute the upload of a mission to the UAV."""
+            exec_upload_mission(conn, mission_path=mission_path)
+
+        def check_fn(self, conn: MAVConnection) -> bool:
+            """Verify that the mission upload was successful."""
+            return check_upload_mission(conn)
+
+    upload_mission.add(UploadMission(name="upload mission"))
     return upload_mission
 
 
@@ -53,7 +58,7 @@ def exec_upload_mission(
 
     for i in range(count):
         wp = mission.item(i)
-        cmd_name = CmdNav(wp.command).name
+        cmd_name = Cmd(wp.command).name
         logging.debug(
             f"🧭 Vehicle {conn.target_system}: Mission[{i}] → cmd: {cmd_name}, "
             f"x: {wp.x}, y: {wp.y}, z: {wp.z}, current: {wp.current}"
@@ -70,14 +75,14 @@ def exec_upload_mission(
         logging.debug(f"✅ Vehicle {conn.target_system}: Sent mission item {i}")
 
 
-def check_upload_mission(conn: MAVConnection) -> tuple[bool, None]:
+def check_upload_mission(conn: MAVConnection) -> bool:
     """Verify that the mission upload was successful."""
     ack = conn.recv_match(type="MISSION_ACK", blocking=True, timeout=5)
     if ack and MissionResult(ack.type) == MissionResult.ACCEPTED:
         logging.info(f"✅ Vehicle {conn.target_system}: Mission upload successful!")
-        return True, None
+        return True
     logging.warning(f"⚠️ Mission upload failed or timed out: {ack}")
-    return False, None
+    return False
 
 
 # Clear missions step
@@ -86,10 +91,10 @@ def exec_clear_mission(conn: MAVConnection) -> None:
     conn.mav.mission_clear_all_send(conn.target_system, conn.target_component)
 
 
-def check_clear_mission(conn: MAVConnection) -> tuple[bool, None]:
+def check_clear_mission(conn: MAVConnection) -> bool:
     """Verify that cleared mission was successful."""
     msg = conn.recv_match(type="STATUSTEXT")
     if msg and msg.text == "ArduPilot Ready":
         logging.info(f"🧹 Vehicle {conn.target_system}: Cleared previous mission")
-        return True, None
-    return False, None
+        return True
+    return False

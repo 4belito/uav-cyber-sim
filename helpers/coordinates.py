@@ -19,6 +19,7 @@ from matplotlib.axes import Axes
 from pymap3d import enu2geodetic, geodetic2enu  # type: ignore
 
 from config import Color
+from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 
 
 def float_nans(n: int) -> Generator[float, None, None]:
@@ -70,6 +71,16 @@ class XY(NamedTuple):
         x_rot = self.x * cos_t - self.y * sin_t
         y_rot = self.x * sin_t + self.y * cos_t
         return self.__class__(x_rot, y_rot)
+
+    def norm(self) -> float:
+        """Return the Euclidean norm of the XY vector."""
+        return math.sqrt(self.x**2 + self.y**2)
+
+    @classmethod
+    def div(cls, a: Self, b: Self) -> Self:
+        """Element-wise division of two XY vectors (a / b)."""
+        assert b.x != 0 and b.y != 0, "Division by zero in XY.div"
+        return cls(a.x / b.x, a.y / b.y)
 
 
 class XYZ(NamedTuple):
@@ -245,6 +256,10 @@ class ENU(XYZ):
         """Squared Euclidean distance between two ENU points."""
         return (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2
 
+    def norm(self) -> float:
+        """Return the Euclidean norm of the ENU vector."""
+        return math.sqrt(self.x**2 + self.y**2 + self.z**2)
+
     def to_abs(self, rel_p: ENU | ENUPose) -> ENU:
         """Compose this ENU (as origin) with a relative ENU/ENUPose."""
         if isinstance(rel_p, ENUPose):
@@ -289,6 +304,22 @@ class ENU(XYZ):
         for p in abss:
             yield self.to_rel(p)
 
+    @classmethod
+    def get_rel_position(cls, conn: MAVConnection) -> ENU | None:
+        """Request and return the UAV's current local NED position."""
+        ## Check this to make blocking optional parameter
+        msg = conn.recv_match(type="LOCAL_POSITION_NED", blocking=True, timeout=0.001)
+        if msg:
+            return cls.from_ned(msg.x, msg.y, msg.z)
+        return None
+
+    def get_position(self, conn: MAVConnection) -> ENU | None:
+        """Alias for get_rel_position."""
+        rel_pos = self.get_rel_position(conn)
+        if rel_pos is None:
+            return None
+        return self.to_abs(rel_pos)
+
 
 class NED(XYZ):
     """NED vector (x=North, y=East, z=Down)."""
@@ -327,6 +358,34 @@ class GRA(LLA):
         alt = alt_mm / 1e3
         return GRA(lat, lon, alt)
 
+    def to_global_int(self) -> tuple[int, int, int]:
+        """
+        Convert a GRA to MAVLink GLOBAL_POSITION_INT message fields.
+        with alt in mm (it agrees with relative altitude).
+        """
+        lat = int(self.lat * 1e7)
+        lon = int(self.lon * 1e7)
+        alt = int(self.alt * 1e3)
+        return lat, lon, alt
+
+    def to_global_int_alt_in_meters(self) -> tuple[int, int, float]:
+        """
+        Convert a GRA to MAVLink GLOBAL_POSITION_INT message fields
+        with alt in meters (it agrees with absolute altitude).
+        """
+        lat = int(self.lat * 1e7)
+        lon = int(self.lon * 1e7)
+        alt = self.alt  # Altitude in meters
+        return lat, lon, alt
+
+    @staticmethod
+    def from_msn_item_int(lat_e7: int, lon_e7: int, alt_mm: int) -> GRA:
+        """Create a GRA from MAVLink GLOBAL_POSITION_INT message fields."""
+        lat = lat_e7 / 1e7
+        lon = lon_e7 / 1e7
+        alt = alt_mm
+        return GRA(lat, lon, alt)
+
     # ---- Batch helpers (GRA) ----
     def to_rel_all(self, points: Iterable[GRA | GRAPose]) -> list[ENU]:
         """Vectorize `to_rel` over a sequence of GRA/GRAPose points."""
@@ -351,6 +410,14 @@ class GRA(LLA):
         folium.Marker(
             location=[self.lat, self.lon], popup=label, icon=folium.Icon(color=color)
         ).add_to(map_obj)
+
+    @classmethod
+    def get_position(cls, conn: MAVConnection) -> GRA | None:
+        """Request and return the UAV's current global position."""
+        msg = conn.recv_match(type="GLOBAL_POSITION_INT", blocking=True, timeout=0.001)
+        if msg:
+            return cls.from_global_int(msg.lat, msg.lon, msg.alt)  # type: ignore
+        return None
 
 
 class ENUPose(XYZPose):

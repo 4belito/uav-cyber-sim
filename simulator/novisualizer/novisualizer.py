@@ -42,7 +42,8 @@ class NoVisualizer(Visualizer[NovisVehicle]):
         self,
         config: ConfigNovis,
     ):
-        super().__init__(config)
+        super().__init__()
+        self.config = config
 
     def add_vehicle_cmd(self, i: int):
         """Add GRA location to the vhecle comand."""

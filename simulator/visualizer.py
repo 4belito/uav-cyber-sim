@@ -33,8 +33,8 @@ class Visualizer(ABC, Generic[V]):
     name: str
     delay = False
 
-    def __init__(self, config: ConfigVis[V]) -> None:
-        self.config = config
+    def __init__(self) -> None:
+        pass
 
     def __str__(self):
         return self.name

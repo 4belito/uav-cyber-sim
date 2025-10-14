@@ -2,8 +2,6 @@
 
 from dataclasses import dataclass
 
-import plotly.graph_objects as go  # type: ignore
-
 from config import Color
 from helpers.coordinates import (
     ENU,
@@ -27,6 +25,8 @@ COLOR_MAP: dict[Color, str] = {
 class GazWP:
     """Visual waypoint with position, color, size, and transparency in Gazebo."""
 
+    name: str
+    group: str
     pos: ENU
     color: Color = Color.GREEN
     radius: float = 0.2
@@ -60,6 +60,7 @@ class ConfigGazebo(ConfigVis[GazVehicle]):
         super().__init__()
         self.origin = origin
         self.world_path = world_path
+        self.traj_id = 0
 
     def add(
         self,
@@ -72,7 +73,9 @@ class ConfigGazebo(ConfigVis[GazVehicle]):
         home_path = base_home.to_abs_all(base_path)
         path = self.origin.to_abs_all(home_path)
         home = self.origin.to_abs(base_home)
-        mtraj = ConfigGazebo.create_mtraj(traj=path, color=color)
+        mtraj = ConfigGazebo.create_mtraj(
+            name=f"traj_{self.traj_id}", traj=path, color=color
+        )
         self.add_vehicle(
             GazVehicle(
                 model=model,
@@ -81,135 +84,11 @@ class ConfigGazebo(ConfigVis[GazVehicle]):
                 mtraj=mtraj,
             )
         )
-
-    def show(
-        self,
-        title: str = "Trajectories",
-        origin_color: Color = Color.WHITE,
-        frames: tuple[float, float, float] = (0.2, 0.2, 0.2),
-        ground: float | None = 0,
-    ) -> None:
-        """Render a 3D interactive plot of waypoint trajectories using Plotly."""
-        data, all_x, all_y, all_z = self._extract_plot_data()
-
-        # Add origin marker
-        ox, oy, oz, _ = self.origin
-        data.append(self._make_point(ENU(ox, oy, oz), "origin", origin_color))
-        all_x.append(ox)
-        all_y.append(oy)
-        all_z.append(oz)
-
-        ranges = self._compute_ranges(all_x, all_y, all_z, frames, ground)
-        fig: go.Figure = go.Figure(data)
-        fig.update_layout(  # type: ignore
-            title=dict(text=title, x=0.5, xanchor="center"),
-            scene=dict(
-                xaxis=dict(title="x", range=ranges[0]),
-                yaxis=dict(title="y", range=ranges[1]),
-                zaxis=dict(title="z", range=ranges[2]),
-            ),
-            width=800,
-            height=600,
-            showlegend=True,
-        )
-        fig.show()  # type: ignore
-
-    def _extract_plot_data(
-        self,
-    ) -> tuple[list[go.Scatter3d], list[float], list[float], list[float]]:
-        data: list[go.Scatter3d] = []
-        all_x: list[float] = []
-        all_y: list[float] = []
-        all_z: list[float] = []
-
-        for i, veh in enumerate(self.vehicles):
-            if not veh.mtraj:
-                continue
-            pos_color = ((w.pos.x, w.pos.y, w.pos.z, w.color) for w in veh.mtraj)
-            xs, ys, zs, colors = map(list, zip(*pos_color))
-            trace = self._make_traj(xs, ys, zs, colors, name=f"trajectory {i}")
-            data.append(trace)
-            all_x += xs
-            all_y += ys
-            all_z += zs
-
-        return data, all_x, all_y, all_z
-
-    def _make_traj(
-        self,
-        xs: list[float],
-        ys: list[float],
-        zs: list[float],
-        colors: list[Color],
-        name: str,
-        size: int = 6,
-    ) -> go.Scatter3d:
-        """Create a 3D scatter trace from trajectory coordinates and colors."""
-        return go.Scatter3d(
-            x=xs,
-            y=ys,
-            z=zs,
-            mode="markers",
-            marker=dict(size=size, color=[c.name.lower() for c in colors]),
-            name=name,
-        )
-
-    def _make_point(
-        self,
-        pos: ENU,
-        label: str,
-        color: Color = Color.BLACK,
-        size: int = 8,
-    ) -> go.Scatter3d:
-        """Create a labeled point marker for the 3D plot."""
-        return go.Scatter3d(
-            x=[pos[0]],
-            y=[pos[1]],
-            z=[pos[2]],
-            mode="markers+text",
-            marker=dict(size=size, color=color.name.lower()),
-            text=[label],
-            textposition="top center",
-            name=label,
-        )
-
-    def _compute_ranges(
-        self,
-        all_x: list[float],
-        all_y: list[float],
-        all_z: list[float],
-        frames: tuple[float, float, float],
-        ground: float | None,
-    ) -> list[list[float]]:
-        def scale(values: list[float], f: float) -> list[float]:
-            vmin, vmax = min(values), max(values)
-            margin = f * (vmax - vmin)
-            return [vmin - margin, vmax + margin]
-
-        x_range = scale(all_x, frames[0])
-        y_range = scale(all_y, frames[1])
-        z_range = scale(all_z, frames[2])
-        if ground is not None:
-            z_range[0] = ground
-        return [x_range, y_range, z_range]
-
-    def __str__(self) -> str:
-        lines = [
-            "ConfigGazebo:",
-            f"  world_path: {self.world_path}",
-            f"  origin: {self.origin}",
-            f"  vehicles ({len(self.vehicles)}):",
-        ]
-        for v in self.vehicles:
-            lines.append(f"    - model: {v.model}")
-            lines.append(f"      color: {v.color.name}")
-            lines.append(f"      trajectory ({len(v.mtraj)} waypoints):")
-            for wp in v.mtraj:
-                lines.append(f"        {wp}")
-        return "\n".join(lines)
+        self.traj_id += 1
 
     @staticmethod
     def create_mtraj(
+        name: str,
         traj: ENUs | ENUPoses,
         color: Color = Color.GREEN,
         radius: float = 0.2,
@@ -217,9 +96,11 @@ class ConfigGazebo(ConfigVis[GazVehicle]):
     ) -> GazTraj:
         """Create a trajectory from waypoints as GazWPMarker objects."""
         markertraj: GazTraj = []
-        for pos in traj:
+        for i, pos in enumerate(traj):
             markertraj.append(
                 GazWP(
+                    name=str(i),
+                    group=name,
                     pos=ENU(*pos[:3]),
                     color=color,
                     radius=radius,

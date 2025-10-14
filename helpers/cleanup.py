@@ -26,12 +26,12 @@ def kill_processes(victims: List[str]):
 
 
 def clean(
-    victims_process: List[str] = ALL_PROCESSES,
+    victim_processes: List[str] = ALL_PROCESSES,
     del_folders: list[Path] = [],
     reset_folders: list[Path] = [DATA_PATH, LOGS_PATH],
 ):
     """End the simulation."""
-    kill_processes(victims_process)
+    kill_processes(victim_processes)
     for folder in reset_folders + del_folders:
         del_folder(folder)
     for folder in reset_folders:

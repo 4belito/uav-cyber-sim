@@ -7,12 +7,19 @@ from __future__ import annotations
 
 import logging
 import time
+from abc import ABC, abstractmethod
 from enum import StrEnum
-from functools import partial
-from typing import Callable, Generic, List, Self, TypeVar, cast
+from typing import Generic, List, Self, TypeVar, cast
 
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.coordinates import ENU
+
+# TODO: Check binding of conn in Action and Step,
+# i think conn can be passed when actions/steps are instantiated
+
+# TODO: Treat concurrency Actions better usigng block and timeout
+
+# TODO: Check if NOT_STARTED and DONE may be combined into a single state
 
 
 class State(StrEnum):
@@ -46,6 +53,7 @@ class ActionNames(StrEnum):
     UPLOAD_MISSION = "UPLOAD_MISSION"
     WAIT = "WAIT"
     MONITOR_MISSION = "MONITOR_MISSION"
+    AVOIDANCE = "AVOIDANCE"
 
 
 class StepFailed(Exception):
@@ -53,7 +61,7 @@ class StepFailed(Exception):
 
 
 # pylint: disable=too-many-instance-attributes
-class MissionElement:
+class MissionElement(ABC):
     """
     Base class for mission components like steps and actions.
     Handles state, chaining, and verbosity.
@@ -77,8 +85,10 @@ class MissionElement:
         self.curr_pos: ENU | None = None  # Default current position
         self.sysid: int = cast(int, None)
 
+    @abstractmethod
     def act(self):
         """Execute the mission lement action; override in subclasses."""
+        pass
 
     def reset(self):
         """Reset the mission element to the NOT_STARTED state."""
@@ -100,26 +110,25 @@ class MissionElement:
         )
 
 
-class Step(MissionElement):
+class Step(MissionElement, ABC):
     """Executable mission step with a check and optional execution function."""
 
-    # pylint: disable=too-many-arguments
-    # pylint: disable=too-many-positional-arguments
     def __init__(
         self,
         name: str,
-        onair: bool,
-        check_fn: Callable[[MAVConnection], tuple[bool, ENU | None]],
-        exec_fn: Callable[[MAVConnection], None],
-        target_pos: ENU = ENU(0, 0, 0),
         emoji: str = "🔹",
     ) -> None:
-        self.exec_fn = exec_fn
-        self.check_fn = check_fn
-        self.curr_pos: ENU | None = None
-        self.onair = onair
-        self.target_pos = target_pos
         super().__init__(name=name, emoji=emoji)
+
+    @abstractmethod
+    def exec_fn(self, conn: MAVConnection) -> None:
+        """Execute the step; override in subclasses."""
+        pass
+
+    @abstractmethod
+    def check_fn(self, conn: MAVConnection) -> bool:
+        """Check if the step is complete; override in subclasses."""
+        pass
 
     def execute(self) -> None:
         """Execute the step and change state to IN_PROGRESS."""
@@ -129,9 +138,7 @@ class Step(MissionElement):
 
     def check(self) -> None:
         """Check step completion and updates state and position."""
-        answer, curr_pos = self.check_fn(self.conn)
-        if curr_pos is not None:
-            self.curr_pos = curr_pos
+        answer = self.check_fn(self.conn)
         if answer:
             self.state = State.DONE
             logging.debug(
@@ -160,31 +167,23 @@ class Step(MissionElement):
         """Reset the step state and clear current position."""
         super().reset()
         self.curr_pos = None
-
-    @staticmethod
-    def noop_exec(_conn: MAVConnection) -> None:
-        """No execution."""
-        pass
-
-    @staticmethod
-    def noop_check(_conn: MAVConnection) -> tuple[bool, None]:
-        """No checking."""
-        return True, None
-
-    @staticmethod
-    def exec_wait(_conn: MAVConnection, t: float = 0) -> None:
-        """No execution."""
-        time.sleep(t)
+        self.onair = None
+        self.target_pos = None
 
     @classmethod
-    def make_wait(cls, t: float = 0) -> Self:
+    def make_wait(cls, t: float = 0) -> Step:
         """Wait for t seconds."""
-        return cls(
-            "wait",
-            exec_fn=partial(cls.exec_wait, t=t),
-            check_fn=partial(cls.noop_check),
-            onair=False,
-        )
+
+        class Wait(Step):
+            def exec_fn(self, conn: MAVConnection) -> None:
+                """Wait for t seconds and return True."""
+                time.sleep(t)
+
+            def check_fn(self, conn: MAVConnection) -> bool:
+                """No checking."""
+                return True
+
+        return Wait(name=f"wait {t} seconds", emoji="⏱️")
 
 
 T = TypeVar("T", bound=MissionElement)
@@ -200,15 +199,9 @@ class Action(MissionElement, Generic[T]):
         self,
         name: str,
         emoji: str = "🔘",
-        onair: bool | None = None,
-        curr_pos: ENU | None = None,
-        target_pos: ENU | None = None,
     ) -> None:
         self.steps: List[T] = []
         self.current: T | None = None
-        self.onair = onair
-        self.curr_pos = curr_pos
-        self.target_pos = target_pos
         super().__init__(name=name, emoji=emoji)  # ✅ no-op
 
     def add(self, step: T) -> None:
@@ -224,6 +217,8 @@ class Action(MissionElement, Generic[T]):
             self.current = step
             self.onair = step.onair
         self.target_pos = step.target_pos
+        if self.state == State.DONE:
+            self.state = State.IN_PROGRESS
 
     def act(self):
         """Execute current step based on the action's state."""
@@ -265,7 +260,7 @@ class Action(MissionElement, Generic[T]):
             )
         else:
             step.act()
-            self.update_pos(step)
+            self.update(step)
 
     def _log_already_done(self):
         logging.warning(
@@ -279,9 +274,12 @@ class Action(MissionElement, Generic[T]):
             f"Already failed! Cannot perform this again!"
         )
 
-    def update_pos(self, step: T):
+    def update(self, step: T):
         """Update current position and onair status based on a Step."""
-        self.onair = step.onair
+        if step.target_pos is not None:
+            self.target_pos = step.target_pos
+        if step.onair is not None:
+            self.onair = step.onair
         if step.curr_pos is not None:
             self.curr_pos = step.curr_pos
 

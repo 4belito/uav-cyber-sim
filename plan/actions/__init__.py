@@ -5,7 +5,7 @@ from .change_mode import make_set_mode
 from .change_parameter import make_change_nav_speed
 from .land import make_land
 from .monitoring import make_monitoring
-from .navegation import make_go_to, make_path
+from .navegation import make_path_global, make_path_local
 from .pre_arm import make_pre_arm
 from .start_mission import make_start_mission
 from .take_off import make_takeoff
@@ -18,8 +18,8 @@ __all__ = [
     "make_takeoff",
     "make_land",
     "make_change_nav_speed",
-    "make_path",
-    "make_go_to",
+    "make_path_global",
+    "make_path_local",
     "make_start_mission",
     "make_upload_mission",
     "make_monitoring",

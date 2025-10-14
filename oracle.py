@@ -256,7 +256,6 @@ class Oracle:  # UAVMonitor
                     logging.info(f"UAV {sysid} completed mission and exited")
                     break
                 rid: RIDData = msg
-                logging.debug(f"Received rid msg {msg}")
                 if sysid in self._seen_in_grid:
                     self.grid.update(sysid, rid)
                 else:
@@ -296,7 +295,9 @@ class Oracle:  # UAVMonitor
                     sysid, rid.enu_pos, radius=None
                 ):
                     o_rid = self.grid.rid(o_sysid)
-                    logging.debug(f"{sysid}({o_rid}) -> {o_sysid} ({o_rid})")
+                    logging.debug(
+                        f"{sysid}: {o_rid.enu_pos} -> {o_sysid}: {o_rid.enu_pos}"
+                    )
                     # TODO: get this information with certainty instead of allowing None
                     o_sysids.append(o_sysid)
                 #     o_data = o_rid.data

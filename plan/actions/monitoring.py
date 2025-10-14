@@ -8,66 +8,92 @@ format.
 """
 
 import logging
-from functools import partial
 
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import MsgID
-from helpers.connections.mavlink.streams import ask_msg, stop_msg
+from helpers.connections.mavlink.streams import stop_msg
+from helpers.coordinates import GRA
 from plan import Action, ActionNames
 from plan.core import Step
 
 
-def make_monitoring(items: list[int] = []) -> Action[Step]:
+def make_monitoring(
+    gra_origin: GRA,
+    items: list[int] = [],
+) -> Action[Step]:
     """Monitor mission items."""
     monitoring = Action[Step](name=ActionNames.MONITOR_MISSION, emoji="👁️")
-    for i in items:
-        monitoring.add(
-            Step(
-                f"check item {i}",
-                exec_fn=Step.noop_exec,
-                check_fn=partial(check_item, seq=i),
-                onair=False,
+
+    class CheckItem(Step):
+        def __init__(self, name: str, emoji: str = "🔹", item: int = 0):
+            super().__init__(name, emoji)
+            self.item = item
+
+        def exec_fn(self, conn: MAVConnection) -> None:
+            """No execution needed; just checking."""
+            pass
+
+        def check_fn(self, conn: MAVConnection) -> bool:
+            """Check if a item is reached."""
+            msg = conn.recv_match(type="MISSION_ITEM_REACHED")
+            # logging.debug(f"Vehicle {conn.target_system}: MISSION_ITEM_REACHED: {msg}")
+            if msg:
+                if msg.seq == self.item:
+                    logging.info(
+                        f"Vehicle {conn.target_system}: ⭐ Reached item: {msg.seq}"
+                    )
+                    return True
+            return False
+
+    class NextWaypoint(Step):
+        def __init__(self, name: str, emoji: str = "📌", item_seq: int = 1):
+            super().__init__(name, emoji)
+            self.item_seq = item_seq
+
+        def exec_fn(self, conn: MAVConnection) -> None:
+            """Request the next waypoint from the UAV."""
+            exec_next_waypoint(conn, self.item_seq)
+
+        def check_fn(self, conn: MAVConnection) -> bool:
+            """Check the next waypoint from the UAV."""
+            item = conn.recv_match(type="MISSION_ITEM")
+            if not item:
+                return False
+            logging.debug(f"Vehicle {conn.target_system}: MISSION_ITEM: {item}")
+            gra_wp = GRA(lat=item.x, lon=item.y, alt=item.z)  # type: ignore
+            self.target_pos = gra_origin.to_rel(gra_wp)
+            logging.info(
+                f"Vehicle {conn.target_system}: 📍 Target Position: {self.target_pos}"
             )
+            return True
+
+    monitoring.add(NextWaypoint(name=f"next waypoint {items[0]}", item_seq=items[0]))
+    for i in range(1, len(items) - 1):
+        monitoring.add(CheckItem(name=f"check item {i}", item=items[i]))
+        monitoring.add(
+            NextWaypoint(name=f"next waypoint {items[i + 1]}", item_seq=items[i + 1])
         )
-    monitoring.add(
-        Step(
-            "check mission completion",
-            exec_fn=Step.noop_exec,
-            check_fn=check_endmission,
-            onair=False,
-        )
-    )
+
+    class CheckEndMission(Step):
+        def exec_fn(self, conn: MAVConnection) -> None:
+            """Start monitoring the UAV by requesting periodic GLOBAL_POSITION_INT."""
+            pass
+
+        def check_fn(self, conn: MAVConnection) -> bool:
+            """Check mission completion."""
+            msg = conn.recv_match(type="STATUSTEXT")
+            if msg:
+                text = msg.text.strip().lower()
+                if "disarming" in text:
+                    logging.info(f"Vehicle {conn.target_system}: Mission completed")
+                    stop_msg(conn, msg_id=MsgID.GLOBAL_POSITION_INT)
+                    return True
+            return False
+
+    monitoring.add(CheckEndMission(name="check end mission"))
     return monitoring
 
 
-def check_item(conn: MAVConnection, seq: int) -> tuple[bool, None]:
-    """Check if a item is reached."""
-    msg = conn.recv_match(type="MISSION_ITEM_REACHED", blocking=True)
-    if msg:
-        if msg.seq == seq:
-            logging.info(
-                f"Vehicle {conn.target_system}: ⭐ Reached waypoint: {msg.seq}"
-            )
-            return True, None
-    else:
-        logging.warning(
-            f"Vehicle {conn.target_system}: loss reached item {seq} message"
-        )
-    return False, None
-
-
-def check_endmission(conn: MAVConnection) -> tuple[bool, None]:
-    """Check mission completion."""
-    msg = conn.recv_match(type="STATUSTEXT", blocking=True)
-    if msg:
-        text = msg.text.strip().lower()
-        if "disarming" in text:
-            logging.info(f"Vehicle {conn.target_system}: Mission completed")
-            stop_msg(conn, msg_id=MsgID.GLOBAL_POSITION_INT)
-            return True, None
-    return False, None
-
-
-def exec_monitoring(conn: MAVConnection) -> None:
-    """Start monitoring the UAV by requesting periodic GLOBAL_POSITION_INT."""
-    ask_msg(conn, msg_id=MsgID.GLOBAL_POSITION_INT, interval=100_000)
+def exec_next_waypoint(conn: MAVConnection, item_seq: int = 1) -> None:
+    """Request the next waypoint from the UAV."""
+    conn.mav.mission_request_send(conn.target_system, conn.target_component, item_seq)

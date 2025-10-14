@@ -2,8 +2,6 @@
 
 import logging
 
-import pymavlink.dialects.v20.ardupilotmega as mavlink
-
 from helpers.coordinates import ENU, GRA
 
 from .customtypes.mavconn import MAVConnection
@@ -77,10 +75,9 @@ def get_ENU_position(conn: MAVConnection) -> ENU | None:
     return None
 
 
-def get_GRA_position(
-    msg: mavlink.MAVLink_global_position_int_message, sysid: int
-) -> GRA:
-    """Request and return the UAV's current local NED position."""
-    gra = GRA.from_global_int(msg.lat, msg.lon, msg.relative_alt)
-    logging.debug(f"Vehicle {sysid}: 📍 Position: {gra} m")
-    return gra
+def get_GRA_position(conn: MAVConnection) -> GRA | None:
+    """Request and return the UAV's current global position."""
+    msg = conn.recv_match(type="GLOBAL_POSITION_INT", blocking=True, timeout=0.001)
+    if msg:
+        return GRA.from_global_int(msg.lat, msg.lon, msg.relative_alt)  # type: ignore
+    return None

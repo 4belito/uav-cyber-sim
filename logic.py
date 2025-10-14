@@ -6,7 +6,7 @@ import argparse
 import json
 import logging
 import time
-from enum import StrEnum
+from queue import Empty
 from typing import TypedDict
 
 from pymavlink import mavutil
@@ -19,22 +19,15 @@ from helpers.connections.mavlink.conn import (
     send_heartbeat,
 )
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
-from helpers.connections.mavlink.enums import CmdCustom
-from helpers.coordinates import ENU, GRA
-from helpers.rid import RIDManager
+from helpers.connections.mavlink.enums import CmdCustom, CopterMode
+from helpers.coordinates import ENU, GRA, XY
+from helpers.rid import RIDData, RIDManager
 from helpers.setup_log import setup_logging
 from params.simulation import HEARTBEAT_FREQUENCY, REMOTE_ID_FREQUENCY
-from plan import Action, Plan, State, Step
+from plan import Action, ActionNames, Plan, State, Step
+from plan.actions import make_set_mode
+from plan.actions.navegation import GoToGlobal
 
-######################################################################
-# NOTE: The plans have to only be hardcoded when using the GUIDED mode.
-mission = True
-if not mission:
-    plans = [
-        Plan.auto(name="square_auto", mission_path=f"plan/missions/square_{i + 1}")
-        for i in range(5)
-    ]
-########################################
 # TODO: Refactor this module
 heartbeat_event = mavutil.periodic_event(HEARTBEAT_FREQUENCY)
 rid_event = mavutil.periodic_event(REMOTE_ID_FREQUENCY)
@@ -54,8 +47,8 @@ def start_logic(config: LogicConfig):
     port_offset = config["port_offset"]
     monitored_items = config["monitored_items"]
     gra_orign = GRA(**config["gra_origin_dict"])
+    navegation_speed = config["navegation_speed"]
 
-    i = sysid - 1
     lg_conn = create_tcp_conn(
         base_port=BasePort.LOG, offset=port_offset, role="server", sysid=sysid
     )
@@ -67,10 +60,12 @@ def start_logic(config: LogicConfig):
 
     plan = Plan.auto(
         name="auto",
+        gra_origin=gra_orign,
         mission_path=str(DATA_PATH / f"mission_{sysid}.waypoints"),
         monitored_items=monitored_items,
+        navegation_speed=navegation_speed,
     )
-    logic = VehicleLogic(lg_conn, plan=plan if mission else plans[i])
+    logic = VehicleLogic(lg_conn, plan=plan, gra_origin=gra_orign)
 
     try:
         while True:
@@ -78,22 +73,26 @@ def start_logic(config: LogicConfig):
                 send_heartbeat(lg_conn)
                 send_heartbeat(cs_conn)
 
-            if rid_event.trigger():
+            if rid_event.trigger() and rid_mnng.pending:
                 try:
+                    logic.rid = rid_mnng.data
                     rid_mnng.publish()
                 except Exception as e:
                     logging.error(f"Error sending RID data: {e}")
                     pass
-
+            # logging.info(f"Vehicle {sysid} plan_state: {logic.plan.state}")
             if logic.plan.state == State.DONE:
-                msg_proxy = mavlink.MAVLink_statustext_message(
-                    severity=6, text=b"LOGIC_DONE"
-                )
-                logging.info(f"Proxy ← Logic {sysid}: Sending LOGIC_DONE")
-                lg_conn.mav.send(msg_proxy)
-                send_done_until_ack(cs_conn, sysid)
+                logic.send_done_msgs(cs_conn)
                 break
-
+            try:
+                o_rid = rid_mnng.received_rid.get_nowait()
+                # TODO: handle multiple obstacles
+                logging.debug(
+                    f"Get RID:{o_rid and o_rid.enu_pos} from the received_queeue"
+                )
+                logic.check_avoidance(o_rid)
+            except Empty:
+                pass
             logic.act()
             time.sleep(0.01)
     finally:
@@ -110,36 +109,7 @@ class LogicConfig(TypedDict):
     gra_origin_dict: dict[str, float]
     port_offset: int
     monitored_items: list[int]
-
-
-def send_done_until_ack(conn: MAVConnection, idx: int, max_tries: float = float("inf")):
-    """
-    Send 'DONE' via STATUSTEXT repeatedly until receiving a COMMAND_ACK.
-    Assumes `conn` is a dedicated MAVLink connection for one UAV.
-    """
-    msg = mavlink.MAVLink_statustext_message(severity=6, text=b"DONE")
-    i = 0
-    while i < max_tries:
-        logging.debug(f"GCS ← UAV {idx}: Sending DONE (attempt {i + 1})")
-        conn.mav.send(msg)
-
-        start = time.time()
-        while time.time() - start < 0.05:
-            ack = conn.recv_match(type="COMMAND_ACK", blocking=False)
-            if ack and ack.command == CmdCustom.PLAN_DONE:
-                logging.info("ACK received. DONE message acknowledged")
-                return
-            time.sleep(0.001)
-        i += 1
-
-    logging.warning("No ACK received after max attempts")
-
-
-class VehicleMode(StrEnum):
-    """Defines operational modes for the UAV."""
-
-    MISSION = "MISSION"  # or "MISSION", "WAYPOINT_NAV"
-    AVOIDANCE = "AVOIDANCE"  # or "COLLISION_AVOIDANCE"
+    navegation_speed: float
 
 
 class VehicleLogic:
@@ -149,23 +119,31 @@ class VehicleLogic:
         self,
         connection: MAVConnection,
         plan: Plan,
+        gra_origin: GRA,
         safety_radius: float = 5,
-        radar_radius: float = 10,
     ):
         # Vehicle Creation
         self.conn = connection
         self.sysid = connection.target_system
         self.name = f"Logic 🧠 {self.sysid}"
 
-        # Mode Properties
-        self.mode = VehicleMode.MISSION
+        # Plan Properties
         self.plan = plan
         self.plan.bind(self.conn)
-        self.back_mode = VehicleMode.MISSION
+
+        # Avoidance Actions
+        self.set_guided = make_set_mode(CopterMode.GUIDED)
+        self.set_guided.bind(self.conn)
+        self.set_auto = make_set_mode(CopterMode.AUTO)
+        self.set_auto.bind(self.conn)
+        self.mode = CopterMode.AUTO
+        self.avoidance_action = Action[Step](name=ActionNames.AVOIDANCE, emoji="🚧")
+        self.avoidance_action.bind(self.conn)
+        self.gra_origin = gra_origin
 
         # Communication properties (positions are local)
         self.safety_radius: float = safety_radius
-        self.radar_radius: float = radar_radius
+        self.rid: RIDData | None = None
 
         logging.info(f"{self.name}: launching")
 
@@ -173,13 +151,38 @@ class VehicleLogic:
         """Perform the next step in the mission plan."""
         self.plan.act()
 
-    def set_mode(self, new_mode: VehicleMode) -> None:
-        """Switch the vehicle to a new operational mode."""
-        if new_mode != self.mode:
-            logging.info(
-                f"{self.name}: Vehicle {self.sysid} switched to mode: {new_mode}"
-            )
-            self.mode = new_mode
+    def send_done_msgs(self, cs_conn: MAVConnection) -> None:
+        """Notify the GCS that the mission is done."""
+        done_msg = mavlink.MAVLink_statustext_message(severity=6, text=b"LOGIC_DONE")
+        logging.info(f"Proxy ← Logic {self.sysid}: Sending LOGIC_DONE")
+        self.conn.mav.send(done_msg)  # This is tcp connection, no ack need it.
+        self.send_msg_until_ack(cs_conn, done_msg, CmdCustom.LOGIC_DONE)
+
+    def send_msg_until_ack(
+        self,
+        conn: MAVConnection,
+        msg: mavlink.MAVLink_statustext_message,
+        ack_cmd: CmdCustom,
+        max_tries: float = float("inf"),
+    ):
+        """
+        Send 'DONE' via STATUSTEXT repeatedly until receiving a COMMAND_ACK.
+        Assumes `conn` is a dedicated MAVLink connection for one UAV.
+        """
+        i = 0
+        while i < max_tries:
+            logging.debug(f"GCS ← UAV {self.sysid}: Sending DONE (attempt {i + 1})")
+            conn.mav.send(msg)
+            start = time.time()
+            while time.time() - start < 0.05:
+                ack = conn.recv_match(type="COMMAND_ACK", blocking=False)
+                if ack and ack.command == ack_cmd:
+                    logging.info("ACK received. DONE message acknowledged")
+                    return
+                time.sleep(0.001)
+            i += 1
+
+        logging.warning("No ACK received after max attempts")
 
     @property
     def current_action(self) -> Action[Step] | None:
@@ -217,6 +220,113 @@ class VehicleLogic:
         with open(config_path) as f:
             logic_config: LogicConfig = json.load(f)
         return logic_config
+
+    ## Passive avoidance
+    def check_avoidance(self, o_rid: RIDData):
+        """Check for nearby obstacles and perform avoidance maneuvers if necessary."""
+        target_pos = self.plan.target_pos
+        logging.debug(f"POS: {self.rid and self.rid.enu_pos} TARGET_POS: {target_pos}")
+        if self.rid is None or target_pos is None:
+            return
+        pos = self.rid.enu_pos
+        o_pos = o_rid.enu_pos
+        obst_dist = ENU.distance(pos, o_pos)
+        logging.debug(
+            (
+                f"Vehicle {self.sysid} obstacle {o_rid.sysid} at distance "
+                f"{obst_dist:.2f} m compared to safety radius "
+                f"{self.safety_radius} m"
+            )
+        )
+        if obst_dist < self.safety_radius:
+            logging.info(
+                (
+                    f"Vehicle {self.sysid} obstacle {o_rid.sysid} too close "
+                    f"({obst_dist:.2f} m < {self.safety_radius} m), performing avoidance"
+                )
+            )
+            avoid_pos = self.get_avoidance_pos(o_pos, target_pos, obst_dist)
+            if avoid_pos is not None:
+                # TODO: Refactor this logic
+                logging.info(
+                    f"Vehicle {self.sysid} avoiding to {avoid_pos}: "
+                    f"mode: {self.mode} action_state: {self.avoidance_action.state}"
+                )
+                if (
+                    self.mode == CopterMode.GUIDED
+                    and self.avoidance_action.state == State.DONE  # check this later
+                ):
+                    gra_avoid_pos = self.gra_origin.to_abs(avoid_pos)
+                    go_to_step = GoToGlobal(
+                        wp=gra_avoid_pos, cause_text="avoidance", stop_asking=False
+                    )
+                    go_to_step.bind(self.conn)
+                    self.avoidance_action.add(go_to_step)
+                    logging.info(
+                        f"Vehicle {self.sysid} continuing avoidance to {avoid_pos}"
+                    )
+                elif self.mode == CopterMode.AUTO:
+                    gra_avoid_pos = self.gra_origin.to_abs(avoid_pos)
+                    go_to_step = GoToGlobal(
+                        wp=gra_avoid_pos, cause_text="avoidance", stop_asking=False
+                    )
+                    go_to_step.bind(self.conn)
+                    self.avoidance_action.add(go_to_step)
+                    while self.set_guided.state != State.DONE:
+                        self.set_guided.act()
+                    self.set_guided.reset()
+                    self.mode = CopterMode.GUIDED
+                    logging.info(f"Vehicle {self.sysid} switched to GUIDED mode")
+        logging.debug(f"Vehicle {self.sysid} no avoidance needed")
+        logging.debug(
+            f"mode {self.mode.name}, plan_state {self.plan.current and self.plan.current.state}"
+        )
+        if self.mode == CopterMode.GUIDED:
+            if self.avoidance_action.state == State.DONE:
+                while self.set_auto.state != State.DONE:
+                    self.set_auto.act()
+                self.set_auto.reset()
+                self.mode = CopterMode.AUTO
+                logging.info(f"Vehicle {self.sysid} switched to AUTO mode")
+            else:
+                self.avoidance_action.act()
+
+    def get_avoidance_pos(
+        self,
+        obst_pos: ENU,
+        target_pos: ENU,
+        obst_dist: float,
+        direction: str = "left",
+        safety_coef: float = 1 / 3,  # magic number to increase the distance
+    ) -> ENU | None:
+        """
+        Send a velocity command in body frame, orthogonal to the direction of wp.
+        `direction` can be 'left' or 'right' (relative to wp direction).
+        """
+        # Normalize wp direction (ignore Z)
+        if self.rid is None:
+            raise ValueError("Current position is None")
+        curr_pos = self.rid.enu_pos
+
+        obj_dir = XY(*ENU.sub(obst_pos, curr_pos)[:2])
+        target_dir = XY(*ENU.sub(target_pos, curr_pos)[:2])
+        if XY.dot(obj_dir, target_dir) < 0:
+            return None
+        # distance = math.sqrt(self.safety_radius**2 - obst_dist**2) * safety_coef
+        # distance = self.safety_radius * safety_coef
+        # obj_dir = obj_dir.scale(distance / obj_dir.norm())
+        # Get orthogonal direction
+        if direction == "left":
+            ortho = ENU(x=-obj_dir.y, y=obj_dir.x, z=0)
+        elif direction == "right":
+            ortho = ENU(x=obj_dir.y, y=-obj_dir.x, z=0)
+        else:
+            raise ValueError("Direction must be 'left' or 'right'")
+
+        # Scale to desired speed
+        return ENU.add(
+            curr_pos, ortho.scale(self.safety_radius * safety_coef / ortho.norm())
+        )
 
 
 def parse_arguments() -> tuple[str, int | None]:

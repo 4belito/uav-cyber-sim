@@ -9,6 +9,8 @@ It modifies the QGroundControl.ini file to set up connection links for each UAV.
 import logging
 import os
 
+import folium
+
 from config import QGC_INI_PATH, QGC_PATH, BasePort
 from helpers.processes import create_process
 
@@ -16,6 +18,8 @@ from helpers.processes import create_process
 from params.simulation import CONNECT_GCS_TO_ARP
 from simulator.QGroundControl.config import ConfigQGC, QGCVehicle
 from simulator.visualizer import Visualizer
+
+from .config import QGCWP
 
 
 class QGC(Visualizer[QGCVehicle]):
@@ -35,7 +39,17 @@ class QGC(Visualizer[QGCVehicle]):
         self,
         config: ConfigQGC,
     ):
-        super().__init__(config)
+        super().__init__()
+        self.config = config
+        self.markers: list[QGCWP] = self.traj_wps()
+
+    def traj_wps(self):
+        """Generate a list of waypoints from all vehicle missions."""
+        markers: list[QGCWP] = []
+        for veh in self.config.vehicles:  # add more colors if needed
+            for wp in veh.mission.traj:
+                markers.append(wp)
+        return markers
 
     def add_vehicle_cmd(self, i: int):
         """Add GRA location to the vhecle comand."""
@@ -59,6 +73,16 @@ class QGC(Visualizer[QGCVehicle]):
             "🗺️  QGroundControl launched for 2D visualization — simulation powered "
             "by ArduPilot SITL."
         )
+
+    def show(self):
+        """Display the vehicles trajectories and origin in GRA coordinates."""
+        lat0, lon0, *_ = self.config.origin
+        m = folium.Map(location=[lat0, lon0], zoom_start=18)
+
+        # Plot each UAV's path
+        for marker in self.markers:  # add more colors if needed
+            marker.pos.draw(m, marker.name, marker.color)
+        return m
 
     def _delete_all_links(self):
         with open(QGC_INI_PATH, "r", encoding="utf-8") as f:

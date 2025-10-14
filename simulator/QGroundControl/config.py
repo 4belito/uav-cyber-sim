@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 
 import folium
-from IPython.display import display  # type: ignore
 
 from config import Color
 from helpers.coordinates import (
@@ -22,6 +21,7 @@ from simulator.visualizer import ConfigVis
 class QGCWP:
     """Visual waypoint with position, color, size, and transparency in Gazebo."""
 
+    name: str
     pos: GRA
     color: Color = Color.GREEN
 
@@ -35,7 +35,8 @@ class Mission:
 
     traj: QGCTraj
     delay: int  # in sec
-    n_items: int
+    land: bool = True
+    speed: float = 5.0  # m/s
 
 
 @dataclass
@@ -69,14 +70,15 @@ class ConfigQGC(ConfigVis[QGCVehicle]):
         base_home: ENUPose,
         color: Color = Color.BLUE,
         mission_delay: int = 0,  # sec
+        land: bool = True,
+        speed: float = 5.0,  # m/s
     ) -> None:
         """Shortcut to add a vehicle from a raw path."""
         home_path = base_home.to_abs_all(base_path)
         path = self.origin.to_abs_all(home_path)
         home = self.origin.to_abs(base_home)
         traj = ConfigQGC.create_mtraj(traj=path, color=color)
-        n_items = len(traj) + 2 + int(mission_delay > 0)
-        mission = Mission(traj=traj, delay=mission_delay, n_items=n_items)
+        mission = Mission(traj=traj, delay=mission_delay, land=land, speed=speed)
         self.add_vehicle(QGCVehicle(home=home, mission=mission))
 
     def __str__(self) -> str:
@@ -91,21 +93,6 @@ class ConfigQGC(ConfigVis[QGCVehicle]):
                 lines.append(f"        {wp}")
         return "\n".join(lines)
 
-    def show(self, origin_color: Color = Color.WHITE):
-        """Display the vehicles trajectories and origin in GRA coordinates."""
-        lat0, lon0, *_ = self.origin
-        m = folium.Map(location=[lat0, lon0], zoom_start=18)
-
-        # Plot each UAV's path
-        for veh in self.vehicles:  # add more colors if needed
-            for i, wp in enumerate(veh.mission.traj):
-                wp.pos.draw(m, f"pos_{i}", wp.color)
-
-        # Plot origin
-        self.origin.unpose().draw(m, "Origin", origin_color)
-        display(m)
-        return m
-
     @staticmethod
     def create_mtraj(
         traj: GRAs | GRAPoses,
@@ -116,8 +103,8 @@ class ConfigQGC(ConfigVis[QGCVehicle]):
         WaypointMarker objects.
         """
         mtraj: QGCTraj = []
-        for pos in traj:
-            mtraj.append(QGCWP(pos=GRA(*pos[:3]), color=color))
+        for i, pos in enumerate(traj):
+            mtraj.append(QGCWP(name=f"wp_{i}", pos=GRA(*pos[:3]), color=color))
         return mtraj
 
     @staticmethod

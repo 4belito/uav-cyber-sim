@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import copy
 import logging
 import math
 import threading
 import time
 from dataclasses import dataclass
+from queue import Queue
 from typing import cast
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
@@ -23,9 +25,9 @@ mav = mavutil.mavlink.MAVLink(None)
 
 def parse_one(buf: bytes) -> mavlink.MAVLink_gps_raw_int_message:
     """Parse a single MAVLink message from a byte buffer."""
-    msgs: list[mavlink.MAVLink_gps_raw_int_message] = mav.parse_buffer(buf)  # type: ignore
+    msg: mavlink.MAVLink_gps_raw_int_message = mav.parse_buffer(buf)[0]  # type: ignore
     try:
-        return msgs[0]
+        return msg
     except Exception as e:
         raise ValueError(f"Failed to parse MAVLink message: {e}")
 
@@ -58,6 +60,7 @@ class RIDManager:
         self.gra_origin = gra_origin
         self.sysid = sysid
         self.data: RIDData
+        self.received_rid: Queue[RIDData] = Queue()
         self._lock = threading.Lock()  # ???
         self._stop = threading.Event()
         self.pending = False  # whether there is new data to publish
@@ -138,7 +141,13 @@ class RIDManager:
         """Send current RID snapshot (pyobj) to oracle."""
         with self._lock:
             if self.pending:
-                self._out_sock.send_pyobj(self.data)  # type: ignore
+                if self.sysid == 255:
+                    send_data = copy.copy(self.data)
+                    send_data.enu_pos = ENU(0, 0, 5)
+                else:
+                    send_data = self.data
+                # logging.debug(f"SEND DATA RID({self.sysid}): {self.data}")
+                self._out_sock.send_pyobj(send_data)  # type: ignore
                 self.pending = False
 
     # --- background loops ------------------------------------------------------
@@ -155,7 +164,7 @@ class RIDManager:
                     and msg.get_type() == "GLOBAL_POSITION_INT"
                     and (msg.lat != 0 or msg.lon != 0)
                 ):
-                    logging.debug(f"RID({self.sysid}) collect: {msg.to_dict()}")
+                    # logging.debug(f"RID({self.sysid}) collect: {msg.to_dict()}")
                     self.update(msg.to_dict())
             except zmq.Again:
                 continue
@@ -168,7 +177,8 @@ class RIDManager:
         while not self._stop.is_set():
             try:
                 rid: RIDData = sock.recv_pyobj()  # type: ignore
-                logging.debug(f"Uav {self.sysid} received RID: {rid}")
+                self.received_rid.put(rid)
+                # logging.debug(f"Uav {self.sysid} received RID: {rid.sysid}")
             except zmq.Again:
                 continue
             except Exception as e:

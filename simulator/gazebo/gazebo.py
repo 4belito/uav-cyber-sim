@@ -20,12 +20,18 @@ import shutil
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import plotly.graph_objects as go
+
 from config import ARDUPILOT_GAZEBO_MODELS, ENV_CMD_GAZ
 from helpers import create_process
 from helpers.coordinates import XYZRPY, GRAPose
 from helpers.math import heading_to_yaw
 from simulator.gazebo.config import COLOR_MAP, ConfigGazebo, GazVehicle, GazWP
 from simulator.visualizer import Visualizer
+
+Trace = tuple[
+    list[float], list[float], list[float], list[float], list[float], list[str]
+]
 
 
 class Gazebo(Visualizer[GazVehicle]):
@@ -42,9 +48,10 @@ class Gazebo(Visualizer[GazVehicle]):
         config: ConfigGazebo,
         gra_origin: GRAPose,
     ):
-        super().__init__(config)
-        self.origin_str = ",".join(map(str, gra_origin))
+        super().__init__()
+        self.origin_str: str = ",".join(map(str, gra_origin))
         self.config: ConfigGazebo = config
+        self.markers: list[GazWP] = self.traj_wps()
 
     def add_vehicle_cmd(self, i: int) -> str:
         """Add gazebo model (only iris TODO: add others)."""
@@ -53,7 +60,9 @@ class Gazebo(Visualizer[GazVehicle]):
     def launch(self, port_offsets: list[int]):
         """Launch the Gazebo simulator with the specified UAV and waypoints."""
         base_models = [f"{veh.model}_{veh.color}" for veh in self.config.vehicles]
-        self._generate_drone_models_from_bases(base_models, base_port_in=9002, step=10)
+        self._generate_drone_models_from_bases(
+            base_models, base_port_in=9002, port_step=10
+        )
         updated_world = self._update_world(self.config.world_path)
         create_process(
             f"gazebo {updated_world}",
@@ -65,11 +74,103 @@ class Gazebo(Visualizer[GazVehicle]):
             "🖥️  Gazebo launched for realistic simulation and 3D visualization."
         )
 
+    def traj_wps(self) -> list[GazWP]:
+        """Obtain trajectories waypoints to Gazebo."""
+        wps: list[GazWP] = []
+        for veh in self.config.vehicles:
+            for waypoint in veh.mtraj:
+                wps.append(waypoint)
+        return wps
+
+    def show(
+        self,
+        title: str = "Trajectories",
+        frames: tuple[float, float, float] = (0.2, 0.2, 0.2),
+        ground: float | None = 0,
+    ) -> None:
+        """Render a 3D interactive plot of waypoint trajectories using Plotly."""
+        data, all_x, all_y, all_z = self._extract_plot_data()
+
+        ranges = self._compute_ranges(all_x, all_y, all_z, frames, ground)
+        fig: go.Figure = go.Figure(data)
+        fig.update_layout(  # type: ignore
+            title=dict(text=title, x=0.5, xanchor="center"),
+            scene=dict(
+                xaxis=dict(title="x", range=ranges[0]),
+                yaxis=dict(title="y", range=ranges[1]),
+                zaxis=dict(title="z", range=ranges[2]),
+            ),
+            width=800,
+            height=600,
+            showlegend=True,
+        )
+        fig.show()  # type: ignore
+
+    def _compute_ranges(
+        self,
+        all_x: list[float],
+        all_y: list[float],
+        all_z: list[float],
+        frames: tuple[float, float, float],
+        ground: float | None,
+    ) -> list[list[float]]:
+        def scale(values: list[float], f: float) -> list[float]:
+            vmin, vmax = min(values), max(values)
+            margin = f * (vmax - vmin)
+            return [vmin - margin, vmax + margin]
+
+        x_range = scale(all_x, frames[0])
+        y_range = scale(all_y, frames[1])
+        z_range = scale(all_z, frames[2])
+        if ground is not None:
+            z_range[0] = ground
+        return [x_range, y_range, z_range]
+
+    def _extract_plot_data(
+        self,
+    ) -> tuple[list[go.Scatter3d], list[float], list[float], list[float]]:
+        data: list[go.Scatter3d] = []
+        all_x: list[float] = []
+        all_y: list[float] = []
+        all_z: list[float] = []
+
+        wp_traces: dict[str, Trace] = {}
+        for mark in self.markers:
+            if mark.group not in wp_traces:
+                wp_traces[mark.group] = ([], [], [], [], [], [])
+            wp_traces[mark.group][0].append(mark.pos.x)
+            wp_traces[mark.group][1].append(mark.pos.y)
+            wp_traces[mark.group][2].append(mark.pos.z)
+            wp_traces[mark.group][3].append(45 * mark.radius)
+            wp_traces[mark.group][4].append(1 - mark.alpha)
+            wp_traces[mark.group][5].append(mark.color.name.lower())
+            all_x.append(mark.pos.x)
+            all_y.append(mark.pos.y)
+            all_z.append(mark.pos.z)
+
+        for name, trace in wp_traces.items():
+            data.append(
+                go.Scatter3d(
+                    x=trace[0],
+                    y=trace[1],
+                    z=trace[2],
+                    mode="markers",
+                    marker=dict(
+                        size=trace[3],
+                        color=trace[5],
+                        opacity=trace[4][0],  # Plotly marker opacity is scalar.
+                    ),
+                    name=name,
+                )
+            )
+
+        return data, all_x, all_y, all_z
+
     def _generate_drone_models_from_bases(
         self,
         base_models: list[str],
         base_port_in: int = 9002,
-        step: int = 10,
+        port_step: int = 10,
     ) -> None:
         template_path = Path(ARDUPILOT_GAZEBO_MODELS) / "drone"
         output_dir = Path(ARDUPILOT_GAZEBO_MODELS)
@@ -93,7 +194,7 @@ class Gazebo(Visualizer[GazVehicle]):
                 sdf,
             )
 
-            port_in = base_port_in + i * step
+            port_in = base_port_in + i * port_step
             port_out = port_in + 1
             sdf = re.sub(
                 r"<fdm_port_in>\d+</fdm_port_in>",
@@ -119,7 +220,7 @@ class Gazebo(Visualizer[GazVehicle]):
             raise ValueError("Could not find 'world' element in the XML.")
 
         self._remove_old_models(world_elem)
-        self._add_marker_elements(world_elem)
+        self._add_markers_elements(world_elem)
         self._add_drone_elements(world_elem)
 
         tree.write(updated_world_path)
@@ -131,23 +232,13 @@ class Gazebo(Visualizer[GazVehicle]):
             if model_name in {"green_waypoint", "red_waypoint", "drone", "iris_demo"}:
                 world_elem.remove(model)
 
-    def _add_marker_elements(self, world_elem: ET.Element) -> None:
-        for i, veh in enumerate(self.config.vehicles):
-            for j, waypoint in enumerate(veh.mtraj):
-                marker_elem = self._generate_waypoint_element(waypoint, i, j)
-                world_elem.append(marker_elem)
+    def _add_markers_elements(self, world_elem: ET.Element):
+        for mark in self.markers:
+            marker_elem = self._generate_waypoint_element(mark)
+            world_elem.append(marker_elem)
 
-    def _add_drone_elements(self, world_elem: ET.Element) -> None:
-        for i, veh in enumerate(self.config.vehicles):
-            x, y, z, h = veh.home
-            pose = XYZRPY(x, y, z, 0, 0, heading_to_yaw(h))
-            drone_elem = self._generate_drone_element(f"drone{i + 1}", pose)
-            world_elem.append(drone_elem)
-
-    def _generate_waypoint_element(
-        self, w: GazWP, traj_id: int, way_id: int
-    ) -> ET.Element:
-        model = ET.Element("model", name=f"waypoint_{traj_id}.{way_id}")
+    def _generate_waypoint_element(self, w: GazWP) -> ET.Element:
+        model = ET.Element("model", name=f"{w.group}.{w.name}")
         x, y, z = w.pos
 
         ET.SubElement(model, "pose").text = f"{x} {y} {z} 0 0 0"
@@ -163,6 +254,13 @@ class Gazebo(Visualizer[GazVehicle]):
         ET.SubElement(model, "static").text = "0"
         ET.SubElement(model, "allow_auto_disable").text = "1"
         return model
+
+    def _add_drone_elements(self, world_elem: ET.Element) -> None:
+        for i, veh in enumerate(self.config.vehicles):
+            x, y, z, h = veh.home
+            pose = XYZRPY(x, y, z, 0, 0, heading_to_yaw(h))
+            drone_elem = self._generate_drone_element(f"drone{i + 1}", pose)
+            world_elem.append(drone_elem)
 
     def _add_inertial(self, link: ET.Element) -> None:
         inertial = ET.SubElement(link, "inertial")
