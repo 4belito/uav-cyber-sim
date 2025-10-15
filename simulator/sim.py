@@ -51,6 +51,7 @@ class Simulator:
         gcs_cmd: Callable[[int, str, int], str] = lambda _, config_path, verbose: (
             f'python3 gcs.py --config-path "{config_path}" --verbose {verbose}'
         ),
+        transmission_range: int = 100,  # meters for inter-UAV communication
         # visualization
         terminals: list[SimProcess] = [],
         supress_output: list[SimProcess] = ["launcher"],
@@ -70,6 +71,7 @@ class Simulator:
         self.logic_cmd = logic_cmd
         self.gcs_cmd = gcs_cmd
         self.monitored_items: dict[int, list[int]] = {}
+        self.transmission_range = transmission_range  # meters
 
         assert len(self.missions) == self.n_vehs, (
             "Number of missions must match number of vehicles"
@@ -135,7 +137,11 @@ class Simulator:
         uav_port_offsets = dict(zip(self.sysids, self.uav_port_offsets))
         gcs_port_offsets = dict(zip(self.gcs_names, self.gcs_port_offsets))
         return Oracle(
-            self.gra_origin, uav_port_offsets, gcs_port_offsets, self.gcs_sysids
+            self.gra_origin,
+            uav_port_offsets,
+            gcs_port_offsets,
+            self.gcs_sysids,
+            transmission_range=self.transmission_range,
         )
 
     def _save_logic_configs(self, folder_name: Path):

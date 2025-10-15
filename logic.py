@@ -136,6 +136,11 @@ class VehicleLogic:
         self.set_guided.bind(self.conn)
         self.set_auto = make_set_mode(CopterMode.AUTO)
         self.set_auto.bind(self.conn)
+        self.set_loiter = make_set_mode(CopterMode.LOITER)
+        self.set_loiter.bind(self.conn)
+        self.set_brake = make_set_mode(CopterMode.BRAKE)
+        self.set_brake.bind(self.conn)
+
         self.mode = CopterMode.AUTO
         self.avoidance_action = Action[Step](name=ActionNames.AVOIDANCE, emoji="🚧")
         self.avoidance_action.bind(self.conn)
@@ -256,7 +261,8 @@ class VehicleLogic:
                     self.mode == CopterMode.GUIDED
                     and self.avoidance_action.state == State.DONE  # check this later
                 ):
-                    gra_avoid_pos = self.gra_origin.to_abs(avoid_pos)
+                    # gra_avoid_pos = self.gra_origin.to_abs(avoid_pos)
+                    gra_avoid_pos = self.gra_origin.to_abs(pos)
                     go_to_step = GoToGlobal(
                         wp=gra_avoid_pos, cause_text="avoidance", stop_asking=False
                     )
@@ -266,25 +272,26 @@ class VehicleLogic:
                         f"Vehicle {self.sysid} continuing avoidance to {avoid_pos}"
                     )
                 elif self.mode == CopterMode.AUTO:
-                    gra_avoid_pos = self.gra_origin.to_abs(avoid_pos)
+                    # gra_avoid_pos = self.gra_origin.to_abs(avoid_pos)
+                    gra_avoid_pos = self.gra_origin.to_abs(pos)
                     go_to_step = GoToGlobal(
                         wp=gra_avoid_pos, cause_text="avoidance", stop_asking=False
                     )
                     go_to_step.bind(self.conn)
                     self.avoidance_action.add(go_to_step)
-                    while self.set_guided.state != State.DONE:
-                        self.set_guided.act()
+                    self.set_guided.run()
                     self.set_guided.reset()
                     self.mode = CopterMode.GUIDED
-                    logging.info(f"Vehicle {self.sysid} switched to GUIDED mode")
+                    # self.set_brake.run()
+                    # self.mode = CopterMode.BRAKE
+                    logging.info(f"Vehicle {self.sysid} switched to {self.mode} mode")
         logging.debug(f"Vehicle {self.sysid} no avoidance needed")
         logging.debug(
             f"mode {self.mode.name}, plan_state {self.plan.current and self.plan.current.state}"
         )
         if self.mode == CopterMode.GUIDED:
             if self.avoidance_action.state == State.DONE:
-                while self.set_auto.state != State.DONE:
-                    self.set_auto.act()
+                self.set_auto.run()
                 self.set_auto.reset()
                 self.mode = CopterMode.AUTO
                 logging.info(f"Vehicle {self.sysid} switched to AUTO mode")
@@ -312,9 +319,6 @@ class VehicleLogic:
         target_dir = XY(*ENU.sub(target_pos, curr_pos)[:2])
         if XY.dot(obj_dir, target_dir) < 0:
             return None
-        # distance = math.sqrt(self.safety_radius**2 - obst_dist**2) * safety_coef
-        # distance = self.safety_radius * safety_coef
-        # obj_dir = obj_dir.scale(distance / obj_dir.norm())
         # Get orthogonal direction
         if direction == "left":
             ortho = ENU(x=-obj_dir.y, y=obj_dir.x, z=0)
@@ -322,11 +326,9 @@ class VehicleLogic:
             ortho = ENU(x=obj_dir.y, y=-obj_dir.x, z=0)
         else:
             raise ValueError("Direction must be 'left' or 'right'")
-
+        scaled_ortho = ortho.scale(self.safety_radius * safety_coef / ortho.norm())
         # Scale to desired speed
-        return ENU.add(
-            curr_pos, ortho.scale(self.safety_radius * safety_coef / ortho.norm())
-        )
+        return ENU.add(curr_pos, scaled_ortho)
 
 
 def parse_arguments() -> tuple[str, int | None]:

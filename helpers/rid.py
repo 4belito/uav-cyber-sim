@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import logging
 import math
+import pickle
 import threading
 import time
 from dataclasses import dataclass
@@ -21,6 +22,11 @@ from helpers.coordinates import ENU, GRA
 from .connections.zeromq import create_zmq_socket
 
 mav = mavutil.mavlink.MAVLink(None)
+
+with open("fake_position.pkl", "rb") as f:
+    fake_pos = pickle.load(f)
+
+# fake_pos = ENU(0, 0, 0)  # East, North, Up in meters
 
 
 def parse_one(buf: bytes) -> mavlink.MAVLink_gps_raw_int_message:
@@ -143,7 +149,7 @@ class RIDManager:
             if self.pending:
                 if self.sysid == 255:
                     send_data = copy.copy(self.data)
-                    send_data.enu_pos = ENU(0, 0, 5)
+                    send_data.enu_pos = fake_pos
                 else:
                     send_data = self.data
                 # logging.debug(f"SEND DATA RID({self.sysid}): {self.data}")

@@ -20,14 +20,14 @@ import shutil
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-import plotly.graph_objects as go
-
 from config import ARDUPILOT_GAZEBO_MODELS, ENV_CMD_GAZ
 from helpers import create_process
 from helpers.coordinates import XYZRPY, GRAPose
 from helpers.math import heading_to_yaw
 from simulator.gazebo.config import COLOR_MAP, ConfigGazebo, GazVehicle, GazWP
 from simulator.visualizer import Visualizer
+
+from .preview import show_markers
 
 Trace = tuple[
     list[float], list[float], list[float], list[float], list[float], list[str]
@@ -89,82 +89,7 @@ class Gazebo(Visualizer[GazVehicle]):
         ground: float | None = 0,
     ) -> None:
         """Render a 3D interactive plot of waypoint trajectories using Plotly."""
-        data, all_x, all_y, all_z = self._extract_plot_data()
-
-        ranges = self._compute_ranges(all_x, all_y, all_z, frames, ground)
-        fig: go.Figure = go.Figure(data)
-        fig.update_layout(  # type: ignore
-            title=dict(text=title, x=0.5, xanchor="center"),
-            scene=dict(
-                xaxis=dict(title="x", range=ranges[0]),
-                yaxis=dict(title="y", range=ranges[1]),
-                zaxis=dict(title="z", range=ranges[2]),
-            ),
-            width=800,
-            height=600,
-            showlegend=True,
-        )
-        fig.show()  # type: ignore
-
-    def _compute_ranges(
-        self,
-        all_x: list[float],
-        all_y: list[float],
-        all_z: list[float],
-        frames: tuple[float, float, float],
-        ground: float | None,
-    ) -> list[list[float]]:
-        def scale(values: list[float], f: float) -> list[float]:
-            vmin, vmax = min(values), max(values)
-            margin = f * (vmax - vmin)
-            return [vmin - margin, vmax + margin]
-
-        x_range = scale(all_x, frames[0])
-        y_range = scale(all_y, frames[1])
-        z_range = scale(all_z, frames[2])
-        if ground is not None:
-            z_range[0] = ground
-        return [x_range, y_range, z_range]
-
-    def _extract_plot_data(
-        self,
-    ) -> tuple[list[go.Scatter3d], list[float], list[float], list[float]]:
-        data: list[go.Scatter3d] = []
-        all_x: list[float] = []
-        all_y: list[float] = []
-        all_z: list[float] = []
-
-        wp_traces: dict[str, Trace] = {}
-        for mark in self.markers:
-            if mark.group not in wp_traces:
-                wp_traces[mark.group] = ([], [], [], [], [], [])
-            wp_traces[mark.group][0].append(mark.pos.x)
-            wp_traces[mark.group][1].append(mark.pos.y)
-            wp_traces[mark.group][2].append(mark.pos.z)
-            wp_traces[mark.group][3].append(45 * mark.radius)
-            wp_traces[mark.group][4].append(1 - mark.alpha)
-            wp_traces[mark.group][5].append(mark.color.name.lower())
-            all_x.append(mark.pos.x)
-            all_y.append(mark.pos.y)
-            all_z.append(mark.pos.z)
-
-        for name, trace in wp_traces.items():
-            data.append(
-                go.Scatter3d(
-                    x=trace[0],
-                    y=trace[1],
-                    z=trace[2],
-                    mode="markers",
-                    marker=dict(
-                        size=trace[3],
-                        color=trace[5],
-                        opacity=trace[4][0],  # Plotly marker opacity is scalar.
-                    ),
-                    name=name,
-                )
-            )
-
-        return data, all_x, all_y, all_z
+        show_markers(self.markers, title=title, frames=frames, ground=ground)
 
     def _generate_drone_models_from_bases(
         self,

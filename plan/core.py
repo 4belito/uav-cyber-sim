@@ -145,6 +145,11 @@ class Step(MissionElement, ABC):
                 f"✅ Vehicle {self.sysid}: {self.class_name} Done: {self.name}"
             )
 
+    def run(self):
+        """Execute the step or check its progress based on current state."""
+        while self.state not in [State.DONE, State.FAILED]:
+            self.act()
+
     def act(self):
         """Execute the step or check its progress based on current state."""
         if self.state == State.NOT_STARTED:
@@ -230,6 +235,11 @@ class Action(MissionElement, Generic[T]):
             self._log_already_done()
         elif self.state == State.FAILED:
             self._log_already_failed()
+
+    def run(self):
+        """Run the action until all steps are done or a failure occurs."""
+        while self.state not in (State.DONE, State.FAILED):
+            self.act()
 
     def _start_action(self):
         self.state = State.IN_PROGRESS

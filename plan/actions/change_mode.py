@@ -6,7 +6,7 @@ steps based on HEARTBEAT messages and supported flight modes.
 """
 
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
-from helpers.connections.mavlink.enums import CmdDo, CopterMode, ModeFlag
+from helpers.connections.mavlink.enums import CopterMode, ModeFlag
 from plan.core import Action, ActionNames, Step
 
 
@@ -19,18 +19,10 @@ def make_set_mode(flight_mode: CopterMode, onair: bool = False) -> Action[Step]:
     class SwitchMode(Step):
         def exec_fn(self, conn: MAVConnection) -> None:
             """Send the SET_MODE command to the UAV with the given mode value."""
-            conn.mav.command_long_send(
+            conn.mav.set_mode_send(
                 conn.target_system,
-                conn.target_component,
-                CmdDo.SET_MODE,
-                0,
                 ModeFlag.CUSTOM_MODE_ENABLED,
                 flight_mode.value,
-                0,
-                0,
-                0,
-                0,
-                0,
             )
 
         def check_fn(self, conn: MAVConnection) -> bool:

@@ -108,6 +108,7 @@ class GCS(UAVMonitor):
             self.paths[sysid].append(pos)
 
     def _monitor_uav(self, sysid: int):
+        logging.info(f"Monitoring UAV {sysid}")
         while not self.is_plan_done(sysid):
             self.get_global_pos(sysid)
             self.save_pos()
