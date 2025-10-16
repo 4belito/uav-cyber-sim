@@ -7,11 +7,10 @@ Currently provides basic global position tracking and mission completion detecti
 
 from __future__ import annotations
 
-# import json
+import json
 import logging
 import pickle
-
-# import subprocess
+import subprocess
 import threading
 import time
 from collections import defaultdict
@@ -282,17 +281,17 @@ class Oracle:  # UAVMonitor
                     time.sleep(TX_LOOP_SLEEP)
                     continue
                 # get position and velocity parameters for each drone
-                # pos = rid.enu_pos
-                # spd = rid.speed
-                # cog = rid.cog
-                # ele = rid.ele
-                # operands = [
-                #     (
-                #         f"{sysid},{round(pos.x, 3)},{round(pos.y, 3)},"
-                #         f"{round(pos.z, 3)},{round(spd, 3)},"
-                #         f"{round(cog, 3)},{round(ele, 3)}"
-                #     )
-                # ]
+                pos = rid.enu_pos
+                spd = rid.speed
+                cog = rid.cog
+                ele = rid.ele
+                operands = [
+                    (
+                        f"{sysid},{round(pos.x, 3)},{round(pos.y, 3)},"
+                        f"{round(pos.z, 3)},{round(spd, 3)},"
+                        f"{round(cog, 3)},{round(ele, 3)}"
+                    )
+                ]
                 o_sysids: list[int] = []
                 for o_sysid in self.grid.iter_neighbors_within(
                     sysid, rid.enu_pos, radius=None
@@ -303,60 +302,63 @@ class Oracle:  # UAVMonitor
                     )
                     # TODO: get this information with certainty instead of allowing None
                     o_sysids.append(o_sysid)
-                    # o_pos = o_rid.enu_pos
-                    # o_spd = o_rid.speed
-                    # o_cog = o_rid.cog
-                    # o_ele = o_rid.ele
-                    # operands.append(
-                    #     (
-                    #         f"{o_sysid},{round(o_pos.x, 3)},{round(o_pos.y, 3)},"
-                    #         f"{round(o_pos.z, 3)},{round(o_spd, 3)},"
-                    #         f"{round(o_cog, 3)},{round(o_ele, 3)}"
-                    #     )
-                    # )
+                    o_pos = o_rid.enu_pos
+                    o_spd = o_rid.speed
+                    o_cog = o_rid.cog
+                    o_ele = o_rid.ele
+                    operands.append(
+                        (
+                            f"{o_sysid},{round(o_pos.x, 3)},{round(o_pos.y, 3)},"
+                            f"{round(o_pos.z, 3)},{round(o_spd, 3)},"
+                            f"{round(o_cog, 3)},{round(o_ele, 3)}"
+                        )
+                    )
 
                 # continue if there not at least two drones to simulate
-                # if len(operands) <= 1:
-                #     continue
+                if len(operands) <= 1:
+                    continue
 
                 # invoke a one-off uli-net-sim Remote ID broadcast simulation
-                # result = subprocess.run(
-                #     [
-                #         "./rid-one-off.sh",
-                #         "-n",
-                #         f"{sysid}",
-                #         # TODO: fill in these RID fields later if needed
-                #         "-t",
-                #         "0",
-                #         "-x",
-                #         "0",
-                #         "-y",
-                #         "0",
-                #         "-z",
-                #         "0",
-                #         "-v",
-                #         "0",
-                #         "-g",
-                #         "0",
-                #         "-h",
-                #         "0",
-                #         "-q",
-                #         "--",
-                #         *operands,
-                #     ],
-                #     cwd="/usr/uli-net-sim",
-                #     capture_output=True,
-                #     text=True,
-                # )
-                # logging.debug(
-                #     f"rid-one-off:\noperands:\n{operands}\n\nstdout:\n{result.stdout}\n\nstderr:\n{result.stderr}"
-                # )
+                result = subprocess.run(
+                    [
+                        "./rid-one-off.sh",
+                        "-n",
+                        f"{sysid}",
+                        # TODO: fill in these RID fields later if needed
+                        "-t",
+                        "0",
+                        "-x",
+                        "0",
+                        "-y",
+                        "0",
+                        "-z",
+                        "0",
+                        "-v",
+                        "0",
+                        "-g",
+                        "0",
+                        "-h",
+                        "0",
+                        "-q",
+                        "--",
+                        *operands,
+                    ],
+                    cwd="/usr/uli-net-sim",
+                    capture_output=True,
+                    text=True,
+                )
+                logging.debug(
+                    f"rid-one-off:\noperands:\n{operands}\n\nstdout:\n{result.stdout}\n\nstderr:\n{result.stderr}"
+                )
 
-                # res = json.loads(result.stdout)
+                res = {}
+                if result.stdout != "":
+                    res = json.loads(result.stdout)
                 for o_sysid in o_sysids:
-                    # if o_sysid in res["Serial Number"]:
-                    #     if sysid in res["Serial Number"][o_sysid]["values"]:
-                    self.rid_out_socks[o_sysid].send_pyobj(rid)  # type: ignore
+                    if "Serial Number" in res:
+                        if str(o_sysid) in res["Serial Number"]:
+                            if str(sysid) in res["Serial Number"][str(o_sysid)]["values"]:
+                                self.rid_out_socks[o_sysid].send_pyobj(rid)  # type: ignore
             except Exception as e:
                 logging.error(f"Retransmit error for {sysid} of type {type(e)}: {e}")
             time.sleep(TX_LOOP_SLEEP)
