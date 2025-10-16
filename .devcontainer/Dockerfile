@@ -86,7 +86,7 @@ RUN ./ardupilot/Tools/environment_install/install-prereqs-ubuntu.sh -y
 # add local python modules to path
 RUN echo 'export PATH=~/.local/bin:$PATH' >> ~/.profile
 # test run
-RUN cd ardupilot/ArduCopter && sim_vehicle.py -w
+RUN cd ardupilot/Tools/autotest && ./sim_vehicle.py -w -v ArduCopter
 RUN sudo apt-get clean && sudo rm -rf /var/lib/apt/lists/*
 
 # INSTALL QGROUNDCONTROL
