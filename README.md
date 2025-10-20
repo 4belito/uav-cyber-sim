@@ -54,37 +54,7 @@ To support this evolving ecosystem, UAV-CYBER-SIM offers a comprehensive testbed
 
 ## Installation Instructions
 
-### 1. Requirements
-- Ubuntu 20.04 or later
-- Python 3.11 (via Conda)
-- ArduPilot SITL
-- QGroundControl
-- Gazebo with ardupilot_gazebo plugin
-
-### 2. Setup Steps
-
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/4belito/uav-cyber-sim.git
-   cd uav-cyber-sim
-   ```
-
-2. Install [ArduPilot](installation/Installing_Ardupilot_20_04.md)
-3. Install [QGroundControl](installation/installing_qgc.md)
-4. Install [Gazebo with plugin](installation/installing_gazebo_arduplugin.md)
-5. If installed outside `$HOME`, modify `config.py` with correct paths.
-6. Create and activate the Python environment:
-   ```bash
-   conda create -n uav-cyber-sim11 python=3.11
-   conda activate uav-cyber-sim11
-   pip install numpy pymavlink plotly nbformat
-   ```
-
----
-
-## Docker Option
-
-A Docker image with preinstalled dependencies is available on Docker Hub as [dalbick/uav-cyber-sim](https://hub.docker.com/r/dalbick/uav-cyber-sim).
+Build the Docker image for [uli-net-sim](https://github.com/brycethebjorkman/uli-net-sim) and then this repository.
 
 To enable running GUI applications (e.g. QGroundControl, Gazebo) inside Docker on Linux systems, launch the container with the following command:
 ```shell
@@ -92,11 +62,6 @@ docker run -u ubuntu --env="DISPLAY" --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw"
 ```
 
 VS Code's 'Dev Containers' extension can be used to attach to a running container in order to run the example Jupyter notebooks. 
-
-**If you plan on using the QGroundControl simulator, run it once manually:**
-```shell
-~/QGroundControl.AppImage --appimage-extract-and-run
-```
 
 **If you encounter "cannot connect to display" error, run the following on your host system:**
 ```shell
