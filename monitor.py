@@ -47,7 +47,7 @@ class UAVMonitor:
         self, msg: mavlink.MAVLink_global_position_int_message, sysid: int
     ):
         """Get the current global position of the specified vehicle."""
-        self.pos[sysid] = get_GRA_position(msg, sysid)
+        self.pos[sysid] = get_GRA_position(self.conns[sysid])  # type: ignore
 
     def is_plan_done(self, sysid: int) -> bool:
         """Listen for a STATUSTEXT("DONE") message and respond with COMMAND_ACK."""

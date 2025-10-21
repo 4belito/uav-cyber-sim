@@ -1,6 +1,14 @@
 {
   "name": "uav-cyber-sim (X11 over SSH)",
-  "image": "uav-cyber-sim",
+  //"image": "uav-cyber-sim",
+  "build": {
+    "context": "..",
+    "dockerfile": "Dockerfile",
+    "args": {
+      "UID": "1001",
+      "GID": "1001"
+    }
+  },
   "runArgs": [
     "--network",
     "host"
@@ -14,12 +22,21 @@
     "type=bind,source=${env:HOME}/.Xauthority,target=/tmp/.Xauthority"
   ],
   "postAttachCommand": "sudo chown -R ubuntu /workspaces",
+  // "customizations": {
+  //   "vscode": {
+  //     "extensions": [
+  //       "ms-toolsai.jupyter@2025.6.0",
+  //       "ms-python.python"
+  //     ]
+  //   }
+  //},
   "customizations": {
     "vscode": {
       "extensions": [
-        "ms-toolsai.jupyter@2025.6.0",
-        "ms-python.python"
+        "ms-python.python",
+        "ms-toolsai.jupyter"
       ]
     }
-  }
+  },
+  "remoteUser": "ubuntu"
 }

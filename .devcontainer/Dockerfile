@@ -157,23 +157,55 @@ RUN source ~/miniconda3/bin/activate && \
 RUN git clone https://github.com/4belito/uav-cyber-sim.git
 
 
+
 # INSTALL ULI NET SIM
 FROM uli-net-sim:latest AS netsim
-# collect packages explicitly installed in uli-net-sim image
 RUN mkdir -p /deps && apt-mark showmanual | sort -u > /deps/packages.txt
+
 FROM main AS final
-# install the same packages
+
 COPY --from=netsim /deps/packages.txt /tmp/packages.txt
 USER root
 RUN apt-get update && \
     xargs -r -a /tmp/packages.txt apt-get install --yes --no-install-recommends && \
     rm -rf /var/lib/apt/lists/* /tmp/manual.txt
+
+# --- Make UID/GID configurable and align the runtime user ---
+ARG UID=1001
+ARG GID=1001
+
+# Ensure group/user IDs match the args
+RUN groupmod -o -g ${GID} ubuntu && \
+    usermod  -o -u ${UID} -g ${GID} ubuntu && \
+    # IMPORTANT: fix ownership of files created earlier under the old UID/GID
+    chown -R ${UID}:${GID} /home/ubuntu
+
+# Copy uli-net-sim content owned by the runtime user
+COPY --from=netsim --chown=${UID}:${GID} /usr/uli-net-sim /usr/uli-net-sim
+
 USER ubuntu
-# copy over uli-net-sim source and binaries
-COPY --from=netsim --chown=1005:1005 /usr/uli-net-sim /usr/uli-net-sim
-
-
 WORKDIR /home/ubuntu/uav-cyber-sim
 
-ENTRYPOINT [ "tail", "-f", "/dev/null" ]
-# CMD ["/bin/bash", "--login"]
+ENTRYPOINT ["tail","-f","/dev/null"]
+
+
+
+# # INSTALL ULI NET SIM
+# FROM uli-net-sim:latest AS netsim
+# # collect packages explicitly installed in uli-net-sim image
+# RUN mkdir -p /deps && apt-mark showmanual | sort -u > /deps/packages.txt
+# FROM main AS final
+# # install the same packages
+# COPY --from=netsim /deps/packages.txt /tmp/packages.txt
+# USER root
+# RUN apt-get update && \
+#     xargs -r -a /tmp/packages.txt apt-get install --yes --no-install-recommends && \
+#     rm -rf /var/lib/apt/lists/* /tmp/manual.txt
+# USER ubuntu
+# # copy over uli-net-sim source and binaries
+# COPY --from=netsim --chown=1005:1005 /usr/uli-net-sim /usr/uli-net-sim
+
+# WORKDIR /home/ubuntu/uav-cyber-sim
+
+# ENTRYPOINT [ "tail", "-f", "/dev/null" ]
+# # CMD ["/bin/bash", "--login"]

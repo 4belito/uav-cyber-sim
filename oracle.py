@@ -7,10 +7,10 @@ Currently provides basic global position tracking and mission completion detecti
 
 from __future__ import annotations
 
+import subprocess
 import json
 import logging
 import pickle
-import subprocess
 import threading
 import time
 from collections import defaultdict
@@ -27,12 +27,19 @@ from helpers.connections.zeromq import create_zmq_sockets
 from helpers.coordinates import ENU, GRAPose
 from helpers.rid import RIDData
 
+
+from params.simulation import USE_NETWORKING_SIM
+
+from pathlib import Path
+
+
+
+
+
 CellKey = tuple[int, int, int]
 
 TX_LOOP_SLEEP = 0.01
 RX_LOOP_SLEEP = 0.10
-
-
 Cell = set[int]
 
 
@@ -281,26 +288,27 @@ class Oracle:  # UAVMonitor
                     time.sleep(TX_LOOP_SLEEP)
                     continue
                 # get position and velocity parameters for each drone
-                pos = rid.enu_pos
-                spd = rid.speed
-                cog = rid.cog
-                ele = rid.ele
-                operands = [
-                    (
-                        f"{sysid},{round(pos.x, 3)},{round(pos.y, 3)},"
-                        f"{round(pos.z, 3)},{round(spd, 3)},"
-                        f"{round(cog, 3)},{round(ele, 3)}"
-                    )
-                ]
+                operands: list[str] = []
+                if USE_NETWORKING_SIM:
+                    pos = rid.enu_pos
+                    spd = rid.speed
+                    cog = rid.cog
+                    ele = rid.ele
+                    operands = [
+                        (
+                            f"{sysid},{round(pos.x, 3)},{round(pos.y, 3)},"
+                            f"{round(pos.z, 3)},{round(spd, 3)},"
+                            f"{round(cog, 3)},{round(ele, 3)}"
+                        )
+                    ]
                 o_sysids: list[int] = []
                 for o_sysid in self.grid.iter_neighbors_within(
                     sysid, rid.enu_pos, radius=None
                 ):
                     o_rid = self.grid.rid(o_sysid)
                     logging.debug(
-                        f"{sysid}: {o_rid.enu_pos} -> {o_sysid}: {o_rid.enu_pos}"
+                        f"{sysid}: {rid.enu_pos} -> {o_sysid}: {o_rid.enu_pos}"
                     )
-                    # TODO: get this information with certainty instead of allowing None
                     o_sysids.append(o_sysid)
                     o_pos = o_rid.enu_pos
                     o_spd = o_rid.speed
@@ -355,10 +363,13 @@ class Oracle:  # UAVMonitor
                 if result.stdout != "":
                     res = json.loads(result.stdout)
                 for o_sysid in o_sysids:
-                    if "Serial Number" in res:
-                        if str(o_sysid) in res["Serial Number"]:
-                            if str(sysid) in res["Serial Number"][str(o_sysid)]["values"]:
-                                self.rid_out_socks[o_sysid].send_pyobj(rid)  # type: ignore
+                    if USE_NETWORKING_SIM:
+                        if "Serial Number" in res:
+                            if str(o_sysid) in res["Serial Number"]:
+                                if str(sysid) in res["Serial Number"][str(o_sysid)]["values"]:
+                                    self.rid_out_socks[o_sysid].send_pyobj(rid) # type: ignore
+                    else:
+                        self.rid_out_socks[o_sysid].send_pyobj(rid)  # type: ignore
             except Exception as e:
                 logging.error(f"Retransmit error for {sysid} of type {type(e)}: {e}")
             time.sleep(TX_LOOP_SLEEP)
@@ -390,7 +401,7 @@ class Oracle:  # UAVMonitor
                 ax.scatter(  # type: ignore
                     xs,
                     ys,
-                    zs,
+                    z=zs,
                     c=[gcs_color.value],  # Use the actual color value
                     s=12,  # type: ignore
                     alpha=0.8,

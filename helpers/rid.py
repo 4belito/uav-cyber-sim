@@ -152,7 +152,7 @@ class RIDManager:
                     send_data.enu_pos = fake_pos
                 else:
                     send_data = self.data
-                # logging.debug(f"SEND DATA RID({self.sysid}): {self.data}")
+                logging.debug(f"SEND DATA RID({self.sysid}): {send_data}")
                 self._out_sock.send_pyobj(send_data)  # type: ignore
                 self.pending = False
 
@@ -170,7 +170,7 @@ class RIDManager:
                     and msg.get_type() == "GLOBAL_POSITION_INT"
                     and (msg.lat != 0 or msg.lon != 0)
                 ):
-                    # logging.debug(f"RID({self.sysid}) collect: {msg.to_dict()}")
+                    #logging.debug(f"RID({self.sysid}) collect: {msg.to_dict()}")
                     self.update(msg.to_dict())
             except zmq.Again:
                 continue
@@ -181,11 +181,13 @@ class RIDManager:
         """Receive the RID data retransmitted  from near uavs."""
         logging.debug(f"receive RID({self.sysid}) starting...")
         while not self._stop.is_set():
+            logging.debug(f"Uav {self.sysid} waiting for RID data...")
             try:
                 rid: RIDData = sock.recv_pyobj()  # type: ignore
                 self.received_rid.put(rid)
-                # logging.debug(f"Uav {self.sysid} received RID: {rid.sysid}")
+                logging.debug(f"Uav {self.sysid} received RID: {rid.sysid}")
             except zmq.Again:
+                logging.debug(f"Uav {self.sysid} no data available")
                 continue
             except Exception as e:
                 logging.error(f"RID receiver error: {e}")

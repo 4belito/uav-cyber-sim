@@ -18,7 +18,6 @@ from config import (
     BasePort,
 )
 from helpers import create_process, setup_logging
-from helpers.cleanup import clean
 from helpers.connections.mavlink.mission_io import save_mission
 from helpers.coordinates import GRAPose
 from oracle import Oracle
@@ -87,7 +86,6 @@ class Simulator:
 
     def launch(self) -> Oracle:
         """Launch vehicle instances and visualizer."""
-        clean(victim_processes=[])  # Ensure clean start
         self.save_missions()
         self.uav_port_offsets = self._find_uav_port_offsets()
         self.gcs_port_offsets = self._find_gcs_port_offsets()
