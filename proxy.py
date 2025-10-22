@@ -163,7 +163,7 @@ class MessageRouter(threading.Thread):
         while not self.stop_event.is_set():
             msg = self.source.recv_match(blocking=True, timeout=0.1)
             if msg and not self.stop_event.is_set():
-                logging.debug(f"UAV ({self.sysid}): Received {msg}")
+                # logging.debug(f"UAV ({self.sysid}): Received {msg}")
                 if (
                     msg.get_type() == "STATUSTEXT"
                     and hasattr(msg, "text")

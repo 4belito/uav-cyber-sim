@@ -161,6 +161,7 @@ class Simulator:
                 json.dump(logic_config, f, indent=2)
 
     def _save_gcs_configs(self, folder_name: Path):
+        n = 0
         for i, (gcs_name, sysids) in enumerate(self.gcs_sysids.items()):
             gcs_config = {
                 "name": gcs_name,
@@ -168,16 +169,16 @@ class Simulator:
                 "uavs": [
                     {
                         "sysid": sysid,
-                        "port_offset": self.uav_port_offsets[i],
+                        "port_offset": self.uav_port_offsets[j],
                         "ardupilot_cmd": (
                             f"python3 {ARDUPILOT_VEHICLE_PATH}"
-                            f" -v ArduCopter -I{i} --sysid {sysid} --no-rebuild"
+                            f" -v ArduCopter -I{j} --sysid {sysid} --no-rebuild"
                             f" --use-dir={ARDU_LOGS_PATH}"
                             f" --add-param-file {VEH_PARAMS_PATH}"
                             f" --no-mavproxy"
-                            f" --port-offset={self.uav_port_offsets[i]}"
+                            f" --port-offset={self.uav_port_offsets[j]}"
                             + (" --terminal" if "veh" in self.terminals else "")
-                            + self.visuals[0].add_vehicle_cmd(i)
+                            + self.visuals[0].add_vehicle_cmd(j)
                         ),
                         "logic_cmd": self.logic_cmd(
                             sysid,
@@ -186,11 +187,11 @@ class Simulator:
                         ),
                         "proxy_cmd": (
                             f"python3 proxy.py --sysid {sysid} "
-                            f"--port-offset={self.uav_port_offsets[i]} "
+                            f"--port-offset={self.uav_port_offsets[j]} "
                             f"--verbose {self.verbose}"
                         ),
                     }
-                    for sysid in sysids
+                    for j, sysid in enumerate(sysids, start=n)
                 ],
                 "terminals": list(self.terminals),
                 "suppress": list(self.suppress),
@@ -198,6 +199,7 @@ class Simulator:
             config_path = folder_name / f"gcs_config_{i + 1}.json"
             with config_path.open("w") as f:
                 json.dump(gcs_config, f, indent=2)
+            n += len(sysids)
 
     def _find_uav_port_offsets(self):
         base_ports = [

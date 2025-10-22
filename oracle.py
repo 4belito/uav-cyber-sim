@@ -28,12 +28,9 @@ from helpers.coordinates import ENU, GRAPose
 from helpers.rid import RIDData
 
 
-from params.simulation import USE_NETWORKING_SIM
+from params.simulation import USE_NETWORK_SIM
 
 from pathlib import Path
-
-
-
 
 
 CellKey = tuple[int, int, int]
@@ -288,8 +285,7 @@ class Oracle:  # UAVMonitor
                     time.sleep(TX_LOOP_SLEEP)
                     continue
                 # get position and velocity parameters for each drone
-                operands: list[str] = []
-                if USE_NETWORKING_SIM:
+                if USE_NETWORK_SIM:
                     pos = rid.enu_pos
                     spd = rid.speed
                     cog = rid.cog
@@ -301,74 +297,78 @@ class Oracle:  # UAVMonitor
                             f"{round(cog, 3)},{round(ele, 3)}"
                         )
                     ]
-                o_sysids: list[int] = []
-                for o_sysid in self.grid.iter_neighbors_within(
-                    sysid, rid.enu_pos, radius=None
-                ):
-                    o_rid = self.grid.rid(o_sysid)
-                    logging.debug(
-                        f"{sysid}: {rid.enu_pos} -> {o_sysid}: {o_rid.enu_pos}"
-                    )
-                    o_sysids.append(o_sysid)
-                    o_pos = o_rid.enu_pos
-                    o_spd = o_rid.speed
-                    o_cog = o_rid.cog
-                    o_ele = o_rid.ele
-                    operands.append(
-                        (
-                            f"{o_sysid},{round(o_pos.x, 3)},{round(o_pos.y, 3)},"
-                            f"{round(o_pos.z, 3)},{round(o_spd, 3)},"
-                            f"{round(o_cog, 3)},{round(o_ele, 3)}"
+                    o_sysids: list[int] = []
+                    for o_sysid in self.grid.iter_neighbors_within(
+                        sysid, rid.enu_pos, radius=None
+                    ):
+                        o_rid = self.grid.rid(o_sysid)
+                        logging.debug(
+                            f"{sysid}: {rid.enu_pos} -> {o_sysid}: {o_rid.enu_pos}"
                         )
+                        o_sysids.append(o_sysid)
+                        o_pos = o_rid.enu_pos
+                        o_spd = o_rid.speed
+                        o_cog = o_rid.cog
+                        o_ele = o_rid.ele
+                        operands.append(
+                            (
+                                f"{o_sysid},{round(o_pos.x, 3)},{round(o_pos.y, 3)},"
+                                f"{round(o_pos.z, 3)},{round(o_spd, 3)},"
+                                f"{round(o_cog, 3)},{round(o_ele, 3)}"
+                            )
+                        )
+
+                    # continue if there not at least two drones to simulate
+                    if len(operands) <= 1:
+                        continue
+
+                    # invoke a one-off uli-net-sim Remote ID broadcast simulation
+                    result = subprocess.run(
+                        [
+                            "./rid-one-off.sh",
+                            "-n",
+                            f"{sysid}",
+                            # TODO: fill in these RID fields later if needed
+                            "-t",
+                            "0",
+                            "-x",
+                            "0",
+                            "-y",
+                            "0",
+                            "-z",
+                            "0",
+                            "-v",
+                            "0",
+                            "-g",
+                            "0",
+                            "-h",
+                            "0",
+                            "-q",
+                            "--",
+                            *operands,
+                        ],
+                        cwd="/usr/uli-net-sim",
+                        capture_output=True,
+                        text=True,
                     )
-
-                # continue if there not at least two drones to simulate
-                if len(operands) <= 1:
-                    continue
-
-                # invoke a one-off uli-net-sim Remote ID broadcast simulation
-                result = subprocess.run(
-                    [
-                        "./rid-one-off.sh",
-                        "-n",
-                        f"{sysid}",
-                        # TODO: fill in these RID fields later if needed
-                        "-t",
-                        "0",
-                        "-x",
-                        "0",
-                        "-y",
-                        "0",
-                        "-z",
-                        "0",
-                        "-v",
-                        "0",
-                        "-g",
-                        "0",
-                        "-h",
-                        "0",
-                        "-q",
-                        "--",
-                        *operands,
-                    ],
-                    cwd="/usr/uli-net-sim",
-                    capture_output=True,
-                    text=True,
-                )
-                logging.debug(
-                    f"rid-one-off:\noperands:\n{operands}\n\nstdout:\n{result.stdout}\n\nstderr:\n{result.stderr}"
-                )
-
-                res = {}
-                if result.stdout != "":
-                    res = json.loads(result.stdout)
-                for o_sysid in o_sysids:
-                    if USE_NETWORKING_SIM:
+                    logging.debug(
+                        f"rid-one-off:\noperands:\n{operands}\n\nstdout:\n{result.stdout}\n\nstderr:\n{result.stderr}"
+                    )
+                    res = {}
+                    if result.stdout != "":
+                        res = json.loads(result.stdout)
+                    for o_sysid in o_sysids:
                         if "Serial Number" in res:
                             if str(o_sysid) in res["Serial Number"]:
-                                if str(sysid) in res["Serial Number"][str(o_sysid)]["values"]:
-                                    self.rid_out_socks[o_sysid].send_pyobj(rid) # type: ignore
-                    else:
+                                if (
+                                    str(sysid)
+                                    in res["Serial Number"][str(o_sysid)]["values"]
+                                ):
+                                    self.rid_out_socks[o_sysid].send_pyobj(rid)  # type: ignore
+                else:
+                    for o_sysid in self.grid.iter_neighbors_within(
+                        sysid, rid.enu_pos, radius=None
+                    ):
                         self.rid_out_socks[o_sysid].send_pyobj(rid)  # type: ignore
             except Exception as e:
                 logging.error(f"Retransmit error for {sysid} of type {type(e)}: {e}")
@@ -401,7 +401,7 @@ class Oracle:  # UAVMonitor
                 ax.scatter(  # type: ignore
                     xs,
                     ys,
-                    z=zs,
+                    zs,
                     c=[gcs_color.value],  # Use the actual color value
                     s=12,  # type: ignore
                     alpha=0.8,
