@@ -242,6 +242,14 @@ class XYZRPY(NamedTuple):
         return cls(*float_nans(6))
 
 
+def format_component(component: float, decimal_places: int) -> float:
+    """Format a single coordinate component with rounding if needed."""
+    if isinstance(component, int) or component.is_integer():
+        return int(component)
+    else:
+        return round(component, decimal_places)
+
+
 # === Specialized frames ===
 class ENU(XYZ):
     """ENU vector (x=East, y=North, z=Up)."""
@@ -320,6 +328,10 @@ class ENU(XYZ):
             return None
         return self.to_abs(rel_pos)
 
+    def short(self, decimal_places: int = 2) -> ENU:
+        """Return a copy of this ENU with coordinates rounded if needed."""
+        return ENU(*(format_component(component, decimal_places) for component in self))
+
 
 class NED(XYZ):
     """NED vector (x=North, y=East, z=Down)."""
@@ -349,6 +361,10 @@ class GRA(LLA):
     def pose(self, heading: float = 0.0) -> GRAPose:
         """Return a GRAPose with this position and the given heading."""
         return GRAPose(self.lat, self.lon, self.alt, heading)
+
+    def to_str(self):
+        """Return"""
+        return ",".join(map(str, self))
 
     @staticmethod
     def from_global_int(lat_e7: int, lon_e7: int, alt_mm: int) -> GRA:
@@ -418,6 +434,20 @@ class GRA(LLA):
         if msg:
             return cls.from_global_int(msg.lat, msg.lon, msg.alt)  # type: ignore
         return None
+
+    def get_enu_position(self, conn: MAVConnection) -> ENU | None:
+        """Get the ENU position of the UAV relative to this GRA origin."""
+        gra_pos = GRA.get_position(conn)
+        if gra_pos is None:
+            return None
+        return self.to_rel(gra_pos)
+
+    def short(self, decimal_places: int = 6, alt_decimal_places: int = 2) -> GRA:
+        """Return a copy of this GRA with coordinates rounded if needed."""
+        lat = format_component(self.lat, decimal_places)
+        lon = format_component(self.lon, decimal_places)
+        alt = format_component(self.alt, alt_decimal_places)
+        return GRA(lat, lon, alt)
 
 
 class ENUPose(XYZPose):
@@ -532,6 +562,10 @@ class GRAPose(LLAPose):
         xl, yl = XY(e, n).rotate(-self.heading)
         h_rel = (p.heading - self.heading) % 360
         return ENUPose(xl, yl, u, h_rel)
+
+    def to_str(self) -> str:
+        """Return a string representation of the GRAPose."""
+        return ",".join(map(str, self))
 
     # ---- Batch helpers (GRAPose) ----
     def to_abs_all(self, rels: Iterable[ENU | ENUPose]) -> list[GRAPose]:

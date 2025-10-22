@@ -148,6 +148,14 @@ class MAVConnection(Protocol):
     @overload
     def recv_match(
         self,
+        type: Literal["MISSION_CURRENT"],
+        timeout: float | None = ...,
+        blocking: bool | None = ...,
+    ) -> mavlink.MAVLink_mission_current_message | None: ...
+
+    @overload
+    def recv_match(
+        self,
         type: Literal["GLOBAL_POSITION_INT"],
         timeout: float | None = ...,
         blocking: bool | None = ...,

@@ -6,13 +6,12 @@ in UAV plans.
 from __future__ import annotations
 
 import logging
-import time
 from abc import ABC, abstractmethod
 from enum import StrEnum
-from typing import Generic, List, Self, TypeVar, cast
+from typing import Generic, List, Self, TypeVar
 
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
-from helpers.coordinates import ENU
+from helpers.coordinates import ENU, GRA
 
 # TODO: Check binding of conn in Action and Step,
 # i think conn can be passed when actions/steps are instantiated
@@ -30,13 +29,15 @@ class State(StrEnum):
     DONE = "DONE"
     FAILED = "FAILED"
 
-
-state_symbols = {
-    State.NOT_STARTED: "🕓",
-    State.IN_PROGRESS: "🚀",
-    State.DONE: "✅",
-    State.FAILED: "❌",
-}
+    @property
+    def emoji(self) -> str:
+        """Return the emoji representation of the state."""
+        return {
+            State.NOT_STARTED: "🕓",
+            State.IN_PROGRESS: "🚀",
+            State.DONE: "✅",
+            State.FAILED: "❌",
+        }[self]
 
 
 class ActionNames(StrEnum):
@@ -54,6 +55,24 @@ class ActionNames(StrEnum):
     WAIT = "WAIT"
     MONITOR_MISSION = "MONITOR_MISSION"
     AVOIDANCE = "AVOIDANCE"
+
+    @property
+    def emoji(self) -> str:
+        """Return the emoji representation of the action name."""
+        return {
+            ActionNames.PREARM: "🛡️",
+            ActionNames.ARM: "🔒",
+            ActionNames.TAKEOFF: "🛫",
+            ActionNames.FLY: "✈️",
+            ActionNames.LAND: "🛬",
+            ActionNames.CHANGE_FLIGHTMODE: "⚙️",
+            ActionNames.CHANGE_NAVSPEED: "🎚️",
+            ActionNames.START_MISSION: "🚀",
+            ActionNames.UPLOAD_MISSION: "💾",
+            ActionNames.WAIT: "🕒",
+            ActionNames.MONITOR_MISSION: "👀",
+            ActionNames.AVOIDANCE: "🚧",
+        }[self]
 
 
 class StepFailed(Exception):
@@ -79,11 +98,12 @@ class MissionElement(ABC):
         self.next: Self | None = None
 
         ## live property(after building)
-        self.conn: MAVConnection = cast(MAVConnection, None)
+        self.conn: MAVConnection
+        self.origin: GRA
+        self.sysid: int
         self.onair: bool | None = None  # Default onair status
-        self.target_pos: ENU | None = None  # Default target position
-        self.curr_pos: ENU | None = None  # Default current position
-        self.sysid: int = cast(int, None)
+        self.target_pos: ENU | None = None  # Default target (global) position
+        self.curr_pos: ENU | None = None  # Default current (global) position
 
     @abstractmethod
     def act(self):
@@ -95,15 +115,15 @@ class MissionElement(ABC):
         self.state = State.NOT_STARTED
 
     def __repr__(self) -> str:
-        symbol = state_symbols.get(self.state, "❔")
-        return f"{symbol} <{self.class_name} '{self.emoji} {self.name}'>"
+        return f"{self.state.emoji} <{self.class_name} '{self.emoji} {self.name}'>"
 
-    def bind(self, connection: MAVConnection) -> None:
+    def bind(self, connection: MAVConnection, origin: GRA) -> None:
         """
         Binds the mission element to a MAVLink connection and sets verbosity
         level.
         """
         self.conn = connection  # Set later from the parent Action
+        self.origin = origin
         self.sysid = connection.target_system
         logging.debug(
             f"🔗 Vehicle {self.sysid}: {self.class_name} '{self.name}' is now connected"
@@ -116,9 +136,8 @@ class Step(MissionElement, ABC):
     def __init__(
         self,
         name: str,
-        emoji: str = "🔹",
     ) -> None:
-        super().__init__(name=name, emoji=emoji)
+        super().__init__(name=name, emoji="🔹")
 
     @abstractmethod
     def exec_fn(self, conn: MAVConnection) -> None:
@@ -175,21 +194,6 @@ class Step(MissionElement, ABC):
         self.onair = None
         self.target_pos = None
 
-    @classmethod
-    def make_wait(cls, t: float = 0) -> Step:
-        """Wait for t seconds."""
-
-        class Wait(Step):
-            def exec_fn(self, conn: MAVConnection) -> None:
-                """Wait for t seconds and return True."""
-                time.sleep(t)
-
-            def check_fn(self, conn: MAVConnection) -> bool:
-                """No checking."""
-                return True
-
-        return Wait(name=f"wait {t} seconds", emoji="⏱️")
-
 
 T = TypeVar("T", bound=MissionElement)
 
@@ -203,11 +207,11 @@ class Action(MissionElement, Generic[T]):
     def __init__(
         self,
         name: str,
-        emoji: str = "🔘",
+        emoji: str = "📋",
     ) -> None:
         self.steps: List[T] = []
         self.current: T | None = None
-        super().__init__(name=name, emoji=emoji)  # ✅ no-op
+        super().__init__(name=name, emoji=emoji)
 
     def add(self, step: T) -> None:
         """
@@ -300,11 +304,11 @@ class Action(MissionElement, Generic[T]):
         self.current = self.steps[0] if self.steps else None
         super().reset()
 
-    def bind(self, connection: MAVConnection) -> None:
+    def bind(self, connection: MAVConnection, origin: GRA) -> None:
         """Bind the action to the MAVLink connection."""
         for step in self.steps:
-            step.bind(connection)
-        super().bind(connection)
+            step.bind(connection, origin)
+        super().bind(connection, origin)
         logging.debug(
             f"🔗 Vehicle {self.sysid}: {self.class_name} '{self.name}' is now connected"
         )

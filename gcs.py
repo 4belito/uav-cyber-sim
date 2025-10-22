@@ -16,6 +16,7 @@ from pymavlink import mavutil
 
 from config import DATA_PATH, ENV_CMD_ARP, ENV_CMD_PYT, BasePort
 from helpers.connections.mavlink.conn import create_udp_conn
+from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.zeromq import create_zmq_socket
 from helpers.coordinates import GRAs
 from helpers.processes import create_process
@@ -70,18 +71,19 @@ class GCS(UAVMonitor):
         # Configure logging for this GCS process
         self.name = name
         self.uavs = uavs
-        self.n_uavs = len(uavs)
+        self.sysids = [uavconfig["sysid"] for uavconfig in uavs]
+        self.n_uavs = len(self.sysids)
         self.terminals = set(terminals)
         self.suppress = set(suppress)
-        self._launch_vehicles()  # NOTE: add self.conn =
+        self.conns = self._launch_vehicles()  # NOTE: add self.conn =
 
         self.zmq_ctx = zmq.Context()
         self.orc_sock = create_zmq_socket(
             self.zmq_ctx, zmq.PUB, BasePort.GCS_ZMQ, port_offset
         )
 
-        super().__init__(self.conns)
-        self.paths: dict[int, GRAs] = {sysid: [] for sysid in self.conns}
+        super().__init__(dict(zip(self.sysids, self.conns)))
+        self.paths: dict[int, GRAs] = {sysid: [] for sysid in self.sysids}
 
         logging.info(f" GCS {self.name} started with {self.n_uavs} UAVs")
 
@@ -89,7 +91,7 @@ class GCS(UAVMonitor):
     def run(self):
         """Run the GCS monitoring loop until all UAVs complete their missions."""
         with futures.ThreadPoolExecutor() as executor:
-            executor.map(self._monitor_uav, list(self.conns.keys()))
+            executor.map(self._monitor_uav, self.sysids)
 
         logging.info("All UAVs assigned have completed their missions")
         self.orc_sock.send_string("DONE")  # type: ignore
@@ -118,15 +120,11 @@ class GCS(UAVMonitor):
         self.remove_uav(sysid)
         logging.info(f"UAV {sysid} mission completed")
 
-    def _launch_vehicles(self):
+    def _launch_vehicles(self) -> list[MAVConnection]:
         """Launch ArduPilot and logic processes for each UAV."""
         with futures.ThreadPoolExecutor() as executor:
-            self.conns = dict(
-                zip(
-                    range(self.n_uavs),
-                    executor.map(self._launch_uav, range(self.n_uavs)),
-                )
-            )
+            conns = list(executor.map(self._launch_uav, range(self.n_uavs)))
+        return conns
 
     def _launch_uav(self, i: int):
         uav_config = self.uavs[i]

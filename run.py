@@ -16,7 +16,7 @@ import signal
 from config import Color
 from helpers import clean
 from helpers.cleanup import ALL_PROCESSES
-from mavlink.customtypes.location import ENUPose, GRAPose
+from helpers.coordinates import ENUPose, GRAPose
 from plan import Plan
 from simulator import (
     QGC,
@@ -42,7 +42,7 @@ def main():
 
     gcs_colors = [Color.RED, Color.ORANGE, Color.GREEN, Color.BLUE]  #
     n_uavs_per_gcs = 60
-    side_len = 100
+    side_len = 10
     altitude = 5
     max_delay = 3  # sec
 
@@ -51,7 +51,7 @@ def main():
     # gaz (i * 50, j * 3 * side_len, 0, 0)                 3x3 10
     base_homes = ENUPose.list(
         [
-            (i * 50 * side_len, j * 50 * side_len, 0, 0)
+            (i * 50 * side_len, j * 3 * side_len, 0, 0)
             for i in range(len(gcs_colors))
             for j in range(n_uavs_per_gcs)
         ]
@@ -66,11 +66,12 @@ def main():
     msn_delays = [random.randint(0, max_delay) for _ in base_homes]
 
     ## Assign vehicles to GCS (by color)
-    gcs_names = [f"{color.name}_{color.emoji}" for color in gcs_colors]
-    gcs_sysids = [
-        list(range(i * n_uavs_per_gcs + 1, (i + 1) * n_uavs_per_gcs + 1))
-        for i in range(len(gcs_colors))
-    ]
+    gcs_sysids = {
+        f"{color.name}_{color.emoji}": list(
+            range(i * n_uavs_per_gcs + 1, (i + 1) * n_uavs_per_gcs + 1)
+        )
+        for i, color in enumerate(gcs_colors)
+    }
 
     # Gazebo Configuration
     gaz_config = ConfigGazebo(
@@ -79,14 +80,12 @@ def main():
 
     for path, home, c in zip(base_paths, base_homes, colors):
         gaz_config.add(base_path=path, base_home=home, color=c)
-    # gaz_config.show()
 
     # QGroundControl Configuration
     qgc_config = ConfigQGC(origin=gra_origin)
 
     for path, home, color, delay in zip(base_paths, base_homes, colors, msn_delays):
         qgc_config.add(base_path=path, base_home=home, color=color, mission_delay=delay)
-    # qgc_config.show()
 
     # No Visualizer
     novis_config = ConfigNovis(origin=gra_origin)
@@ -100,9 +99,9 @@ def main():
 
     # Launch Simulator
     simulator = Simulator(
+        gra_origin=gra_origin,
         visualizers=[novis],
-        gcs_names=gcs_names,
-        gcs_sysids=gcs_sysids,
+        gcs_system_ids=gcs_sysids,
         missions=[veh.mission for veh in qgc_config.vehicles],
         terminals=["gcs"],
         verbose=1,

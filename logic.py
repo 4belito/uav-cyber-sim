@@ -26,7 +26,7 @@ from helpers.setup_log import setup_logging
 from params.simulation import HEARTBEAT_FREQUENCY, REMOTE_ID_FREQUENCY
 from plan import Action, ActionNames, Plan, State, Step
 from plan.actions import make_set_mode
-from plan.actions.navegation import GoToGlobal
+from plan.actions.navegation import GoTo
 
 # TODO: Refactor this module
 heartbeat_event = mavutil.periodic_event(HEARTBEAT_FREQUENCY)
@@ -41,11 +41,11 @@ def main():
     start_logic(config)
 
 
+# TODO: Remove monitored items from config
 def start_logic(config: LogicConfig):
     """Start bidirectional proxy for a given UAV system_id."""
     sysid = config["sysid"]
     port_offset = config["port_offset"]
-    monitored_items = config["monitored_items"]
     gra_orign = GRA(**config["gra_origin_dict"])
     navegation_speed = config["navegation_speed"]
 
@@ -60,9 +60,7 @@ def start_logic(config: LogicConfig):
 
     plan = Plan.auto(
         name="auto",
-        gra_origin=gra_orign,
         mission_path=str(DATA_PATH / f"mission_{sysid}.waypoints"),
-        monitored_items=monitored_items,
         navegation_speed=navegation_speed,
     )
     logic = VehicleLogic(lg_conn, plan=plan, gra_origin=gra_orign)
@@ -126,25 +124,25 @@ class VehicleLogic:
         self.conn = connection
         self.sysid = connection.target_system
         self.name = f"Logic 🧠 {self.sysid}"
+        self.gra_origin = gra_origin
 
         # Plan Properties
         self.plan = plan
-        self.plan.bind(self.conn)
+        self.plan.bind(self.conn, self.gra_origin)
 
         # Avoidance Actions
         self.set_guided = make_set_mode(CopterMode.GUIDED)
-        self.set_guided.bind(self.conn)
+        self.set_guided.bind(self.conn, self.gra_origin)
         self.set_auto = make_set_mode(CopterMode.AUTO)
-        self.set_auto.bind(self.conn)
+        self.set_auto.bind(self.conn, self.gra_origin)
         self.set_loiter = make_set_mode(CopterMode.LOITER)
-        self.set_loiter.bind(self.conn)
+        self.set_loiter.bind(self.conn, self.gra_origin)
         self.set_brake = make_set_mode(CopterMode.BRAKE)
-        self.set_brake.bind(self.conn)
+        self.set_brake.bind(self.conn, self.gra_origin)
 
         self.mode = CopterMode.AUTO
         self.avoidance_action = Action[Step](name=ActionNames.AVOIDANCE, emoji="🚧")
-        self.avoidance_action.bind(self.conn)
-        self.gra_origin = gra_origin
+        self.avoidance_action.bind(self.conn, self.gra_origin)
 
         # Communication properties (positions are local)
         self.safety_radius: float = safety_radius
@@ -261,29 +259,23 @@ class VehicleLogic:
                     self.mode == CopterMode.GUIDED
                     and self.avoidance_action.state == State.DONE  # check this later
                 ):
-                    # gra_avoid_pos = self.gra_origin.to_abs(avoid_pos)
-                    gra_avoid_pos = self.gra_origin.to_abs(pos)
-                    go_to_step = GoToGlobal(
-                        wp=gra_avoid_pos, cause_text="avoidance", stop_asking=False
-                    )
-                    go_to_step.bind(self.conn)
+                    go_to_step = GoTo(
+                        name="go to (avoidance)", wp=avoid_pos, stop_asking_pos=False
+                    )  # avoid_pos/pos
+                    go_to_step.bind(self.conn, self.gra_origin)
                     self.avoidance_action.add(go_to_step)
                     logging.info(
                         f"Vehicle {self.sysid} continuing avoidance to {avoid_pos}"
                     )
                 elif self.mode == CopterMode.AUTO:
-                    # gra_avoid_pos = self.gra_origin.to_abs(avoid_pos)
-                    gra_avoid_pos = self.gra_origin.to_abs(pos)
-                    go_to_step = GoToGlobal(
-                        wp=gra_avoid_pos, cause_text="avoidance", stop_asking=False
-                    )
-                    go_to_step.bind(self.conn)
+                    go_to_step = GoTo(
+                        name="go to (avoidance)", wp=avoid_pos, stop_asking_pos=False
+                    )  # avoid_pos/pos
+                    go_to_step.bind(self.conn, self.gra_origin)
                     self.avoidance_action.add(go_to_step)
                     self.set_guided.run()
                     self.set_guided.reset()
                     self.mode = CopterMode.GUIDED
-                    # self.set_brake.run()
-                    # self.mode = CopterMode.BRAKE
                     logging.info(f"Vehicle {self.sysid} switched to {self.mode} mode")
         logging.debug(f"Vehicle {self.sysid} no avoidance needed")
         logging.debug(

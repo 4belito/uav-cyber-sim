@@ -7,10 +7,10 @@ Currently provides basic global position tracking and mission completion detecti
 
 from __future__ import annotations
 
-import subprocess
 import json
 import logging
 import pickle
+import subprocess
 import threading
 import time
 from collections import defaultdict
@@ -26,12 +26,7 @@ from config import DATA_PATH, BasePort, Color
 from helpers.connections.zeromq import create_zmq_sockets
 from helpers.coordinates import ENU, GRAPose
 from helpers.rid import RIDData
-
-
 from params.simulation import USE_NETWORK_SIM
-
-from pathlib import Path
-
 
 CellKey = tuple[int, int, int]
 

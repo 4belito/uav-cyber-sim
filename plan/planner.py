@@ -9,13 +9,13 @@ from enum import StrEnum
 from typing import overload
 
 from helpers.connections.mavlink.enums import CopterMode
-from helpers.coordinates import ENU, GRA, XY, ENUPose, ENUPoses, ENUs, XYs
+from helpers.coordinates import ENU, XY, ENUPose, ENUPoses, ENUs, XYs
 from plan.actions import (
     make_arm,
     make_change_nav_speed,
     make_land,
     make_monitoring,
-    make_path_local,
+    make_path,
     make_pre_arm,
     make_set_mode,
     make_start_mission,
@@ -183,7 +183,7 @@ class Plan(Action[Action[Step]]):
             plan.add(make_change_nav_speed(speed=navegation_speed))
         plan.add(make_arm())
         plan.add(make_takeoff(altitude=takeoff_alt))
-        plan.add(make_path_local(wps=wps, wp_margin=wp_margin))
+        plan.add(make_path(wps=wps, wp_margin=wp_margin))
 
         plan.add(make_land(final_wp=land_wp))
         return plan
@@ -193,7 +193,7 @@ class Plan(Action[Action[Step]]):
     @classmethod
     def hover(
         cls,
-        wps: ENUs | None = None,
+        wps: ENUs,
         wp_margin: float = 0.5,
         navegation_speed: float = 5,
         name: str = "hover",
@@ -207,30 +207,28 @@ class Plan(Action[Action[Step]]):
             plan.add(make_change_nav_speed(speed=navegation_speed))
         plan.add(make_arm())
         plan.add(make_takeoff(altitude=takeoff_alt))
-        plan.add(make_path_local(wps=wps, wp_margin=wp_margin))
+        plan.add(make_path(wps=wps, wp_margin=wp_margin))
         return plan
 
     @classmethod
     def auto(
         cls,
         name: str,
-        gra_origin: GRA,
         mission_path: str,
         mission_delay: float = 0,
         from_scratch: bool = True,
-        monitored_items: list[int] = [],
         navegation_speed: float = 5,
     ):
         """Create a plan to execute a mission in auto mode."""
         plan = cls(name)
         plan.add(make_upload_mission(mission_path, from_scratch))
-        plan.add(make_pre_arm(delay=mission_delay))
+        plan.add(make_pre_arm())
         plan.add(make_set_mode(CopterMode.GUIDED))
         if navegation_speed != 5:
             plan.add(make_change_nav_speed(speed=navegation_speed))
         plan.add(make_arm())
         plan.add(make_start_mission())
-        plan.add(make_monitoring(gra_origin, monitored_items))
+        plan.add(make_monitoring())
         return plan
 
     @classmethod
@@ -241,7 +239,7 @@ class Plan(Action[Action[Step]]):
     ):
         """Create a plan to execute a mission in auto mode."""
         plan = cls(name)
-        plan.add(make_pre_arm(delay=mission_delay))
+        plan.add(make_pre_arm())
         plan.add(make_set_mode(CopterMode.GUIDED))
         plan.add(make_arm())
         return plan
