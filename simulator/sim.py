@@ -21,6 +21,7 @@ from helpers import create_process, setup_logging
 from helpers.connections.mavlink.mission_io import save_mission
 from helpers.coordinates import GRAPose
 from oracle import Oracle
+from plan.planner import Plan
 from simulator.visualizer import Visualizer
 
 from .QGroundControl.config import Missions
@@ -28,6 +29,16 @@ from .QGroundControl.config import Missions
 SimProcess = Literal["launcher", "veh", "logic", "proxy", "gcs"]
 
 V = TypeVar("V")  # Vehicle type
+
+
+class Vehicle:
+    """Base vehicle class."""
+
+    sysid: int
+    model: str
+    color: str
+    home: GRAPose
+    plan: Plan
 
 
 class Simulator:
@@ -41,7 +52,7 @@ class Simulator:
     def __init__(
         self,
         gra_origin: GRAPose,
-        visualizers: list[Visualizer[V]],
+        visualizer: Visualizer[V],
         missions: Missions,
         gcs_system_ids: dict[str, list[int]],
         logic_cmd: Callable[[int, str, int], str] = lambda _, config_path, verbose: (
@@ -57,7 +68,7 @@ class Simulator:
         verbose: int = 1,
     ):
         self.gra_origin = gra_origin
-        self.visuals = visualizers
+        self.visualizer = visualizer
         self.terminals = set(terminals)
         self.suppress = set(supress_output)
         self.sysids = [sysid for sysids in gcs_system_ids.values() for sysid in sysids]
@@ -69,7 +80,6 @@ class Simulator:
         self.missions = missions
         self.logic_cmd = logic_cmd
         self.gcs_cmd = gcs_cmd
-        self.monitored_items: dict[int, list[int]] = {}
         self.transmission_range = transmission_range  # meters
 
         assert len(self.missions) == self.n_vehs, (
@@ -91,22 +101,19 @@ class Simulator:
         self.gcs_port_offsets = self._find_gcs_port_offsets()
         self._save_logic_configs(DATA_PATH)
         self._save_gcs_configs(DATA_PATH)
-        for visual in self.visuals:
-            if not visual.delay:
-                visual.launch(self.uav_port_offsets)
+        if not self.visualizer.delay:
+            self.visualizer.launch(self.uav_port_offsets)
         self._launch_gcses()
         oracle = self._launch_oracle()
-        for visual in self.visuals:
-            if visual.delay:
-                visual.launch(self.uav_port_offsets)
-
+        if self.visualizer.delay:
+            self.visualizer.launch(self.uav_port_offsets)
         return oracle
 
     def save_missions(self):
         """Save the missions for all the vehicles."""
         for sysid, mission in zip(self.sysids, self.missions):
             traj = [wp.pos for wp in mission.traj]
-            self.monitored_items[sysid] = save_mission(
+            save_mission(
                 path=DATA_PATH / f"mission_{sysid}.waypoints",
                 poses=traj,
                 delay=mission.delay,
@@ -153,7 +160,6 @@ class Simulator:
                     "alt": self.gra_origin.alt,
                 },
                 "port_offset": self.uav_port_offsets[i],
-                "monitored_items": self.monitored_items[sysid],
                 "navegation_speed": self.missions[i].speed,
             }
             config_path = folder_name / f"logic_config_{sysid}.json"
@@ -178,7 +184,7 @@ class Simulator:
                             f" --no-mavproxy"
                             f" --port-offset={self.uav_port_offsets[j]}"
                             + (" --terminal" if "veh" in self.terminals else "")
-                            + self.visuals[0].add_vehicle_cmd(j)
+                            + self.visualizer.add_vehicle_cmd(j)
                         ),
                         "logic_cmd": self.logic_cmd(
                             sysid,

@@ -100,7 +100,7 @@ def main():
     # Launch Simulator
     simulator = Simulator(
         gra_origin=gra_origin,
-        visualizers=[novis],
+        visualizer=novis,
         gcs_system_ids=gcs_sysids,
         missions=[veh.mission for veh in qgc_config.vehicles],
         terminals=["gcs"],
