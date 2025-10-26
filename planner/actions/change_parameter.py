@@ -11,7 +11,8 @@ Includes:
 from helpers.ardupilot.enums import WPNav
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import ParamType
-from plan.core import Action, ActionNames, Step
+from planner.action import Action
+from planner.step import Step
 
 
 class SetSpeed(Step):
@@ -47,7 +48,7 @@ class SetSpeed(Step):
 
 def make_change_nav_speed(speed: float) -> Action[Step]:
     """Return an Action that changes the UAV's WPNAV_SPEED."""
-    name = ActionNames.CHANGE_NAVSPEED
+    name = Action.Names.CHANGE_NAVSPEED
     action = Action[Step](name=name, emoji=name.emoji)
     step = SetSpeed(name=f"Set speed to {speed:.2f} m/s", speed=speed)
     action.add(step)

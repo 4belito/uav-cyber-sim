@@ -13,8 +13,8 @@ from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import MsgID
 from helpers.connections.mavlink.streams import ask_msg, stop_msg
 from helpers.coordinates import GRA
-from plan import Action, ActionNames
-from plan.core import Step
+from planner.action import Action
+from planner.step import Step
 
 
 class CheckItems(Step):
@@ -86,7 +86,7 @@ class CheckEndMission(Step):
 
 def make_monitoring() -> Action[Step]:
     """Monitor mission items."""
-    name = ActionNames.MONITOR_MISSION
+    name = Action.Names.MONITOR_MISSION
     monitoring = Action[Step](name=name, emoji=name.emoji)
     monitoring.add(CheckItems(name="check items"))
     monitoring.add(CheckEndMission(name="check end mission"))

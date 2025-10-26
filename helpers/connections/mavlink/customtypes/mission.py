@@ -25,6 +25,9 @@ class LoaderInterface(Protocol):
     def clear(self) -> None: ...  # noqa: D102
     def load(self, filename: str) -> int: ...  # noqa: D102
     def save(self, filename: str) -> None: ...  # noqa: D102
+    def add_latlonalt(  # noqa: D102
+        self, lat: float, lon: float, altitude: float, terrain_alt: bool = False
+    ) -> None: ...
 
 
 class MissionLoader:
@@ -32,11 +35,11 @@ class MissionLoader:
 
     _loader: LoaderInterface
 
-    def __init__(self, target_system: int = 0, target_component: int = 0):
+    def __init__(self, target_system: int, target_component: int = 0):
         self._loader = MAVWPLoader(target_system, target_component)
 
     def count(self) -> int:
-        """Return number of waypoints."""
+        """Return number of item messages."""
         return self._loader.count()
 
     def wp(self, i: int) -> ItemMsg:
@@ -48,37 +51,43 @@ class MissionLoader:
         return self._loader.item(i)
 
     def add(self, w: ItemMsg, comment: str = "") -> None:
-        """Add a waypoint."""
+        """Add an item message."""
         self._loader.add(w, comment)
 
     def insert(self, idx: int, w: ItemMsg, comment: str = "") -> None:
-        """Insert a waypoint."""
+        """Insert an item message."""
         self._loader.insert(idx, w, comment)
 
     def reindex(self) -> None:
-        """Reindex waypoints."""
+        """Reindex item messages."""
         self._loader.reindex()
 
     def set(self, w: ItemMsg, idx: int) -> None:
-        """Set a waypoint."""
+        """Set an item message."""
         self._loader.set(w, idx)
 
     def remove(self, w: ItemMsg) -> None:
-        """Remove a waypoint."""
+        """Remove an item message."""
         self._loader.remove(w)
 
     def clear(self) -> None:
-        """Clear waypoint list."""
+        """Clear item message list."""
         self._loader.clear()
 
     def load(self, filename: str) -> int:
-        """Load waypoints from a file. Returns number of waypoints loaded."""
+        """Load item messages from a file. Returns number of item messages loaded."""
         return self._loader.load(filename)
 
     def save(self, filename: str) -> None:
-        """Save waypoints to a file."""
+        """Save item messages to a file."""
         self._loader.save(filename)
 
     def items(self) -> list[ItemMsg]:
-        """Return internal list of waypoints."""
+        """Return internal list of item messages."""
         return self._loader.wpoints
+
+    def add_latlonalt(
+        self, lat: float, lon: float, altitude: float, terrain_alt: bool = False
+    ):
+        """Add a waypoint item message by latitude, longitude, and altitude."""
+        self._loader.add_latlonalt(lat, lon, altitude, terrain_alt)

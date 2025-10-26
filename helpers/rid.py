@@ -16,17 +16,12 @@ import pymavlink.dialects.v20.ardupilotmega as mavlink
 import zmq
 from pymavlink import mavutil
 
-from config import BasePort
+from config import DATA_PATH, BasePort
 from helpers.coordinates import ENU, GRA
 
 from .connections.zeromq import create_zmq_socket
 
 mav = mavutil.mavlink.MAVLink(None)
-
-with open("fake_position.pkl", "rb") as f:
-    fake_pos = pickle.load(f)
-
-# fake_pos = ENU(0, 0, 0)  # East, North, Up in meters
 
 
 def parse_one(buf: bytes) -> mavlink.MAVLink_gps_raw_int_message:
@@ -65,6 +60,14 @@ class RIDManager:
         self._lock = threading.Lock()  # ???
         self._stop = threading.Event()
         self.pending = False  # whether there is new data to publish
+
+        # TODO: load fake position from config
+        fake_pos_path = DATA_PATH / "fake_position.pkl"
+        if fake_pos_path.exists():
+            with open(fake_pos_path, "rb") as f:
+                self.fake_pos = pickle.load(f)
+        else:
+            self.fake_pos = None
 
         # ZMQ setup
         self._ctx = zmq.Context()
@@ -142,9 +145,9 @@ class RIDManager:
         """Send current RID snapshot (pyobj) to oracle."""
         with self._lock:
             if self.pending:
-                if self.sysid == 255:
+                if self.fake_pos and self.sysid == 255:
                     send_data = copy.copy(self.data)
-                    send_data.enu_pos = fake_pos
+                    send_data.enu_pos = self.fake_pos
                 else:
                     send_data = self.data
                 # logging.debug(f"SEND DATA RID({self.sysid}): {send_data}")

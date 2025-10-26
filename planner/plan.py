@@ -5,12 +5,11 @@ Supports static and dynamic waypoint modes and includes predefined plans.
 
 from __future__ import annotations
 
-from enum import StrEnum
 from typing import overload
 
 from helpers.connections.mavlink.enums import CopterMode
 from helpers.coordinates import ENU, XY, ENUPose, ENUPoses, ENUs, XYs
-from plan.actions import (
+from planner.actions import (
     make_arm,
     make_change_nav_speed,
     make_land,
@@ -22,28 +21,9 @@ from plan.actions import (
     make_takeoff,
     make_upload_mission,
 )
-from plan.core import Step
 
-from .core import Action
-
-
-class State(StrEnum):
-    """Represents the execution status of a mission element."""
-
-    NOT_STARTED = "NOT_STARTED"
-    IN_PROGRESS = "IN_PROGRESS"
-    DONE = "DONE"
-    FAILED = "FAILED"
-
-
-class PlanMode(StrEnum):
-    """Defines whether a plan uses static or dynamic waypoints."""
-
-    DYNAMIC = "DYNAMIC"
-    STATIC = "STATIC"
-
-
-# TODO: move annotations out
+from .action import Action
+from .step import Step
 
 
 class Plan(Action[Action[Step]]):
@@ -57,6 +37,11 @@ class Plan(Action[Action[Step]]):
         emoji: str = "📋",
     ) -> None:
         super().__init__(name, emoji=emoji)
+
+    def extend(self, plan: Plan) -> None:
+        """Append another plan's steps to this plan."""
+        for action in plan.steps:
+            self.add(action)
 
     @staticmethod
     @overload
@@ -166,29 +151,20 @@ class Plan(Action[Action[Step]]):
         )
 
     @classmethod
-    def basic(
+    def arm(
         cls,
-        wps: ENUs = [ENU(0.0, 0.0, 5.0)],
-        wp_margin: float = 0.5,
+        name: str = "ARM",
+        mission_delay: float = 0,
         navegation_speed: float = 5,
-        name: str = "basic",
-        takeoff_alt: float = 1.0,
-    ) -> Plan:
-        """Create a basic plan with configurable waypoints and options."""
-        land_wp = ENU(wps[-1][0], wps[-1][1], 0)
-        plan = cls(name=name)
+    ):
+        """Create a plan to execute a mission in auto mode."""
+        plan = cls(name)
         plan.add(make_pre_arm())
         plan.add(make_set_mode(CopterMode.GUIDED))
         if navegation_speed != 5:
             plan.add(make_change_nav_speed(speed=navegation_speed))
         plan.add(make_arm())
-        plan.add(make_takeoff(altitude=takeoff_alt))
-        plan.add(make_path(wps=wps, wp_margin=wp_margin))
-
-        plan.add(make_land(final_wp=land_wp))
         return plan
-
-    # TODO Add concatenate plan/actiom method to no repeat code
 
     @classmethod
     def hover(
@@ -200,14 +176,30 @@ class Plan(Action[Action[Step]]):
         takeoff_alt: float = 5.0,
     ):
         """Create a plan to take off, reach a point, and hover."""
-        plan = cls(name)
-        plan.add(make_pre_arm())
-        plan.add(make_set_mode(CopterMode.GUIDED))
-        if navegation_speed != 5:
-            plan.add(make_change_nav_speed(speed=navegation_speed))
-        plan.add(make_arm())
+        plan = cls.arm(name=name, navegation_speed=navegation_speed)
         plan.add(make_takeoff(altitude=takeoff_alt))
         plan.add(make_path(wps=wps, wp_margin=wp_margin))
+        return plan
+
+    @classmethod
+    def basic(
+        cls,
+        wps: ENUs,
+        name: str = "basic",
+        wp_margin: float = 0.5,
+        navegation_speed: float = 5,
+        takeoff_alt: float = 1.0,
+    ) -> Plan:
+        """Create a basic plan with configurable waypoints and options."""
+        land_wp = ENU(wps[-1][0], wps[-1][1], 0)
+        plan = cls.hover(
+            name=name,
+            navegation_speed=navegation_speed,
+            wps=wps,
+            wp_margin=wp_margin,
+            takeoff_alt=takeoff_alt,
+        )
+        plan.add(make_land(final_wp=land_wp))
         return plan
 
     @classmethod
@@ -222,26 +214,15 @@ class Plan(Action[Action[Step]]):
         """Create a plan to execute a mission in auto mode."""
         plan = cls(name)
         plan.add(make_upload_mission(mission_path, from_scratch))
-        plan.add(make_pre_arm())
-        plan.add(make_set_mode(CopterMode.GUIDED))
-        if navegation_speed != 5:
-            plan.add(make_change_nav_speed(speed=navegation_speed))
-        plan.add(make_arm())
+        plan.extend(
+            cls.arm(
+                name="auto_arm",
+                mission_delay=mission_delay,
+                navegation_speed=navegation_speed,
+            )
+        )
         plan.add(make_start_mission())
         plan.add(make_monitoring())
-        return plan
-
-    @classmethod
-    def arm(
-        cls,
-        name: str,
-        mission_delay: float = 0,
-    ):
-        """Create a plan to execute a mission in auto mode."""
-        plan = cls(name)
-        plan.add(make_pre_arm())
-        plan.add(make_set_mode(CopterMode.GUIDED))
-        plan.add(make_arm())
         return plan
 
 

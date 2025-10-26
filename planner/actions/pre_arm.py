@@ -19,7 +19,8 @@ import logging
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import EkfStatus, ModeFlag, MsgID, SensorFlag
 from helpers.connections.mavlink.streams import ask_msg, stop_msg
-from plan.core import Action, ActionNames, Step, StepFailed
+from planner.action import Action
+from planner.step import Step
 
 
 class CheckDisarmed(Step):
@@ -35,7 +36,7 @@ class CheckDisarmed(Step):
         if not msg:
             return False
         if msg.base_mode & ModeFlag.SAFETY_ARMED:
-            raise StepFailed("UAV is already armed")
+            return False
         return True
 
 
@@ -127,7 +128,7 @@ class CheckSystem(Step):
         if not msg:
             return False
         if msg.battery_remaining < 20:
-            raise StepFailed(
+            raise Exception(
                 (
                     f"🔋 Vehicle {conn.target_system}: Battery too low "
                     f"({msg.battery_remaining}%)"
@@ -142,7 +143,7 @@ class CheckSystem(Step):
         ]
 
         if missing:
-            raise StepFailed(
+            raise Exception(
                 f"⚠️ Vehicle {conn.target_system}: Missing or unhealthy sensors: "
                 f"{', '.join(missing)}"
             )
@@ -152,7 +153,7 @@ class CheckSystem(Step):
 
 def make_pre_arm() -> Action[Step]:
     """Build a pre-arm Action that validates safety and system readiness checks."""
-    name = ActionNames.PREARM
+    name = Action.Names.PREARM
     pre_arm = Action[Step](name=name, emoji=name.emoji)
 
     disarm = CheckDisarmed(name="Check disarmed")
@@ -162,80 +163,3 @@ def make_pre_arm() -> Action[Step]:
     for step in [disarm, ekf_status, gps, system]:
         pre_arm.add(step)
     return pre_arm
-
-
-# === CHECK FUNCTIONS ===
-# def check_disarmed(conn: MAVConnection) -> bool:
-#     """Fail if the UAV is currently armed."""
-#     msg = conn.recv_match(type="HEARTBEAT")
-#     if not msg:
-#         return False
-#     if msg.base_mode & ModeFlag.SAFETY_ARMED:
-#         raise StepFailed("UAV is already armed")
-#     return True
-
-
-# def check_ekf_status(
-#     conn: MAVConnection,
-#     required_flags: tuple[EkfStatus, ...],
-# ) -> bool:
-#     """Check whether all required EKF flags are set."""
-#     msg = conn.recv_match(type="EKF_STATUS_REPORT")
-#     if not msg:
-#         return False
-#     missing = [flag.name for flag in required_flags if not msg.flags & flag]
-#     if missing:
-#         logging.debug(
-#             f"🛰️ Vehicle {conn.target_system}: Waiting for EKF to be ready... "
-#             f"Pending: {', '.join(missing)}"
-#         )
-#         return False
-#     stop_msg(conn, msg_id=MsgID.EKF_STATUS_REPORT)
-#     return True
-
-
-# def check_gps_status(conn: MAVConnection) -> bool:
-#     """Fail if GPS fix is not 3D (fix_type < 3)."""
-#     msg = conn.recv_match(type="GPS_RAW_INT")
-#     if not msg:
-#         return False
-#     if msg.fix_type < 3:
-#         logging.warning(
-#             f"📡 Vehicle {conn.target_system}: GPS fix too weak — "
-#             f"fix_type = {msg.fix_type} (need at least 3 for 3D fix)"
-#         )
-#         return False
-#         # raise StepFailed(f"GPS fix too weak (fix_type = {msg.fix_type})")
-#     # stop_msg(conn, msg_id=MsgID.GPS_RAW_INT)
-#     return True
-
-
-# def check_sys_status(
-#     conn: MAVConnection, required_sensors: tuple[SensorFlag, ...]
-# ) -> bool:
-#     """Fail if battery is low or any required sensors are unhealthy."""
-#     msg = conn.recv_match(type="SYS_STATUS")
-#     if not msg:
-#         return False
-#     if msg.battery_remaining < 20:
-#         raise StepFailed(
-#             (
-#                 f"🔋 Vehicle {conn.target_system}: Battery too low "
-#                 f"({msg.battery_remaining}%)"
-#             )
-#         )
-#     healthy = msg.onboard_control_sensors_health
-#     enabled = msg.onboard_control_sensors_enabled
-#     missing = [
-#         req_sensor.name
-#         for req_sensor in required_sensors
-#         if not healthy & enabled & req_sensor
-#     ]
-
-#     if missing:
-#         raise StepFailed(
-#             f"⚠️ Vehicle {conn.target_system}: Missing or unhealthy sensors: "
-#             f"{', '.join(missing)}"
-#         )
-#     stop_msg(conn, msg_id=MsgID.SYS_STATUS)
-#     return True

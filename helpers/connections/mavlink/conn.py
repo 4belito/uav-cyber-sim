@@ -1,6 +1,7 @@
 """Utility functions for MAVLink connections and messaging."""
 
 import logging
+import time
 from typing import Literal, cast
 
 from pymavlink import mavutil
@@ -54,18 +55,40 @@ def create_tcp_conn(
     offset: int,
     role: Literal["client", "server"] = "client",
     sysid: int = 255,
+    retry_window: float = 15.0,
 ) -> MAVConnection:
     """Create and in or out connection and wait for geting the hearbeat in."""
     port = base_port + offset
     connection_string = f"tcp{'in' if role == 'server' else ''}:127.0.0.1:{port}"
+    is_client = role == "client"
 
-    try:
-        conn = connect(connection_string)
-        send_heartbeat(conn, sysid)
-        conn.wait_heartbeat()
-        conn.target_system = sysid
-        return conn
-    except Exception as e:
-        logging.error(f"Failed to create TCP connection on port {port}: {e}")
-        # logging.error(f"TCP connection error traceback:\n{traceback.format_exc()}")
-        raise
+    attempt = 0
+    start_time = time.time()
+    while True:
+        attempt += 1
+        try:
+            conn = connect(connection_string)
+            send_heartbeat(conn, sysid)
+            conn.wait_heartbeat()
+            conn.target_system = sysid
+            return conn
+        except Exception as e:
+            if not is_client:
+                logging.error(f"Failed to create TCP connection on port {port}: {e}")
+                raise
+
+            elapsed = time.time() - start_time
+            remaining = retry_window - elapsed
+            if remaining <= 0:
+                logging.error(
+                    f"Failed to create TCP connection on port {port} after "
+                    f"{attempt} attempts: {e}"
+                )
+                raise e
+
+            backoff = min(0.1 * attempt, 0.5, remaining)
+            logging.warning(
+                f"TCP client connection to port {port} failed (attempt {attempt}): {e}."
+                f" Retrying in {backoff}"
+            )
+            time.sleep(backoff)

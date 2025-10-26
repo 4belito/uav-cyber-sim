@@ -24,9 +24,9 @@ from helpers.coordinates import ENU, GRA, XY
 from helpers.rid import RIDData, RIDManager
 from helpers.setup_log import setup_logging
 from params.simulation import HEARTBEAT_FREQUENCY, REMOTE_ID_FREQUENCY
-from plan import Action, ActionNames, Plan, State, Step
-from plan.actions import make_set_mode
-from plan.actions.navegation import GoTo
+from planner import Action, Plan, State, Step
+from planner.actions import make_set_mode
+from planner.actions.navigation import GoTo
 
 # TODO: Refactor this module
 heartbeat_event = mavutil.periodic_event(HEARTBEAT_FREQUENCY)
@@ -88,7 +88,8 @@ def start_logic(config: LogicConfig):
                 logging.debug(
                     f"Get RID:{o_rid and o_rid.enu_pos} from the received_queeue"
                 )
-                logic.check_avoidance(o_rid)
+                if logic.avoidance_method:
+                    logic.check_avoidance(o_rid)
             except Empty:
                 pass
             logic.act()
@@ -141,12 +142,18 @@ class VehicleLogic:
         self.set_brake.bind(self.conn, self.gra_origin)
 
         self.mode = CopterMode.AUTO
-        self.avoidance_action = Action[Step](name=ActionNames.AVOIDANCE, emoji="🚧")
+        self.avoidance_action = Action[Step](name=Action.Names.AVOIDANCE, emoji="🚧")
         self.avoidance_action.bind(self.conn, self.gra_origin)
 
         # Communication properties (positions are local)
         self.safety_radius: float = safety_radius
         self.rid: RIDData | None = None
+        avoidance_method_path = DATA_PATH / "avoid_method.txt"
+        if avoidance_method_path.exists():
+            with open(DATA_PATH / "avoid_method.txt", "r") as f:
+                self.avoidance_method = f.read()
+        else:
+            self.avoidance_method = None
 
         logging.info(f"{self.name}: launching")
 
@@ -242,14 +249,14 @@ class VehicleLogic:
             )
         )
         if obst_dist < self.safety_radius:
-            logging.info(
-                (
-                    f"Vehicle {self.sysid} obstacle {o_rid.sysid} too close "
-                    f"({obst_dist:.2f} m < {self.safety_radius} m), performing avoidance"
-                )
-            )
             avoid_pos = self.get_avoidance_pos(o_pos, target_pos, obst_dist)
             if avoid_pos is not None:
+                if self.avoidance_method == "naive":
+                    avoid_wp = avoid_pos
+                elif self.avoidance_method == "stop":
+                    avoid_wp = pos
+                else:
+                    raise Exception("Incorrect avoidance method")
                 # TODO: Refactor this logic
                 logging.info(
                     f"Vehicle {self.sysid} avoiding to {avoid_pos}: "
@@ -260,8 +267,8 @@ class VehicleLogic:
                     and self.avoidance_action.state == State.DONE  # check this later
                 ):
                     go_to_step = GoTo(
-                        name="go to (avoidance)", wp=avoid_pos, stop_asking_pos=False
-                    )  # avoid_pos/pos
+                        name="go to (avoidance)", wp=avoid_wp, stop_asking_pos=False
+                    )
                     go_to_step.bind(self.conn, self.gra_origin)
                     self.avoidance_action.add(go_to_step)
                     logging.info(
@@ -269,18 +276,14 @@ class VehicleLogic:
                     )
                 elif self.mode == CopterMode.AUTO:
                     go_to_step = GoTo(
-                        name="go to (avoidance)", wp=avoid_pos, stop_asking_pos=False
-                    )  # avoid_pos/pos
+                        name="go to (avoidance)", wp=avoid_wp, stop_asking_pos=False
+                    )
                     go_to_step.bind(self.conn, self.gra_origin)
                     self.avoidance_action.add(go_to_step)
                     self.set_guided.run()
                     self.set_guided.reset()
                     self.mode = CopterMode.GUIDED
                     logging.info(f"Vehicle {self.sysid} switched to {self.mode} mode")
-        logging.debug(f"Vehicle {self.sysid} no avoidance needed")
-        logging.debug(
-            f"mode {self.mode.name}, plan_state {self.plan.current and self.plan.current.state}"
-        )
         if self.mode == CopterMode.GUIDED:
             if self.avoidance_action.state == State.DONE:
                 self.set_auto.run()

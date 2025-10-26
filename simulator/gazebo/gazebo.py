@@ -18,20 +18,44 @@ import os
 import re
 import shutil
 import xml.etree.ElementTree as ET
+from dataclasses import dataclass
 from pathlib import Path
 
-from config import ARDUPILOT_GAZEBO_MODELS, ENV_CMD_GAZ
+from config import ARDUPILOT_GAZEBO_MODELS, ENV_CMD_GAZ, Color
 from helpers import create_process
-from helpers.coordinates import XYZRPY, GRAPose
+from helpers.coordinates import XYZRPY, ENUPose, GRAPose
 from helpers.math import heading_to_yaw
-from simulator.gazebo.config import COLOR_MAP, ConfigGazebo, GazVehicle, GazWP
+from simulator.vehicle import SimVehicle, Vehicle
 from simulator.visualizer import Visualizer
 
-from .preview import show_markers
+from .preview import GazMarker, GazMarkers, show_markers
 
 Trace = tuple[
     list[float], list[float], list[float], list[float], list[float], list[str]
 ]
+
+
+COLOR_MAP: dict[Color, str] = {
+    Color.BLUE: "0.0 0.0 1.0 1",
+    Color.GREEN: "0.306 0.604 0.024 1",
+    Color.RED: "0.8 0.0 0.0 1",
+    Color.ORANGE: "1.0 0.5 0.0 1",
+    Color.YELLOW: "1.0 1.0 0.0 1",
+    Color.WHITE: "1.0 1.0 1.0 1",
+}
+
+
+@dataclass
+class GazVehicle(Vehicle):
+    """Represents a vehicle with a model and a trajectory."""
+
+    home: ENUPose
+    model: str
+    color: Color
+    mtraj: GazMarkers
+
+
+GazVehicles = list[GazVehicle]
 
 
 class Gazebo(Visualizer[GazVehicle]):
@@ -45,25 +69,24 @@ class Gazebo(Visualizer[GazVehicle]):
 
     def __init__(
         self,
-        config: ConfigGazebo,
         gra_origin: GRAPose,
+        world_path: str,
     ):
-        super().__init__()
-        self.origin_str: str = ",".join(map(str, gra_origin))
-        self.config: ConfigGazebo = config
-        self.markers: list[GazWP] = self.traj_wps()
+        super().__init__(gra_origin)
+        self.world_path = world_path
+        self.markers: GazMarkers = []
 
     def add_vehicle_cmd(self, i: int) -> str:
         """Add gazebo model (only iris TODO: add others)."""
-        return f" -f gazebo-iris --custom-location={self.origin_str}"
+        return f" -f gazebo-iris --custom-location={self.gra_origin.to_str()}"
 
     def launch(self, port_offsets: list[int]):
         """Launch the Gazebo simulator with the specified UAV and waypoints."""
-        base_models = [f"{veh.model}_{veh.color}" for veh in self.config.vehicles]
+        base_models = [f"{veh.model}_{veh.color}" for veh in self.vehicles]
         self._generate_drone_models_from_bases(
             base_models, base_port_in=9002, port_step=10
         )
-        updated_world = self._update_world(self.config.world_path)
+        updated_world = self._update_world(self.world_path)
         create_process(
             f"gazebo {updated_world}",
             visible=False,
@@ -74,14 +97,6 @@ class Gazebo(Visualizer[GazVehicle]):
             "🖥️  Gazebo launched for realistic simulation and 3D visualization."
         )
 
-    def traj_wps(self) -> list[GazWP]:
-        """Obtain trajectories waypoints to Gazebo."""
-        wps: list[GazWP] = []
-        for veh in self.config.vehicles:
-            for waypoint in veh.mtraj:
-                wps.append(waypoint)
-        return wps
-
     def show(
         self,
         title: str = "Trajectories",
@@ -90,6 +105,33 @@ class Gazebo(Visualizer[GazVehicle]):
     ) -> None:
         """Render a 3D interactive plot of waypoint trajectories using Plotly."""
         show_markers(self.markers, title=title, frames=frames, ground=ground)
+
+    def get_vehicle(
+        self,
+        vehicle: SimVehicle,
+        radius: float = 0.2,
+        alpha: float = 0.05,
+    ) -> GazVehicle:
+        """Convert a Vehicle to a GazVehicle with markers for its trajectory."""
+        markertraj: GazMarkers = []
+        for i, pos in enumerate(vehicle.waypoints):
+            markertraj.append(
+                GazMarker(
+                    name=str(i),
+                    group=f"traj_{vehicle.sysid}",
+                    pos=pos,
+                    color=vehicle.color,
+                    radius=radius,
+                    alpha=alpha,
+                )
+            )
+            self.markers.extend(markertraj)
+        return GazVehicle(
+            model=vehicle.model,
+            color=vehicle.color,
+            home=vehicle.home,
+            mtraj=markertraj,
+        )
 
     def _generate_drone_models_from_bases(
         self,
@@ -101,7 +143,7 @@ class Gazebo(Visualizer[GazVehicle]):
         output_dir = Path(ARDUPILOT_GAZEBO_MODELS)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        for i in range(self.config.n_vehicles):
+        for i in range(self.num_vehicles):
             name = f"drone{i + 1}"
             new_model_path = output_dir / name
             if new_model_path.exists():
@@ -162,7 +204,7 @@ class Gazebo(Visualizer[GazVehicle]):
             marker_elem = self._generate_waypoint_element(mark)
             world_elem.append(marker_elem)
 
-    def _generate_waypoint_element(self, w: GazWP) -> ET.Element:
+    def _generate_waypoint_element(self, w: GazMarker) -> ET.Element:
         model = ET.Element("model", name=f"{w.group}.{w.name}")
         x, y, z = w.pos
 
@@ -181,7 +223,7 @@ class Gazebo(Visualizer[GazVehicle]):
         return model
 
     def _add_drone_elements(self, world_elem: ET.Element) -> None:
-        for i, veh in enumerate(self.config.vehicles):
+        for i, veh in enumerate(self.vehicles):
             x, y, z, h = veh.home
             pose = XYZRPY(x, y, z, 0, 0, heading_to_yaw(h))
             drone_elem = self._generate_drone_element(f"drone{i + 1}", pose)
@@ -207,7 +249,7 @@ class Gazebo(Visualizer[GazVehicle]):
         for tag in ["self_collide", "enable_wind", "kinematic", "gravity"]:
             ET.SubElement(link, tag).text = "0"
 
-    def _add_visual(self, visual: ET.Element, w: GazWP) -> None:
+    def _add_visual(self, visual: ET.Element, w: GazMarker) -> None:
         geometry = ET.SubElement(visual, "geometry")
         sphere = ET.SubElement(geometry, "sphere")
         ET.SubElement(sphere, "radius").text = str(w.radius)

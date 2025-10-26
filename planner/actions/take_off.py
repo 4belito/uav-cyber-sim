@@ -12,7 +12,8 @@ import logging
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import CmdNav, LandState, MsgID
 from helpers.connections.mavlink.streams import ask_msg, stop_msg
-from plan.core import Action, ActionNames, Step
+from planner.action import Action
+from planner.step import Step
 
 
 class TakeOff(Step):
@@ -66,7 +67,7 @@ class TakeOff(Step):
 
 def make_takeoff(altitude: float = 1.0) -> Action[Step]:
     """Create a TAKEOFF action with execution and check steps."""
-    name = ActionNames.TAKEOFF
+    name = Action.Names.TAKEOFF
     takeoff_action = Action[Step](name=name, emoji=name.emoji)
     takeoff_action.add(TakeOff(name=f"take off to {altitude} m", altitude=altitude))
     return takeoff_action

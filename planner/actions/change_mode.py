@@ -7,7 +7,8 @@ steps based on HEARTBEAT messages and supported flight modes.
 
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import CopterMode, ModeFlag
-from plan.core import Action, ActionNames, Step
+from planner.action import Action
+from planner.step import Step
 
 
 class SwitchMode(Step):
@@ -35,7 +36,7 @@ class SwitchMode(Step):
 
 def make_set_mode(flight_mode: CopterMode) -> Action[Step]:
     """Create an Action to switch the UAV flight mode."""
-    name = ActionNames.CHANGE_FLIGHTMODE
+    name = Action.Names.CHANGE_FLIGHTMODE
     action = Action[Step](name, emoji=name.emoji)
     step = SwitchMode(name=f"Switch to {flight_mode.name}", flight_mode=flight_mode)
     action.add(step)

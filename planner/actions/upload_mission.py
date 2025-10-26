@@ -13,8 +13,8 @@ import time
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.customtypes.mission import MissionLoader
 from helpers.connections.mavlink.enums import Cmd, MissionResult
-from plan import Action, ActionNames
-from plan.core import Step
+from planner.action import Action
+from planner.step import Step
 
 
 class ClearMission(Step):
@@ -78,7 +78,7 @@ class UploadMission(Step):
 
 def make_upload_mission(mission_path: str, from_scratch: bool = True) -> Action[Step]:
     """Create an upload mission action."""
-    name = ActionNames.UPLOAD_MISSION
+    name = Action.Names.UPLOAD_MISSION
     upload_mission = Action[Step](name=name, emoji=name.emoji)
     if from_scratch:
         upload_mission.add(ClearMission(name="clear previous mission"))

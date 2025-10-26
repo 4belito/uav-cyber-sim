@@ -4,33 +4,18 @@ import logging
 from dataclasses import dataclass
 
 from helpers.coordinates import ENUPose, GRAPose
-from simulator.visualizer import ConfigVis, Visualizer
+from simulator.vehicle import SimVehicle, Vehicle
+from simulator.visualizer import Visualizer  # ConfigVis,
 
 
 @dataclass
-class NovisVehicle:
+class NovisVehicle(Vehicle):
     """Vehicle with a home position."""
 
-    home: GRAPose
+    home: ENUPose
 
 
-class ConfigNovis(ConfigVis[NovisVehicle]):
-    """Stores the GRA origin used to compute UAV home positions."""
-
-    def __init__(
-        self,
-        origin: GRAPose,
-    ) -> None:
-        super().__init__()
-        self.origin = origin
-
-    def add(
-        self,
-        base_home: ENUPose,
-    ) -> None:
-        """Shortcut to add a vehicle from a raw path."""
-        home = self.origin.to_abs(base_home)
-        self.add_vehicle(NovisVehicle(home=home))
+NovisVehicles = list[NovisVehicle]
 
 
 class NoVisualizer(Visualizer[NovisVehicle]):
@@ -40,16 +25,23 @@ class NoVisualizer(Visualizer[NovisVehicle]):
 
     def __init__(
         self,
-        config: ConfigNovis,
+        gra_origin: GRAPose,
     ):
-        super().__init__()
-        self.config = config
+        super().__init__(gra_origin)
 
-    def add_vehicle_cmd(self, i: int):
-        """Add GRA location to the vhecle comand."""
-        homes_str = ",".join(map(str, self.config.vehicles[i].home))
+    def get_vehicle(self, vehicle: SimVehicle) -> NovisVehicle:
+        """Convert a Vehicle to a NovisVehicle with GRA home position."""
+        return NovisVehicle(home=vehicle.home)
+
+    def add_vehicle_cmd(self, i: int) -> str:
+        """Add GRA location to the vehicle command."""
+        homes_str = self.gra_origin.to_abs(self.vehicles[i].home).to_str()
         return f" --custom-location={homes_str}"
 
     def launch(self, port_offsets: list[int], verbose: int = 1):
         """Print a message indicating that no visualizer will be launched."""
         logging.info("🙈 Running without visualization.")
+
+    def show(self):
+        """Print the vehicles."""
+        print(self.vehicles)

@@ -1,22 +1,14 @@
 TODO:
-- Check UDP conections( some times some uavs does not complete its mission)
-- Update simulator logic: launch GCSs first, then have each GCS launch its associated vehicles.
-
 - organize data collection
-- modularize upload mission
 - study GAZEBO Model
-- Apply delay between upload mission and arm (or launch vehchels at any time of the simulation)
-- clean all the old notations after passing to the new branch
+- Launch vehicles at any time
 - Add support to use different UAV models other than Iris.
-
 - Fix: [Errno 111] Connection refused — sleeping.
 - Completely remove the sim_vehicle.py script from the simulator; move necessary code to custom scripts (proxy.py, sim.py, oracle.py).
-
 - Add a parameter for waypoint reach distance, similar to Guided mode.
 
-
-- Add collision avoidance and dynamic planning capabilities (some old code is commented out in vehicle_logic.py and oracle.py)
+- Add dynamic planning capabilities (from old code) 
 - Improve collision avoidance — ideally, use ArduPilot’s built-in algorithm or implement a state-of-the-art alternative.
 
-- List of posible cyber attacks
+- Add more cyber attacks and modulireze the current rid spooing attack
 

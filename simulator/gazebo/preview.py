@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Iterable, TypeAlias
 
 import numpy as np
 import plotly.graph_objects as go
 from numpy.typing import NDArray
 
-from simulator.gazebo.config import GazWP
+from config import Color
+from helpers.coordinates import ENU
 
 SphereTriMesh: TypeAlias = tuple[
     NDArray[np.float64],
@@ -20,8 +22,23 @@ SphereTriMesh: TypeAlias = tuple[
 ]
 
 
+@dataclass
+class GazMarker:
+    """Visual waypoint with position, color, size, and transparency in Gazebo."""
+
+    name: str
+    group: str
+    pos: ENU
+    color: Color = Color.GREEN
+    radius: float = 0.2
+    alpha: float = 0.05
+
+
+GazMarkers = list[GazMarker]
+
+
 def show_markers(
-    markers: Iterable[GazWP],
+    markers: Iterable[GazMarker],
     *,
     title: str = "Trajectories",
     frames: tuple[float, float, float] = (0.2, 0.2, 0.2),
@@ -33,7 +50,7 @@ def show_markers(
 
 
 def create_trajectory_figure(
-    markers: Iterable[GazWP],
+    markers: Iterable[GazMarker],
     title: str,
     frames: tuple[float, float, float],
     ground: float | None,
@@ -86,7 +103,7 @@ def _compute_ranges(
 
 
 def _build_plot_series(
-    marker_iter: Iterable[GazWP],
+    marker_iter: Iterable[GazMarker],
 ) -> tuple[list[go.Mesh3d | go.Scatter3d], list[float], list[float], list[float]]:
     data: list[go.Mesh3d | go.Scatter3d] = []
     all_x: list[float] = []

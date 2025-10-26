@@ -4,7 +4,8 @@ import logging
 
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import Cmd
-from plan.core import Action, ActionNames, Step
+from planner.action import Action
+from planner.step import Step
 
 
 class StartMission(Step):
@@ -39,7 +40,7 @@ class StartMission(Step):
 
 def make_start_mission() -> Action[Step]:
     """Build an Action to start the mission."""
-    name = ActionNames.START_MISSION
+    name = Action.Names.START_MISSION
     arm = Action[Step](name=name, emoji=name.emoji)
 
     arm.add(StartMission(name="start mission"))

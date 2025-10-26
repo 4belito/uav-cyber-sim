@@ -3,7 +3,7 @@
 import time
 
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
-from plan.core import Step
+from planner.step import Step
 
 
 class Wait(Step):

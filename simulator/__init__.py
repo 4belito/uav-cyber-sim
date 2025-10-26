@@ -5,22 +5,16 @@ This package provides interfaces and configuration classes for different UAV sim
 and ground control software.
 """
 
-from .gazebo.config import ConfigGazebo  # , GazVehicle   , GazWP,  GazTraj
 from .gazebo.gazebo import Gazebo
-from .novisualizer.novisualizer import ConfigNovis, NoVisualizer
-from .QGroundControl.config import ConfigQGC  # , Missions
+from .novisualizer.novisualizer import NoVisualizer
 from .QGroundControl.qgc import QGC
 from .sim import Simulator
-from .visualizer import ConfigVis, Visualizer
+from .visualizer import Visualizer
 
 __all__ = [
     "Simulator",
     "QGC",
     "Gazebo",
-    "ConfigGazebo",
     "Visualizer",
     "NoVisualizer",
-    "ConfigQGC",
-    "ConfigVis",
-    "ConfigNovis",
 ]

@@ -21,6 +21,8 @@ from pymap3d import enu2geodetic, geodetic2enu  # type: ignore
 from config import Color
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 
+# TODO: Check repetitions of similar methods across classes
+
 
 def float_nans(n: int) -> Generator[float, None, None]:
     """Create a stream of NaN floats of length n."""
@@ -355,7 +357,7 @@ class GRA(LLA):
         """Absolute GRA obtained by applying ENU/ENUPose `point` to this origin."""
         if isinstance(point, ENUPose):
             point = point.unpose()
-        lat, lon, alt = enu2geodetic(*point, *self, deg=True)  # type: ignore
+        lat, lon, alt = map(float, enu2geodetic(*point, *self, deg=True))  # type: ignore
         return GRA(lat, lon, alt)
 
     def pose(self, heading: float = 0.0) -> GRAPose:
@@ -429,7 +431,10 @@ class GRA(LLA):
 
     @classmethod
     def get_position(cls, conn: MAVConnection) -> GRA | None:
-        """Request and return the UAV's current global position."""
+        """
+        Request and return the UAV's current global position.
+        It requires GLOBAL_POSITION_INT mesages to be emited from ardupilot.
+        """
         msg = conn.recv_match(type="GLOBAL_POSITION_INT", blocking=True, timeout=0.001)
         if msg:
             return cls.from_global_int(msg.lat, msg.lon, msg.alt)  # type: ignore
@@ -473,6 +478,10 @@ class ENUPose(XYZPose):
         x_rot, y_rot = XY(p.x, p.y).rotate(-self.heading)
         return ENUPose(x_rot, y_rot, p.z, p.heading)
 
+    def to_str(self) -> str:
+        """Return a string representation of the ENUPose."""
+        return ",".join(map(str, self))
+
     # ---- Batch helpers (ENUPose) ----
     def to_rel_all(self, points: Iterable[ENU | ENUPose]) -> list[ENUPose]:
         """Vectorize `to_rel` over a sequence of ENU/ENUPose."""
@@ -491,6 +500,11 @@ class ENUPose(XYZPose):
         """Iterate ENU/ENUPose → absolute ENUPose."""
         for v in offsets:
             yield self.to_abs(v)
+
+    @staticmethod
+    def unpose_all(poses: Iterable[ENUPose]) -> list[ENU]:
+        """Vectorize `unpose` over a sequence of ENUPose."""
+        return [p.unpose() for p in poses]
 
     def draw(self, ax: Axes, label: str, color: str, alpha: float = 1.0):
         """Draws an ENUPose on a matplotlib Axes with an arrow and label."""
@@ -529,14 +543,17 @@ class GRAPose(LLAPose):
             p = p.pose()
         # rotate local offset by origin heading, then apply on globe
         x_rot, y_rot = XY(p.x, p.y).rotate(self.heading)
-        lat, lon, alt = enu2geodetic(  # type: ignore
-            x_rot,
-            y_rot,
-            p.z,
-            self.lat,
-            self.lon,
-            self.alt,
-            deg=True,
+        lat, lon, alt = map(
+            float,
+            enu2geodetic(  # type: ignore
+                x_rot,
+                y_rot,
+                p.z,
+                self.lat,
+                self.lon,
+                self.alt,
+                deg=True,
+            ),
         )
         h_abs = (self.heading + p.heading) % 360
         return GRAPose(lat, lon, alt, h_abs)
@@ -568,11 +585,11 @@ class GRAPose(LLAPose):
         return ",".join(map(str, self))
 
     # ---- Batch helpers (GRAPose) ----
-    def to_abs_all(self, rels: Iterable[ENU | ENUPose]) -> list[GRAPose]:
+    def to_abs_all(self, rels: Iterable[ENU | ENUPose]) -> GRAPoses:
         """Vectorize `to_abs` over a sequence of ENU/ENUPose offsets."""
         return [self.to_abs(v) for v in rels]
 
-    def to_rel_all(self, points: Iterable[GRA | GRAPose]) -> list[ENUPose]:
+    def to_rel_all(self, points: Iterable[GRA | GRAPose]) -> ENUPoses:
         """Vectorize `to_rel` over a sequence of GRA/GRAPose points."""
         return [self.to_rel(p) for p in points]
 
@@ -585,6 +602,11 @@ class GRAPose(LLAPose):
         """Iterate GRA/GRAPose → relative ENUPose."""
         for p in points:
             yield self.to_rel(p)
+
+    @staticmethod
+    def unpose_all(poses: Iterable[GRAPose]) -> GRAs:
+        """Vectorize `unpose` over a sequence of GRAPose."""
+        return [p.unpose() for p in poses]
 
 
 # === Type aliases for grouped data (inputs are usually Iterable) ===

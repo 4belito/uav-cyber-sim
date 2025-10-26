@@ -1,117 +1,166 @@
 """
 Multi-UAV Mission Launcher.
 
-This script launches a multi-UAV simulation using predefined mission plans
-and visualizers. It assigns UAVs to Ground Control Stations (GCS) by color,
-creates square paths with random delays, and monitors mission completion.
+This script mirrors the `5-many_uavs` notebook but exposes CLI switches to pick
+between the lightweight run (default), Gazebo, or QGroundControl visualizers.
 
-Run from command line for faster output than notebooks:
-
-    python multi_uav_launcher.py
+Usage:
+    python run.py --visualizer novis|gazebo|qgc
 """
 
-import random
-import signal
+import argparse
+from typing import Callable, Tuple, cast
 
-from config import Color
+from config import DATA_PATH, Color
 from helpers import clean
-from helpers.cleanup import ALL_PROCESSES
 from helpers.coordinates import ENUPose, GRAPose
-from plan import Plan
-from simulator import (
-    QGC,
-    ConfigGazebo,
-    ConfigNovis,
-    ConfigQGC,
-    Gazebo,
-    NoVisualizer,
-    Simulator,
-)
+from planner import Plan
+from planner.plans.auto import AutoPlan
+from simulator import QGC, Gazebo, NoVisualizer, Simulator
+from simulator.gazebo.preview import GazMarker
+from simulator.QGroundControl.qgc import QGCMarker
+from simulator.vehicle import SimVehicle, Vehicle
+from simulator.visualizer import Visualizer
 
-signal.signal(signal.SIGTTIN, signal.SIG_IGN)
-ALL_PROCESSES.remove("run_many_uavs.py")
+VISUALIZER_CHOICES = ("novis", "gazebo", "qgc")
+GAZEBO_WORLD = "simulator/gazebo/worlds/runway.world"
+
+vis_trajs: dict[str, Callable[[int, int, float], Tuple[float, float, float, float]]] = {
+    "novis": lambda i, j, side_len: (i * 50 * side_len, j * 50 * side_len, 0.0, 0.0),
+    "qgc": lambda i, j, side_len: (i * side_len / 10.0, j * side_len / 3.0, 0.0, 0.0),
+    "gaz": lambda i, j, side_len: (i * 50.0, j * 3 * side_len, 0.0, 0.0),
+}
+
+vis_gcs_colors: dict[str, list[Color]] = {
+    "novis": [Color.RED, Color.ORANGE, Color.GREEN, Color.BLUE],
+    "qgc": [Color.RED, Color.ORANGE, Color.GREEN, Color.BLUE],
+    "gaz": [Color.RED, Color.GREEN, Color.BLUE],
+}
+vis_uavs_per_gcs: dict[str, int] = {
+    "novis": 60,
+    "qgc": 40,
+    "gaz": 3,
+}
+
+
+def parse_args():
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(description="Launch many-UAV mission runs")
+    parser.add_argument(
+        "--visualizer",
+        choices=VISUALIZER_CHOICES,
+        default="novis",
+        help="Visualizer to use (default: novis/headless)",
+    )
+    return parser.parse_args()
+
+
+def make_visualizer(
+    choice: str, gra_origin: GRAPose, enu_origin: ENUPose
+) -> Visualizer[Vehicle]:
+    """Create the requested visualizer."""
+    match choice:
+        case "gazebo":
+            gaz = Gazebo(gra_origin, world_path=GAZEBO_WORLD)
+            origin_gaz = GazMarker(
+                name="origin",
+                group="origin",
+                pos=enu_origin.unpose(),
+                color=Color.WHITE,
+            )
+            gaz.markers.append(origin_gaz)
+            vis = gaz
+        case "qgc":
+            qgc = QGC(gra_origin)
+            origin_qgc = QGCMarker(
+                name="origin",
+                pos=gra_origin.unpose(),
+                color=Color.WHITE,
+            )
+            qgc.markers.append(origin_qgc)
+            vis = qgc
+        case "novis":
+            vis = NoVisualizer(gra_origin)
+        case _:
+            raise ValueError(f"Unknown visualizer choice: {choice}")
+    return cast(Visualizer[Vehicle], vis)
 
 
 def main():
     """Launch a multi-UAV simulation and monitors mission completion."""
-    clean(ALL_PROCESSES)
+    args = parse_args()
+    clean()
 
-    # Create Plans
-    gra_origin = GRAPose(lat=-35.3633280, lon=149.1652241, alt=0, heading=90)
+    ## Simulation Positions and Paths
+    gra_origin = GRAPose(lat=-35.3633280, lon=149.1652241, alt=0, heading=0)
     enu_origin = ENUPose(x=0, y=0, z=gra_origin.alt, heading=gra_origin.heading)
+    visualizer = make_visualizer(args.visualizer, gra_origin, enu_origin)
 
-    gcs_colors = [Color.RED, Color.ORANGE, Color.GREEN, Color.BLUE]  #
-    n_uavs_per_gcs = 60
+    gcs_colors = vis_gcs_colors[args.visualizer]
+    n_uavs_per_gcs = vis_uavs_per_gcs[args.visualizer]
     side_len = 10
     altitude = 5
-    max_delay = 3  # sec
 
-    # novis (i * 50 * side_len, j * 50 * side_len, 0, 0)  4x60 100
-    # qgc (i * side_len / 10, j * side_len / 3, 0, 0)     4x30 100
-    # gaz (i * 50, j * 3 * side_len, 0, 0)                 3x3 10
     base_homes = ENUPose.list(
         [
-            (i * 50 * side_len, j * 3 * side_len, 0, 0)
+            vis_trajs[args.visualizer](i, j, side_len)
             for i in range(len(gcs_colors))
             for j in range(n_uavs_per_gcs)
         ]
     )
+
     base_paths = [
         Plan.create_square_path(side_len=side_len, alt=altitude, heading=0)
         for _ in base_homes
     ]
 
-    colors = [color for color in gcs_colors for _ in range(n_uavs_per_gcs)]
+    enu_homes = enu_origin.to_abs_all(base_homes)
+    gra_homes = gra_origin.to_abs_all(base_homes)
+    enu_wptrajs = [
+        enu_home.to_abs_all(base_path)
+        for enu_home, base_path in zip(enu_homes, base_paths)
+    ]
+    gra_wptrajs = [
+        gra_home.to_abs_all(base_path)
+        for gra_home, base_path in zip(gra_homes, base_paths)
+    ]
 
-    msn_delays = [random.randint(0, max_delay) for _ in base_homes]
+    ## Create Vehicles
+    sysids = range(1, len(base_homes) + 1)
+    colors: list[Color] = []
+    for color in gcs_colors:
+        colors.extend([color] * n_uavs_per_gcs)
 
-    ## Assign vehicles to GCS (by color)
-    gcs_sysids = {
-        f"{color.name}_{color.emoji}": list(
-            range(i * n_uavs_per_gcs + 1, (i + 1) * n_uavs_per_gcs + 1)
+    vehs: list[SimVehicle] = []
+    for sysid, enu_home, gra_wptraj, enu_wptraj, color in zip(
+        sysids, enu_homes, gra_wptrajs, enu_wptrajs, colors
+    ):
+        mission_path = DATA_PATH / f"mission_{sysid}.waypoints"
+        plan = AutoPlan(
+            name="simple_auto_plan",
+            mission_path=str(mission_path),
         )
-        for i, color in enumerate(gcs_colors)
-    }
+        plan.save_basic_mission(
+            sysid=sysid,
+            gra_wps=GRAPose.unpose_all(gra_wptraj),
+        )
 
-    # Gazebo Configuration
-    gaz_config = ConfigGazebo(
-        origin=enu_origin, world_path="simulator/gazebo/worlds/runway3.world"
-    )
+        veh = SimVehicle(
+            sysid=sysid,
+            gcs_name=f"{color.name}_{color.emoji}",
+            plan=plan,
+            color=color,
+            home=enu_home,
+            waypoints=ENUPose.unpose_all(enu_wptraj),
+        )
+        vehs.append(veh)
 
-    for path, home, c in zip(base_paths, base_homes, colors):
-        gaz_config.add(base_path=path, base_home=home, color=c)
-
-    # QGroundControl Configuration
-    qgc_config = ConfigQGC(origin=gra_origin)
-
-    for path, home, color, delay in zip(base_paths, base_homes, colors, msn_delays):
-        qgc_config.add(base_path=path, base_home=home, color=color, mission_delay=delay)
-
-    # No Visualizer
-    novis_config = ConfigNovis(origin=gra_origin)
-    for home in base_homes:
-        novis_config.add(base_home=home)
-
-    # Visualization Parameters
-    novis = NoVisualizer(novis_config)  # type: ignore  # noqa: F841
-    gaz = Gazebo(gaz_config, gra_origin)  # type: ignore  # noqa: F841
-    qgc = QGC(qgc_config)  # type: ignore  # noqa: F841
-
-    # Launch Simulator
-    simulator = Simulator(
-        gra_origin=gra_origin,
-        visualizer=novis,
-        gcs_system_ids=gcs_sysids,
-        missions=[veh.mission for veh in qgc_config.vehicles],
-        terminals=["gcs"],
-        verbose=1,
-    )
+    simulator = Simulator(visualizer=visualizer, terminals=["gcs"], verbose=1)
+    for veh in vehs:
+        simulator.add_vehicle(veh)
 
     orac = simulator.launch()
-
     orac.run()
-    orac.wait_for_trajectory_files()
-    orac.plot_trajectories(gra_origin)
 
 
 if __name__ == "__main__":

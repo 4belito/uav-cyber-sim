@@ -1,30 +1,11 @@
 """Visualizer module."""
 
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar
+from typing import Generic
 
-V = TypeVar("V")  # Vehicle type
+from helpers.coordinates import GRAPose
 
-
-class ConfigVis(ABC, Generic[V]):
-    """Base class for visualizer configurations that manage a list of vehicles."""
-
-    def __init__(self) -> None:
-        self.vehicles: list[V] = []
-        self.n_vehicles: int = 0
-
-    def add_vehicle(self, vehicle: V) -> None:
-        """Add a vehicle to the configuration."""
-        self.vehicles.append(vehicle)
-        self.n_vehicles += 1
-
-    def remove_vehicle_at(self, index: int) -> bool:
-        """Remove a vehicle by index."""
-        if 0 <= index < len(self.vehicles):
-            del self.vehicles[index]
-            self.n_vehicles -= 1
-            return True
-        return False
+from .vehicle import SimVehicle, V
 
 
 class Visualizer(ABC, Generic[V]):
@@ -33,17 +14,43 @@ class Visualizer(ABC, Generic[V]):
     name: str
     delay = False
 
-    def __init__(self) -> None:
-        pass
+    def __init__(self, gra_origin: GRAPose) -> None:
+        self.gra_origin = gra_origin
+        self.vehicles: list[V] = []
+        self.num_vehicles: int = 0
 
-    def __str__(self):
-        return self.name
+    @abstractmethod
+    def launch(self, port_offsets: list[int]) -> None:
+        """Launch the visualizer."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def get_vehicle(self, vehicle: SimVehicle) -> V:
+        """Convert a Vehicle to the visualizer-specific vehicle type."""
+        raise NotImplementedError
+
+    @abstractmethod
+    def show(self) -> None:
+        """Show a stathic preview visualization."""
+        raise NotImplementedError
 
     def add_vehicle_cmd(self, i: int) -> str:
         """Add optional command-line for the ith vehicle."""
         return ""
 
-    @abstractmethod
-    def launch(self, port_offsets: list[int]) -> None:
-        """Launch the visualizer."""
-        pass
+    def add_vehicle(self, vehicle: SimVehicle) -> None:
+        """Add a vehicle to the visualizer."""
+        veh = self.get_vehicle(vehicle)
+        self.vehicles.append(veh)
+        self.num_vehicles += 1
+
+    def remove_vehicle_at(self, index: int) -> bool:
+        """Remove a vehicle by index."""
+        if 0 <= index < len(self.vehicles):
+            del self.vehicles[index]
+            self.num_vehicles -= 1
+            return True
+        return False
+
+    def __str__(self):
+        return self.name

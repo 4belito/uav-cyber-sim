@@ -8,7 +8,8 @@ into mission plans.
 
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import Cmd, ModeFlag
-from plan.core import Action, ActionNames, Step, StepFailed
+from planner.action import Action
+from planner.step import Step
 
 
 class Arm(Step):
@@ -36,13 +37,12 @@ class Arm(Step):
         if msg:
             if msg.base_mode & ModeFlag.SAFETY_ARMED:
                 return True
-            raise StepFailed(f"flag {msg.base_mode}")
         return False
 
 
 def make_arm() -> Action[Step]:
     """Build an Action to arm the UAV, including exec and check logic."""
-    name = ActionNames.ARM
+    name = Action.Names.ARM
     arm = Action[Step](name=name, emoji=name.emoji)
     arm.add(Arm("arm"))
     return arm

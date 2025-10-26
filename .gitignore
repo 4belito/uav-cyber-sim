@@ -1,5 +1,11 @@
+__pycache__/
 **/__pycache__/
 ardupilot_logs/
 data/
 vehicle_logic.py
 logs/
+
+# ArduPilot/SITL state
+eeprom.bin
+**/eeprom.bin
+eeprom*.bin

@@ -6,7 +6,8 @@ from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import CmdNav, LandState, MsgID
 from helpers.connections.mavlink.streams import ask_msg, stop_msg
 from helpers.coordinates import ENU
-from plan.core import Action, ActionNames, Step
+from planner.action import Action
+from planner.step import Step
 
 
 class Land(Step):
@@ -42,7 +43,7 @@ class Land(Step):
             0,
         )
         ask_msg(conn, MsgID.EXTENDED_SYS_STATE, interval=self.msg_land_interval)
-        ask_msg(conn, MsgID.LOCAL_POSITION_NED, interval=self.msg_pos_interval)
+        ask_msg(conn, MsgID.GLOBAL_POSITION_INT, interval=self.msg_pos_interval)
 
     def check_fn(self, conn: MAVConnection) -> bool:
         """Check if the UAV has landed using EXTENDED_SYS_STATE."""
@@ -70,7 +71,7 @@ def make_land(
     stop_asking_pos: bool = True,
 ) -> Action[Step]:
     """Create a LAND Action with execution and check steps."""
-    name = ActionNames.LAND
+    name = Action.Names.LAND
     land = Action[Step](name=name, emoji=name.emoji)
     land_step = Land(
         name="Land UAV",

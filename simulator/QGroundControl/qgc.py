@@ -8,18 +8,44 @@ It modifies the QGroundControl.ini file to set up connection links for each UAV.
 
 import logging
 import os
+import time
+from dataclasses import dataclass
 
 import folium
+from IPython.display import display  # type: ignore
 
-from config import QGC_INI_PATH, QGC_PATH, BasePort
+from config import QGC_INI_PATH, QGC_PATH, BasePort, Color
+from helpers.coordinates import (
+    GRA,
+    GRAPose,
+)
 from helpers.processes import create_process
-
-# find_spawns
 from params.simulation import CONNECT_GCS_TO_ARP
-from simulator.QGroundControl.config import ConfigQGC, QGCVehicle
+from simulator.vehicle import SimVehicle, Vehicle
 from simulator.visualizer import Visualizer
 
-from .config import QGCWP
+
+@dataclass
+class QGCMarker:
+    """Visual waypoint with position, color, size, and transparency in Gazebo."""
+
+    name: str
+    pos: GRA
+    color: Color
+
+
+QGCMarkers = list[QGCMarker]
+
+
+@dataclass
+class QGCVehicle(Vehicle):
+    """Represents a vehicle with a model and a trajectory."""
+
+    home: GRAPose
+    marker_traj: QGCMarkers
+
+
+QGCVehicles = list[QGCVehicle]
 
 
 class QGC(Visualizer[QGCVehicle]):
@@ -37,28 +63,20 @@ class QGC(Visualizer[QGCVehicle]):
 
     def __init__(
         self,
-        config: ConfigQGC,
+        gra_origin: GRAPose,
     ):
-        super().__init__()
-        self.config = config
-        self.markers: list[QGCWP] = self.traj_wps()
-
-    def traj_wps(self):
-        """Generate a list of waypoints from all vehicle missions."""
-        markers: list[QGCWP] = []
-        for veh in self.config.vehicles:  # add more colors if needed
-            for wp in veh.mission.traj:
-                markers.append(wp)
-        return markers
+        super().__init__(gra_origin)
+        self.markers: QGCMarkers = []
 
     def add_vehicle_cmd(self, i: int):
-        """Add GRA location to the vhecle comand."""
-        homes_str = ",".join(map(str, self.config.vehicles[i].home))
+        """Add GRA location to the vehicle command."""
+        homes_str = self.vehicles[i].home.to_str()
         return f" --custom-location={homes_str}"
 
     def launch(self, port_offsets: list[int]):
         """Launch the Gazebo."""
         self._delete_all_links()  # delete TCP
+        time.sleep(1)  # wait for file to be written
         if CONNECT_GCS_TO_ARP:
             # self._disable_autoconnect_udp()
             self._add_tcp_links(port_offsets)
@@ -76,13 +94,30 @@ class QGC(Visualizer[QGCVehicle]):
 
     def show(self):
         """Display the vehicles trajectories and origin in GRA coordinates."""
-        lat0, lon0, *_ = self.config.origin
+        lat0, lon0, *_ = self.gra_origin
         m = folium.Map(location=[lat0, lon0], zoom_start=18)
 
         # Plot each UAV's path
         for marker in self.markers:  # add more colors if needed
             marker.pos.draw(m, marker.name, marker.color)
-        return m
+        display(m)
+
+    def get_vehicle(self, vehicle: SimVehicle):
+        """Convert a Vehicle to a QGCVehicle with GRA home position and trajectory."""
+        graunpose_origin = self.gra_origin.unpose()
+        home = graunpose_origin.pose().to_abs(vehicle.home)
+        mtraj: QGCMarkers = []
+        for i, wp in enumerate(vehicle.waypoints):
+            gra_wp = graunpose_origin.to_abs(wp)
+            mtraj.append(
+                QGCMarker(
+                    name=f"veh{vehicle.sysid}_wp{i}",
+                    pos=gra_wp,
+                    color=vehicle.color,
+                )
+            )
+        self.markers.extend(mtraj)
+        return QGCVehicle(home=home, marker_traj=mtraj)
 
     def _delete_all_links(self):
         with open(QGC_INI_PATH, "r", encoding="utf-8") as f:

@@ -7,7 +7,7 @@ import json
 import logging
 import socket
 from pathlib import Path
-from typing import Callable, Literal, TypeVar
+from typing import Callable, Generic, Literal
 
 from config import (
     ARDU_LOGS_PATH,
@@ -18,30 +18,15 @@ from config import (
     BasePort,
 )
 from helpers import create_process, setup_logging
-from helpers.connections.mavlink.mission_io import save_mission
-from helpers.coordinates import GRAPose
 from oracle import Oracle
-from plan.planner import Plan
 from simulator.visualizer import Visualizer
 
-from .QGroundControl.config import Missions
+from .vehicle import SimVehicle, SimVehicles, V
 
 SimProcess = Literal["launcher", "veh", "logic", "proxy", "gcs"]
 
-V = TypeVar("V")  # Vehicle type
 
-
-class Vehicle:
-    """Base vehicle class."""
-
-    sysid: int
-    model: str
-    color: str
-    home: GRAPose
-    plan: Plan
-
-
-class Simulator:
+class Simulator(Generic[V]):
     """
     Manages a full multi-UAV simulation, including SITL, logic, proxy, GCS,
     and visualization.
@@ -51,40 +36,34 @@ class Simulator:
 
     def __init__(
         self,
-        gra_origin: GRAPose,
-        visualizer: Visualizer[V],
-        missions: Missions,
-        gcs_system_ids: dict[str, list[int]],
-        logic_cmd: Callable[[int, str, int], str] = lambda _, config_path, verbose: (
-            f'python3 logic.py --config-path "{config_path}" --verbose {verbose} '
-        ),
-        gcs_cmd: Callable[[int, str, int], str] = lambda _, config_path, verbose: (
-            f'python3 gcs.py --config-path "{config_path}" --verbose {verbose}'
-        ),
-        transmission_range: int = 100,  # meters for inter-UAV communication
         # visualization
+        visualizer: Visualizer[V],
         terminals: list[SimProcess] = [],
         supress_output: list[SimProcess] = ["launcher"],
         verbose: int = 1,
+        # oracle
+        transmission_range: int = 100,  # meters for inter-UAV communication
     ):
-        self.gra_origin = gra_origin
         self.visualizer = visualizer
+        self.gra_origin = self.visualizer.gra_origin
         self.terminals = set(terminals)
         self.suppress = set(supress_output)
-        self.sysids = [sysid for sysids in gcs_system_ids.values() for sysid in sysids]
-        self.gcs_names = list(gcs_system_ids.keys())
+        self.sysids: list[int] = []
+        self.gcs_names: list[str] = []
         self.n_vehs = len(self.sysids)
         self.n_gcss = len(self.gcs_names)
         self.verbose = verbose
-        self.gcs_sysids = gcs_system_ids
-        self.missions = missions
-        self.logic_cmd = logic_cmd
-        self.gcs_cmd = gcs_cmd
-        self.transmission_range = transmission_range  # meters
-
-        assert len(self.missions) == self.n_vehs, (
-            "Number of missions must match number of vehicles"
+        self.gcs_sysids: dict[str, list[int]] = {}
+        self.vehs: SimVehicles = []
+        self.logic_cmd: Callable[[int, str, int], str] = (
+            lambda _, config_path, verbose: (
+                f'python3 logic.py --config-path "{config_path}" --verbose {verbose} '
+            )
         )
+        self.gcs_cmd: Callable[[int, str, int], str] = lambda _, config_path, verbose: (
+            f'python3 gcs.py --config-path "{config_path}" --verbose {verbose}'
+        )
+        self.transmission_range = transmission_range  # meters
 
         setup_logging(self.oracle_name, verbose=verbose, console_output=True)
         logging.debug(
@@ -94,9 +73,21 @@ class Simulator:
             )
         )
 
+    def add_vehicle(self, vehicle: SimVehicle):
+        """Add a vehicle to the simulation."""
+        self.vehs.append(vehicle)
+        self.sysids.append(vehicle.sysid)
+        if vehicle.gcs_name not in self.gcs_sysids:
+            self.gcs_sysids[vehicle.gcs_name] = []
+            self.gcs_names.append(vehicle.gcs_name)
+        self.gcs_sysids[vehicle.gcs_name].append(vehicle.sysid)
+        self.n_vehs = len(self.sysids)
+        self.n_gcss = len(self.gcs_names)
+        self.visualizer.add_vehicle(vehicle)
+
     def launch(self) -> Oracle:
         """Launch vehicle instances and visualizer."""
-        self.save_missions()
+        # self.save_missions()
         self.uav_port_offsets = self._find_uav_port_offsets()
         self.gcs_port_offsets = self._find_gcs_port_offsets()
         self._save_logic_configs(DATA_PATH)
@@ -109,17 +100,12 @@ class Simulator:
             self.visualizer.launch(self.uav_port_offsets)
         return oracle
 
-    def save_missions(self):
-        """Save the missions for all the vehicles."""
-        for sysid, mission in zip(self.sysids, self.missions):
-            traj = [wp.pos for wp in mission.traj]
-            save_mission(
-                path=DATA_PATH / f"mission_{sysid}.waypoints",
-                poses=traj,
-                delay=mission.delay,
-                land=mission.land,
-                speed=mission.speed,
-            )
+    def show(self):
+        """
+        Render a static preview of the configured simulation
+        before launch.
+        """
+        self.visualizer.show()
 
     def _launch_gcses(self):
         """Launch each GCS process and create an Oracle instance."""
@@ -160,7 +146,7 @@ class Simulator:
                     "alt": self.gra_origin.alt,
                 },
                 "port_offset": self.uav_port_offsets[i],
-                "navegation_speed": self.missions[i].speed,
+                "navegation_speed": 5,
             }
             config_path = folder_name / f"logic_config_{sysid}.json"
             with config_path.open("w") as f:
@@ -207,6 +193,8 @@ class Simulator:
                 json.dump(gcs_config, f, indent=2)
             n += len(sysids)
 
+    # TODO: Check why BasePort.GCS is in find_uav_port_offset
+    # and no in find_gcs_port_offset
     def _find_uav_port_offsets(self):
         base_ports = [
             BasePort.ARP,
