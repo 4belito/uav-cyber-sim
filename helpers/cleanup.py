@@ -16,6 +16,7 @@ ALL_PROCESSES = [
     "run_many_uavs.py",
     "logic.py",
     "gcs.py",
+    "run.py",
 ]
 
 

@@ -198,6 +198,8 @@ class Simulator(Generic[V]):
     def _find_uav_port_offsets(self):
         base_ports = [
             BasePort.ARP,
+            BasePort.ARP2,
+            BasePort.ARP3,
             BasePort.GCS,
             BasePort.QGC,
             BasePort.LOG,
@@ -218,25 +220,20 @@ class Simulator(Generic[V]):
         base_ports: list[BasePort],
         n_ports: int,
         unit_offset: int = 10,
-        excluded_offsets: list[int] = [],
     ) -> list[int]:
         """Find available port offsets for each UAV to avoid conflicts."""
-        offsets = list[int]()
+        offsets: list[int] = []
 
         cur_offset = 0
         while len(offsets) < n_ports:
-            if cur_offset in excluded_offsets:
-                cur_offset += 10
-                continue
             for base_port in base_ports:
                 port = base_port + cur_offset
-                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                s.settimeout(0.01)
-                try:
-                    s.bind(("127.0.0.1", port))
-                    s.close()
-                except Exception:
-                    break
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(0.01)
+                    try:
+                        s.bind(("0.0.0.0", port))
+                    except Exception:
+                        break
             else:
                 offsets.append(cur_offset)
             cur_offset += unit_offset

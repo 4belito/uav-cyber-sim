@@ -35,7 +35,7 @@ QGC_TCP = 5762  # QGroundControl(TCP-no default-connect to Ardupilot-like Gazebo
 
 class BasePort(IntEnum):
     """
-    Base ports for QGrounfControl(QGC), ArduPilot (ARP), Ground control Station (GCS),
+    Base ports for QGroundControl(QGC), ArduPilot (ARP), Ground control Station (GCS),
     and Oracle.
 
     - QGC and ARP ports increment by +10 per UAV instance.
@@ -48,15 +48,15 @@ class BasePort(IntEnum):
     """
 
     # ONE-PER-UAV PORTS
-    # variable QGC_UDP is not actually being used because QGround control connects
-    # automatically to UDP 14550
     QGC = QGC_TCP if CONNECT_GCS_TO_ARP else QGC_UDP
-    ARP = 5760  # Ardupilot Vehicle(TCP: PROXY->ARP)
+    ARP = 5760  # ArduPilot master port (TCP: PROXY->ARP)
+    ARP2 = 5762  # ArduPilot SERIAL1 (TCP: auto-opened by SITL)
+    ARP3 = 5763  # ArduPilot SERIAL2 (TCP: auto-opened by SITL)
     LOG = 14551  # Vehicle(TCP: PROXY->LOGIC)
-    GCS = 14552  # Ground Control Station(UDP: LOGIC->GCS)
-    RID_UP = 14554  # Remote ID (LOGIC->ORC)
-    RID_DOWN = 14555  # Remote ID (ORC->LOGIC)
-    RID_DATA = 14556  # Remote ID (PROXY->LOGIC) internal
+    GCS = 14555  # Ground Control Station(UDP: LOGIC->GCS)
+    RID_UP = 14556  # Remote ID (LOGIC->ORC)
+    RID_DOWN = 14557  # Remote ID (ORC->LOGIC)
+    RID_DATA = 14558  # Remote ID (PROXY->LOGIC) internal
 
     # ONE-PER-GCS PORTS
     GCS_ZMQ = 30000  # GCS ZMQ (GCS->ORC)

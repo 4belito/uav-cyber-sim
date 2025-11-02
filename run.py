@@ -12,7 +12,7 @@ import argparse
 from typing import Callable, Tuple, cast
 
 from config import DATA_PATH, Color
-from helpers import clean
+from helpers import ALL_PROCESSES, clean
 from helpers.coordinates import ENUPose, GRAPose
 from planner import Plan
 from planner.plans.auto import AutoPlan
@@ -22,24 +22,34 @@ from simulator.QGroundControl.qgc import QGCMarker
 from simulator.vehicle import SimVehicle, Vehicle
 from simulator.visualizer import Visualizer
 
-VISUALIZER_CHOICES = ("novis", "gazebo", "qgc")
+VISUALIZER_CHOICES = ("novis", "gazebo", "QGroundControl")
 GAZEBO_WORLD = "simulator/gazebo/worlds/runway.world"
 
 vis_trajs: dict[str, Callable[[int, int, float], Tuple[float, float, float, float]]] = {
     "novis": lambda i, j, side_len: (i * 50 * side_len, j * 50 * side_len, 0.0, 0.0),
-    "qgc": lambda i, j, side_len: (i * side_len / 10.0, j * side_len / 3.0, 0.0, 0.0),
-    "gaz": lambda i, j, side_len: (i * 50.0, j * 3 * side_len, 0.0, 0.0),
+    "QGroundControl": lambda i, j, side_len: (
+        (i - 4) * 1.5 * side_len,
+        j * side_len,
+        0.0,
+        0.0,
+    ),
+    "gazebo": lambda i, j, side_len: (
+        ((i - 1) - 0.25) * 1.75 * side_len,
+        j * 3 * side_len,
+        0.0,
+        0.0,
+    ),
 }
 
 vis_gcs_colors: dict[str, list[Color]] = {
     "novis": [Color.RED, Color.ORANGE, Color.GREEN, Color.BLUE],
-    "qgc": [Color.RED, Color.ORANGE, Color.GREEN, Color.BLUE],
-    "gaz": [Color.RED, Color.GREEN, Color.BLUE],
+    "QGroundControl": [Color.RED, Color.ORANGE, Color.GREEN, Color.BLUE],
+    "gazebo": [Color.RED, Color.GREEN, Color.BLUE],
 }
 vis_uavs_per_gcs: dict[str, int] = {
     "novis": 60,
-    "qgc": 40,
-    "gaz": 3,
+    "QGroundControl": 30,
+    "gazebo": 3,
 }
 
 
@@ -70,7 +80,7 @@ def make_visualizer(
             )
             gaz.markers.append(origin_gaz)
             vis = gaz
-        case "qgc":
+        case "QGroundControl":
             qgc = QGC(gra_origin)
             origin_qgc = QGCMarker(
                 name="origin",
@@ -89,7 +99,11 @@ def make_visualizer(
 def main():
     """Launch a multi-UAV simulation and monitors mission completion."""
     args = parse_args()
-    clean()
+    clean(
+        victim_processes=[
+            proc for proc in ALL_PROCESSES if proc not in {args.visualizer, "run.py"}
+        ]
+    )
 
     ## Simulation Positions and Paths
     gra_origin = GRAPose(lat=-35.3633280, lon=149.1652241, alt=0, heading=0)
@@ -98,7 +112,7 @@ def main():
 
     gcs_colors = vis_gcs_colors[args.visualizer]
     n_uavs_per_gcs = vis_uavs_per_gcs[args.visualizer]
-    side_len = 10
+    side_len = 8
     altitude = 5
 
     base_homes = ENUPose.list(
