@@ -8,7 +8,6 @@ It modifies the QGroundControl.ini file to set up connection links for each UAV.
 
 import logging
 import os
-import time
 from dataclasses import dataclass
 
 import folium
@@ -20,7 +19,6 @@ from helpers.coordinates import (
     GRAPose,
 )
 from helpers.processes import create_process
-from params.simulation import CONNECT_GCS_TO_ARP
 from simulator.vehicle import SimVehicle, Vehicle
 from simulator.visualizer import Visualizer
 
@@ -75,11 +73,8 @@ class QGC(Visualizer[QGCVehicle]):
 
     def launch(self, port_offsets: list[int]):
         """Launch the Gazebo."""
-        self._delete_all_links()  # delete TCP
-        time.sleep(1)  # wait for file to be written
-        if CONNECT_GCS_TO_ARP:
-            # self._disable_autoconnect_udp()
-            self._add_tcp_links(port_offsets)
+        self._delete_all_links()
+        self._add_tcp_links(port_offsets)
         sim_cmd = [os.path.expanduser(QGC_PATH), "--appimage-extract-and-run"]
         create_process(
             cmd=" ".join(sim_cmd),
@@ -143,6 +138,7 @@ class QGC(Visualizer[QGCVehicle]):
 
         with open(QGC_INI_PATH, "w", encoding="utf-8") as f:
             f.writelines(new_lines)
+            f.flush()
 
     def _disable_autoconnect_udp(self):
         """

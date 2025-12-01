@@ -123,10 +123,10 @@ class GCS(UAVMonitor):
     def _launch_vehicles(self) -> list[MAVConnection]:
         """Launch ArduPilot and logic processes for each UAV."""
         with futures.ThreadPoolExecutor() as executor:
-            conns = list(executor.map(self._launch_uav, range(self.n_uavs)))
+            conns = list(executor.map(self._launch_vehicle, range(self.n_uavs)))
         return conns
 
-    def _launch_uav(self, i: int):
+    def _launch_vehicle(self, i: int):
         uav_config = self.uavs[i]
         sysid = uav_config["sysid"]
 

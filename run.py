@@ -48,7 +48,7 @@ vis_gcs_colors: dict[str, list[Color]] = {
 }
 vis_uavs_per_gcs: dict[str, int] = {
     "novis": 60,
-    "QGroundControl": 30,
+    "QGroundControl": 25,
     "gazebo": 3,
 }
 

@@ -7,8 +7,6 @@ Defines system paths, base communication ports, and a color enum for UAV visuali
 from enum import IntEnum, StrEnum
 from pathlib import Path
 
-from params.simulation import CONNECT_GCS_TO_ARP
-
 # --- System Paths ---
 HOME = Path.home()
 QGC_PATH = HOME / "QGroundControl.AppImage"
@@ -28,11 +26,6 @@ DATA_PATH = (ROOT / "data").resolve()
 ARDU_LOGS_PATH.mkdir(parents=True, exist_ok=True)
 
 
-# --- Base Communication Ports ---
-QGC_UDP = 14550  # QGroundControl(UDP-default option-connect to the proxy)
-QGC_TCP = 5762  # QGroundControl(TCP-no default-connect to Ardupilot-like Gazebo)
-
-
 class BasePort(IntEnum):
     """
     Base ports for QGroundControl(QGC), ArduPilot (ARP), Ground control Station (GCS),
@@ -48,10 +41,10 @@ class BasePort(IntEnum):
     """
 
     # ONE-PER-UAV PORTS
-    QGC = QGC_TCP if CONNECT_GCS_TO_ARP else QGC_UDP
     ARP = 5760  # ArduPilot master port (TCP: PROXY->ARP)
     ARP2 = 5762  # ArduPilot SERIAL1 (TCP: auto-opened by SITL)
     ARP3 = 5763  # ArduPilot SERIAL2 (TCP: auto-opened by SITL)
+    QGC = 5763  # QGroundControl (TCP: QGC->ARP). it must be 5762 or 5763.
     LOG = 14551  # Vehicle(TCP: PROXY->LOGIC)
     GCS = 14555  # Ground Control Station(UDP: LOGIC->GCS)
     RID_UP = 14556  # Remote ID (LOGIC->ORC)
