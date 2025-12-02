@@ -11,9 +11,7 @@ from .enums.autopilot import Autopilot
 from .enums.type import Type
 
 
-def connect(
-    device: str, source_system: int = 255, source_component: int = 0
-) -> MAVConnection:
+def connect(device: str, src_sysid: int, src_compid: int) -> MAVConnection:
     """
     Wrap `mavlink_connection` with a type cast to `MAVConnection`
     to enable clean static typing.
@@ -22,39 +20,47 @@ def connect(
     return cast(
         MAVConnection,
         mavutil.mavlink_connection(  # type: ignore[arg-type]
-            device, source_system=source_system, source_component=source_component
+            device, source_system=src_sysid, source_component=src_compid
         ),
     )
 
 
 # taken from mavproxy
-def send_heartbeat(conn: MAVConnection, sysid: int = 255) -> None:
+def send_heartbeat(
+    conn: MAVConnection,
+    sys_type: Type = Type.ONBOARD_CONTROLLER,
+    ardupilot: Autopilot = Autopilot.GENERIC,
+) -> None:
     """Send a GCS heartbeat message to the UAV."""
     # Set the source system ID for this connection
-    conn.mav.srcSystem = sysid
-    conn.mav.heartbeat_send(Type.GCS, Autopilot.INVALID, 0, 0, 0)
+    conn.mav.heartbeat_send(sys_type, ardupilot, 0, 0, 0)
 
 
 def create_udp_conn(
     base_port: int,
     offset: int,
     mode: Literal["receiver", "sender"],
+    src_sysid: int,
+    src_compid: int,
 ) -> MAVConnection:
     """Create a MAVLink-over-UDP connection."""
     port = base_port + offset
     if mode == "receiver":
-        conn = connect(f"udp:127.0.0.1:{port}")  # listen for incoming
+        conn = connect(f"udp:127.0.0.1:{port}", src_sysid, src_compid)  # recv+send
         conn.wait_heartbeat()
     else:  # mode == "sender"
-        conn = connect(f"udpout:127.0.0.1:{port}")  # send-only
+        conn = connect(f"udpout:127.0.0.1:{port}", src_sysid, src_compid)  # send-only
     return conn
 
 
 def create_tcp_conn(
     base_port: int,
     offset: int,
-    role: Literal["client", "server"] = "client",
-    sysid: int = 255,
+    src_sysid: int,
+    src_compid: int,
+    role: Literal["client", "server"],
+    sys_type: Type = Type.ONBOARD_CONTROLLER,
+    ardupilot: Autopilot = Autopilot.GENERIC,
     retry_window: float = 15.0,
 ) -> MAVConnection:
     """Create and in or out connection and wait for geting the hearbeat in."""
@@ -67,10 +73,9 @@ def create_tcp_conn(
     while True:
         attempt += 1
         try:
-            conn = connect(device_str)
-            send_heartbeat(conn, sysid)
+            conn = connect(device_str, src_sysid, src_compid)
+            conn.mav.heartbeat_send(sys_type, ardupilot, 0, 0, 0)
             conn.wait_heartbeat()
-            conn.target_system = sysid
             return conn
         except Exception as e:
             if not is_client:

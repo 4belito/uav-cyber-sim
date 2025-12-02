@@ -164,6 +164,8 @@ class GCS(UAVMonitor):
             base_port=BasePort.GCS,
             offset=uav_config["port_offset"],
             mode="receiver",
+            src_sysid=255,  # estándar GCS sysid
+            src_compid=190,  # estándar GCS commponent ID
         )
         logging.info(f"UAV {sysid} connected")
         return conn

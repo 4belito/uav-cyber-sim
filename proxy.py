@@ -48,10 +48,18 @@ def main() -> None:
 def start_proxy(sysid: int, port_offset: int) -> None:
     """Start bidirectional proxy for a given UAV system_id."""
     ap_conn = create_tcp_conn(
-        base_port=BasePort.ARP, offset=port_offset, role="client", sysid=sysid
+        base_port=BasePort.ARP,
+        offset=port_offset,
+        role="client",
+        src_sysid=sysid,
+        src_compid=141,
     )
     lg_conn = create_tcp_conn(
-        base_port=BasePort.LOG, offset=port_offset, role="client", sysid=sysid
+        base_port=BasePort.LOG,
+        offset=port_offset,
+        role="client",
+        src_sysid=sysid,
+        src_compid=141,
     )
     ## ASK NED POSITION for REMOTE ID
     ask_msg(ap_conn, MsgID.GLOBAL_POSITION_INT, interval=RID_INTERVAL)

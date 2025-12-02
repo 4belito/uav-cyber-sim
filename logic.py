@@ -50,10 +50,20 @@ def start_logic(config: LogicConfig):
     navegation_speed = config["navegation_speed"]
 
     lg_conn = create_tcp_conn(
-        base_port=BasePort.LOG, offset=port_offset, role="server", sysid=sysid
+        base_port=BasePort.LOG,
+        offset=port_offset,
+        role="server",
+        src_sysid=sysid,
+        src_compid=140,  # free for custom modules, companion computers, routing modules
     )
 
-    cs_conn = create_udp_conn(base_port=BasePort.GCS, offset=port_offset, mode="sender")
+    cs_conn = create_udp_conn(
+        base_port=BasePort.GCS,
+        offset=port_offset,
+        mode="sender",
+        src_sysid=sysid,
+        src_compid=140,
+    )
 
     rid_mnng = RIDManager(sysid, port_offset, gra_orign)
     rid_mnng.start()
