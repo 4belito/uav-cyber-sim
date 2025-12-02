@@ -10,7 +10,6 @@ import logging
 
 from pymavlink import mavutil
 
-from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import Frame, MsgID
 from helpers.connections.mavlink.streams import (
     ask_msg,
@@ -39,13 +38,13 @@ class GoTo(Step):
         self.stop_asking_pos = stop_asking_pos
         self.type_mask = int(0b110111111000)
 
-    def exec_fn(self, conn: MAVConnection) -> None:
+    def exec_fn(self) -> None:
         """Send a MAVLink command to move the UAV to a global waypoint."""
         gra_wp = self.origin.to_abs(self.wp)
         go_msg = mavutil.mavlink.MAVLink_set_position_target_global_int_message(
             10,
-            conn.target_system,
-            conn.target_component,
+            self.sysid,
+            self.conn.target_component,
             Frame.GLOBAL_INT,
             self.type_mask,
             *gra_wp.to_global_int_alt_in_meters(),
@@ -58,26 +57,24 @@ class GoTo(Step):
             0,
             0,
         )
-        conn.mav.send(go_msg)
-        ask_msg(conn, MsgID.GLOBAL_POSITION_INT, interval=self.msg_pos_interval)
+        self.conn.mav.send(go_msg)
+        ask_msg(self.conn, MsgID.GLOBAL_POSITION_INT, interval=self.msg_pos_interval)
 
-    def check_fn(self, conn: MAVConnection) -> bool:
+    def check_fn(self) -> bool:
         """
         Check if the UAV has reached the target altitude within an acceptable
         margin.
         """
-        pos = self.origin.get_enu_position(conn)
+        pos = self.origin.get_enu_position(self.conn)
         if pos is not None:
             self.curr_pos = pos
             dist = ENU.distance(pos, self.wp)
-            logging.debug(
-                f"📍 Vehicle {conn.target_system}: Distance to target: {dist:.2f} m"
-            )
+            logging.debug(f"📍 Vehicle {self.sysid}: Distance to target: {dist:.2f} m")
             reached = dist < self.wp_margin
         else:
             reached = False
         if reached and self.stop_asking_pos:
-            stop_msg(conn, MsgID.GLOBAL_POSITION_INT)
+            stop_msg(self.conn, MsgID.GLOBAL_POSITION_INT)
         return reached
 
 

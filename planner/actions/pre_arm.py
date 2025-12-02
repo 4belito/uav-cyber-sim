@@ -16,7 +16,6 @@ these checks in sequence.
 
 import logging
 
-from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import EkfStatus, ModeFlag, MsgID, SensorFlag
 from helpers.connections.mavlink.streams import ask_msg, stop_msg
 from planner.action import Action
@@ -26,13 +25,13 @@ from planner.step import Step
 class CheckDisarmed(Step):
     """Step to verify that the UAV is disarmed before arming."""
 
-    def exec_fn(self, conn: MAVConnection) -> None:
+    def exec_fn(self) -> None:
         """No execution needed; just checking."""
         pass
 
-    def check_fn(self, conn: MAVConnection) -> bool:
+    def check_fn(self) -> bool:
         """Fail if the UAV is currently armed."""
-        msg = conn.recv_match(type="HEARTBEAT")
+        msg = self.conn.recv_match(type="HEARTBEAT")
         if not msg:
             return False
         if msg.base_mode & ModeFlag.SAFETY_ARMED:
@@ -56,13 +55,13 @@ class EKFStatus(Step):
         super().__init__(name)
         self.required_ekf_flags = required_ekf_flags
 
-    def exec_fn(self, conn: MAVConnection) -> None:
+    def exec_fn(self) -> None:
         """No execution needed; just checking."""
-        ask_msg(conn, MsgID.EKF_STATUS_REPORT)
+        ask_msg(self.conn, MsgID.EKF_STATUS_REPORT)
 
-    def check_fn(self, conn: MAVConnection) -> bool:
+    def check_fn(self) -> bool:
         """Check whether all required EKF flags are set."""
-        msg = conn.recv_match(type="EKF_STATUS_REPORT")
+        msg = self.conn.recv_match(type="EKF_STATUS_REPORT")
         if not msg:
             return False
         missing = [
@@ -70,29 +69,29 @@ class EKFStatus(Step):
         ]
         if missing:
             logging.debug(
-                f"🛰️ Vehicle {conn.target_system}: Waiting for EKF to be ready... "
+                f"🛰️ Vehicle {self.sysid}: Waiting for EKF to be ready... "
                 f"Pending: {', '.join(missing)}"
             )
             return False
-        stop_msg(conn, msg_id=MsgID.EKF_STATUS_REPORT)
+        stop_msg(self.conn, msg_id=MsgID.EKF_STATUS_REPORT)
         return True
 
 
 class GPSStatus(Step):
     """Step to verify that the GPS fix is sufficient."""
 
-    def exec_fn(self, conn: MAVConnection) -> None:
+    def exec_fn(self) -> None:
         """No execution needed; just checking."""
-        ask_msg(conn, MsgID.GPS_RAW_INT)
+        ask_msg(self.conn, MsgID.GPS_RAW_INT)
 
-    def check_fn(self, conn: MAVConnection) -> bool:
+    def check_fn(self) -> bool:
         """Fail if GPS fix is not 3D (fix_type < 3)."""
-        msg = conn.recv_match(type="GPS_RAW_INT")
+        msg = self.conn.recv_match(type="GPS_RAW_INT")
         if not msg:
             return False
         if msg.fix_type < 3:
             logging.warning(
-                f"📡 Vehicle {conn.target_system}: GPS fix too weak — "
+                f"📡 Vehicle {self.sysid}: GPS fix too weak — "
                 f"fix_type = {msg.fix_type} (need at least 3 for 3D fix)"
             )
             return False
@@ -118,21 +117,18 @@ class CheckSystem(Step):
         super().__init__(name)
         self.required_sensors = required_sensors
 
-    def exec_fn(self, conn: MAVConnection) -> None:
+    def exec_fn(self) -> None:
         """Request SYS_STATUS message to check battery and sensors."""
-        ask_msg(conn, MsgID.SYS_STATUS)
+        ask_msg(self.conn, MsgID.SYS_STATUS)
 
-    def check_fn(self, conn: MAVConnection) -> bool:
+    def check_fn(self) -> bool:
         """Fail if battery is low or any required sensors are unhealthy."""
-        msg = conn.recv_match(type="SYS_STATUS")
+        msg = self.conn.recv_match(type="SYS_STATUS")
         if not msg:
             return False
         if msg.battery_remaining < 20:
             raise Exception(
-                (
-                    f"🔋 Vehicle {conn.target_system}: Battery too low "
-                    f"({msg.battery_remaining}%)"
-                )
+                (f"🔋 Vehicle {self.sysid}: Battery too low ({msg.battery_remaining}%)")
             )
         healthy = msg.onboard_control_sensors_health
         enabled = msg.onboard_control_sensors_enabled
@@ -144,10 +140,10 @@ class CheckSystem(Step):
 
         if missing:
             raise Exception(
-                f"⚠️ Vehicle {conn.target_system}: Missing or unhealthy sensors: "
+                f"⚠️ Vehicle {self.sysid}: Missing or unhealthy sensors: "
                 f"{', '.join(missing)}"
             )
-        stop_msg(conn, msg_id=MsgID.SYS_STATUS)
+        stop_msg(self.conn, msg_id=MsgID.SYS_STATUS)
         return True
 
 

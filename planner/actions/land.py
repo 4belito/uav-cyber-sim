@@ -2,7 +2,6 @@
 
 import logging
 
-from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import CmdNav, LandState, MsgID
 from helpers.connections.mavlink.streams import ask_msg, stop_msg
 from helpers.coordinates import ENU
@@ -27,11 +26,11 @@ class Land(Step):
         self.stop_asking_pos = stop_asking_pos
         self.final_wp = final_wp
 
-    def exec_fn(self, conn: MAVConnection) -> None:
+    def exec_fn(self) -> None:
         """Send a MAVLink command to initiate landing."""
-        conn.mav.command_long_send(
-            conn.target_system,
-            conn.target_component,
+        self.conn.mav.command_long_send(
+            self.sysid,
+            self.conn.target_component,
             CmdNav.LAND,
             0,
             0,
@@ -42,25 +41,23 @@ class Land(Step):
             0,
             0,
         )
-        ask_msg(conn, MsgID.EXTENDED_SYS_STATE, interval=self.msg_land_interval)
-        ask_msg(conn, MsgID.GLOBAL_POSITION_INT, interval=self.msg_pos_interval)
+        ask_msg(self.conn, MsgID.EXTENDED_SYS_STATE, interval=self.msg_land_interval)
+        ask_msg(self.conn, MsgID.GLOBAL_POSITION_INT, interval=self.msg_pos_interval)
 
-    def check_fn(self, conn: MAVConnection) -> bool:
+    def check_fn(self) -> bool:
         """Check if the UAV has landed using EXTENDED_SYS_STATE."""
         # parameter 4 is confirmation(it may be increased)
-        msg = conn.recv_match(type="EXTENDED_SYS_STATE")
-        current_pos = self.origin.get_enu_position(conn)
+        msg = self.conn.recv_match(type="EXTENDED_SYS_STATE")
+        current_pos = self.origin.get_enu_position(self.conn)
         if current_pos is not None:
             self.current_pos = current_pos
-            logging.debug(
-                f"Vehicle {conn.target_system}: Altitude: {current_pos[2]:.2f} m"
-            )
+            logging.debug(f"Vehicle {self.sysid}: Altitude: {current_pos[2]:.2f} m")
         on_ground = bool(msg and msg.landed_state == LandState.ON_GROUND)
         if on_ground:
-            stop_msg(conn, MsgID.EXTENDED_SYS_STATE)
+            stop_msg(self.conn, MsgID.EXTENDED_SYS_STATE)
             if self.stop_asking_pos:
-                stop_msg(conn, MsgID.LOCAL_POSITION_NED)
-            logging.info(f"Vehicle {conn.target_system}: 🛬 Landed successfully.")
+                stop_msg(self.conn, MsgID.LOCAL_POSITION_NED)
+            logging.info(f"Vehicle {self.sysid}: 🛬 Landed successfully.")
         return on_ground
 
 

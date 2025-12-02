@@ -2,7 +2,6 @@
 
 import time
 
-from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from planner.step import Step
 
 
@@ -14,11 +13,11 @@ class Wait(Step):
         self.t = t
         self._ready_at: float | None = None
 
-    def exec_fn(self, conn: MAVConnection) -> None:
+    def exec_fn(self) -> None:
         """Start the wait timer."""
         self._ready_at = time.monotonic() + self.t
 
-    def check_fn(self, conn: MAVConnection) -> bool:
+    def check_fn(self) -> bool:
         """Return True once the wait duration has elapsed."""
         if self._ready_at is None:
             return False

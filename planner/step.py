@@ -93,24 +93,24 @@ class Step(MissionElement, ABC):
         super().__init__(name=name, emoji="🔹")
 
     @abstractmethod
-    def exec_fn(self, conn: MAVConnection) -> None:
+    def exec_fn(self) -> None:
         """Execute the step; override in subclasses."""
         pass
 
     @abstractmethod
-    def check_fn(self, conn: MAVConnection) -> bool:
-        """Check if the step is complete; override in subclasses."""
+    def check_fn(self) -> bool:
+        """Check if the step is completed; override in subclasses."""
         pass
 
     def execute(self) -> None:
         """Execute the step and change state to IN_PROGRESS."""
-        self.exec_fn(self.conn)
+        self.exec_fn()
         logging.debug(f"▶️ Vehicle {self.sysid}: {self.class_name} Started: {self.name}")
         self.state = State.IN_PROGRESS
 
     def check(self) -> None:
         """Check step completion and updates state and position."""
-        answer = self.check_fn(self.conn)
+        answer = self.check_fn()
         if answer:
             self.state = State.DONE
             logging.debug(

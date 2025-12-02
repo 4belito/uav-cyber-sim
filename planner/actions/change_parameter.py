@@ -9,7 +9,6 @@ Includes:
 """
 
 from helpers.ardupilot.enums import WPNav
-from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import ParamType
 from planner.action import Action
 from planner.step import Step
@@ -22,20 +21,20 @@ class SetSpeed(Step):
         super().__init__(name)
         self.speed = speed
 
-    def exec_fn(self, conn: MAVConnection) -> None:
+    def exec_fn(self) -> None:
         """Send a SET_PARAM command to change WPNAV_SPEED (navigation speed)."""
         speed_cmps = self.speed * 100  # ArduPilot uses cm/s
-        conn.mav.param_set_send(
-            conn.target_system,
-            conn.target_component,
+        self.conn.mav.param_set_send(
+            self.sysid,
+            self.conn.target_component,
             WPNav.SPEED,
             speed_cmps,
             ParamType.REAL32,
         )
 
-    def check_fn(self, conn: MAVConnection) -> bool:
+    def check_fn(self) -> bool:
         """Check whether the WPNAV_SPEED parameter has been updated."""
-        msg = conn.recv_match(type="PARAM_VALUE")
+        msg = self.conn.recv_match(type="PARAM_VALUE")
         if not msg:
             return False
 

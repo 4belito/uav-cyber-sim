@@ -59,7 +59,7 @@ def create_tcp_conn(
 ) -> MAVConnection:
     """Create and in or out connection and wait for geting the hearbeat in."""
     port = base_port + offset
-    connection_string = f"tcp{'in' if role == 'server' else ''}:127.0.0.1:{port}"
+    device_str = f"tcp{'in' if role == 'server' else ''}:127.0.0.1:{port}"
     is_client = role == "client"
 
     attempt = 0
@@ -67,7 +67,7 @@ def create_tcp_conn(
     while True:
         attempt += 1
         try:
-            conn = connect(connection_string)
+            conn = connect(device_str)
             send_heartbeat(conn, sysid)
             conn.wait_heartbeat()
             conn.target_system = sysid

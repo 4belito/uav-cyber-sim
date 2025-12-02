@@ -2,7 +2,6 @@
 
 import logging
 
-from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import Cmd
 from planner.action import Action
 from planner.step import Step
@@ -11,11 +10,11 @@ from planner.step import Step
 class StartMission(Step):
     """Step to start the UAV mission."""
 
-    def exec_fn(self, conn: MAVConnection) -> None:
+    def exec_fn(self) -> None:
         """Send MISSION_START command to begin executing the mission."""
-        conn.mav.command_long_send(
-            conn.target_system,
-            conn.target_component,
+        self.conn.mav.command_long_send(
+            self.sysid,
+            self.conn.target_component,
             Cmd.MISSION_START,
             0,
             0,
@@ -27,13 +26,13 @@ class StartMission(Step):
             0,
         )
 
-    def check_fn(self, conn: MAVConnection) -> bool:
+    def check_fn(self) -> bool:
         """Check if the mission has started by listening for a STATUSTEXT message."""
-        msg = conn.recv_match(type="STATUSTEXT")
+        msg = self.conn.recv_match(type="STATUSTEXT")
         if msg:
             text = msg.text.strip().lower()
             if text.startswith("mission"):
-                logging.info(f"🚀 Vehicle {conn.target_system}: Mission has started")
+                logging.info(f"🚀 Vehicle {self.sysid}: Mission has started")
                 return True
         return False
 

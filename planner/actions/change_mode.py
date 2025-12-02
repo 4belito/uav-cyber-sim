@@ -5,7 +5,6 @@ Includes logic for creating a mode-switching Action with execution and verificat
 steps based on HEARTBEAT messages and supported flight modes.
 """
 
-from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.mavlink.enums import CopterMode, ModeFlag
 from planner.action import Action
 from planner.step import Step
@@ -18,17 +17,17 @@ class SwitchMode(Step):
         super().__init__(name)
         self.flight_mode = flight_mode
 
-    def exec_fn(self, conn: MAVConnection) -> None:
+    def exec_fn(self) -> None:
         """Send the SET_MODE command to the UAV with the given mode value."""
-        conn.mav.set_mode_send(
-            conn.target_system,
+        self.conn.mav.set_mode_send(
+            self.sysid,
             ModeFlag.CUSTOM_MODE_ENABLED,
             self.flight_mode.value,
         )
 
-    def check_fn(self, conn: MAVConnection) -> bool:
+    def check_fn(self) -> bool:
         """Verify the UAV has switched to the target flight mode."""
-        msg = conn.recv_match(type="HEARTBEAT")
+        msg = self.conn.recv_match(type="HEARTBEAT")
         if msg and msg.custom_mode == self.flight_mode.value:
             return True
         return False
