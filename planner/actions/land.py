@@ -29,7 +29,7 @@ class Land(Step):
     def exec_fn(self) -> None:
         """Send a MAVLink command to initiate landing."""
         self.conn.mav.command_long_send(
-            self.sysid,
+            self.conn.target_system,
             self.conn.target_component,
             CmdNav.LAND,
             0,
@@ -51,13 +51,15 @@ class Land(Step):
         current_pos = self.origin.get_enu_position(self.conn)
         if current_pos is not None:
             self.current_pos = current_pos
-            logging.debug(f"Vehicle {self.sysid}: Altitude: {current_pos[2]:.2f} m")
+            logging.debug(
+                f"Vehicle {self.conn.target_system}: Altitude: {current_pos[2]:.2f} m"
+            )
         on_ground = bool(msg and msg.landed_state == LandState.ON_GROUND)
         if on_ground:
             stop_msg(self.conn, MsgID.EXTENDED_SYS_STATE)
             if self.stop_asking_pos:
                 stop_msg(self.conn, MsgID.LOCAL_POSITION_NED)
-            logging.info(f"Vehicle {self.sysid}: 🛬 Landed successfully.")
+            logging.info(f"Vehicle {self.conn.target_system}: 🛬 Landed successfully.")
         return on_ground
 
 

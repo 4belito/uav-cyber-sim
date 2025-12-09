@@ -20,7 +20,7 @@ class SwitchMode(Step):
     def exec_fn(self) -> None:
         """Send the SET_MODE command to the UAV with the given mode value."""
         self.conn.mav.set_mode_send(
-            self.sysid,
+            self.conn.target_system,
             ModeFlag.CUSTOM_MODE_ENABLED,
             self.flight_mode.value,
         )

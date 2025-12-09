@@ -21,13 +21,17 @@ class ClearMission(Step):
 
     def exec_fn(self) -> None:
         """Execute the clear mission."""
-        self.conn.mav.mission_clear_all_send(self.sysid, self.conn.target_component)
+        self.conn.mav.mission_clear_all_send(
+            self.conn.target_system, self.conn.target_component
+        )
 
     def check_fn(self) -> bool:
         """Verify that cleared mission was successful."""
         msg = self.conn.recv_match(type="STATUSTEXT")
         if msg and msg.text == "ArduPilot Ready":
-            logging.info(f"🧹 Vehicle {self.sysid}: Cleared previous mission")
+            logging.info(
+                f"🧹 Vehicle {self.conn.target_system}: Cleared previous mission"
+            )
             return True
         return False
 
@@ -41,16 +45,16 @@ class UploadMission(Step):
 
     def exec_fn(self) -> None:
         """Execute the upload of a mission to the UAV."""
-        sysid, compid = self.sysid, self.conn.target_component
+        sysid, compid = self.conn.target_system, self.conn.target_component
         mission = MissionLoader(sysid, compid)
         count = mission.load(self.mission_path)
-        logging.info(f"✅ Vehicle {self.sysid}: {count} waypoints read")
+        logging.info(f"✅ Vehicle {self.conn.target_system}: {count} waypoints read")
 
         for i in range(count):
             wp = mission.item(i)
             cmd_name = Cmd(wp.command).name
             logging.debug(
-                f"🧭 Vehicle {self.sysid}: Mission[{i}] → cmd: {cmd_name}, "
+                f"🧭 Vehicle {self.conn.target_system}: Mission[{i}] → cmd: {cmd_name}, "
                 f"x: {wp.x}, y: {wp.y}, z: {wp.z}, current: {wp.current}"
             )
         time.sleep(1)
@@ -59,16 +63,20 @@ class UploadMission(Step):
             msg = self.conn.recv_match(type="MISSION_REQUEST", blocking=True, timeout=5)
             if not msg or msg.seq != i:
                 raise RuntimeError(
-                    f"Vehicle {self.sysid}: ❌ Unexpected mission request: {msg}"
+                    f"Vehicle {self.conn.target_system}: ❌ Unexpected mission request: {msg}"
                 )
             self.conn.mav.send(mission.wp(i))
-            logging.debug(f"✅ Vehicle {self.sysid}: Sent mission item {i}")
+            logging.debug(
+                f"✅ Vehicle {self.conn.target_system}: Sent mission item {i}"
+            )
 
     def check_fn(self) -> bool:
         """Verify that the mission upload was successful."""
         ack = self.conn.recv_match(type="MISSION_ACK", blocking=True, timeout=5)
         if ack and MissionResult(ack.type) == MissionResult.ACCEPTED:
-            logging.info(f"✅ Vehicle {self.sysid}: Mission upload successful!")
+            logging.info(
+                f"✅ Vehicle {self.conn.target_system}: Mission upload successful!"
+            )
             return True
         logging.warning(f"⚠️ Mission upload failed or timed out: {ack}")
         return False

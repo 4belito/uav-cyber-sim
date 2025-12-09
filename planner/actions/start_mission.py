@@ -13,7 +13,7 @@ class StartMission(Step):
     def exec_fn(self) -> None:
         """Send MISSION_START command to begin executing the mission."""
         self.conn.mav.command_long_send(
-            self.sysid,
+            self.conn.target_system,
             self.conn.target_component,
             Cmd.MISSION_START,
             0,
@@ -32,7 +32,9 @@ class StartMission(Step):
         if msg:
             text = msg.text.strip().lower()
             if text.startswith("mission"):
-                logging.info(f"🚀 Vehicle {self.sysid}: Mission has started")
+                logging.info(
+                    f"🚀 Vehicle {self.conn.target_system}: Mission has started"
+                )
                 return True
         return False
 

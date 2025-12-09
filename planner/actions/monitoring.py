@@ -27,7 +27,9 @@ class CheckItems(Step):
     def exec_fn(self) -> None:
         """Request the next waypoint from the UAV."""
         ask_msg(self.conn, msg_id=MsgID.MISSION_CURRENT, interval=100_000)
-        self.conn.mav.mission_request_list_send(self.sysid, self.conn.target_component)
+        self.conn.mav.mission_request_list_send(
+            self.conn.target_system, self.conn.target_component
+        )
 
     def check_fn(self) -> bool:
         """Check the next waypoint from the UAV."""
@@ -35,7 +37,9 @@ class CheckItems(Step):
             msg = self.conn.recv_match(type="MISSION_COUNT")
             if msg:
                 self._mission_count = msg.count
-                logging.info(f"📦 Vehicle {self.sysid} has {msg.count} mission items")
+                logging.info(
+                    f"📦 Vehicle {self.conn.target_system} has {msg.count} mission items"
+                )
             else:
                 return False
 
@@ -43,16 +47,18 @@ class CheckItems(Step):
         if not curr_msg or curr_msg.seq == self._item_seq:
             return False
         while self._item_seq < curr_msg.seq:
-            logging.info(f"Vehicle {self.sysid}: ⭐ Reached item: {self._item_seq}")
+            logging.info(
+                f"Vehicle {self.conn.target_system}: ⭐ Reached item: {self._item_seq}"
+            )
             self._item_seq += 1
         self.conn.mav.mission_request_send(
-            self.sysid, self.conn.target_component, self._item_seq
+            self.conn.target_system, self.conn.target_component, self._item_seq
         )
         item = self.conn.recv_match(type="MISSION_ITEM", blocking=True)
         gra_wp = GRA(lat=float(item.x), lon=float(item.y), alt=float(item.z))  # type: ignore
         self.target_pos = self.origin.to_rel(gra_wp)
         logging.info(
-            f"Vehicle {self.sysid}: 📍 Target Position: {self.target_pos.short()}"
+            f"Vehicle {self.conn.target_system}: 📍 Target Position: {self.target_pos.short()}"
         )
         if self._item_seq == self._mission_count - 1:
             return True
@@ -72,7 +78,7 @@ class CheckEndMission(Step):
         if msg:
             text = msg.text.strip().lower()
             if "disarming" in text:
-                logging.info(f"Vehicle {self.sysid}: Mission completed")
+                logging.info(f"Vehicle {self.conn.target_system}: Mission completed")
                 stop_msg(self.conn, msg_id=MsgID.GLOBAL_POSITION_INT)
                 return True
         return False
@@ -108,6 +114,8 @@ class ReachedItem(Step):
         # logging.debug(f"Vehicle {conn.target_system}: MISSION_ITEM_REACHED: {msg}")
         if msg:
             if msg.seq == self._item:
-                logging.info(f"Vehicle {self.sysid}: ⭐ Reached item: {msg.seq}")
+                logging.info(
+                    f"Vehicle {self.conn.target_system}: ⭐ Reached item: {msg.seq}"
+                )
                 return True
         return False

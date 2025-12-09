@@ -102,6 +102,7 @@ def start_logic(config: LogicConfig):
                     logic.check_avoidance(o_rid)
             except Empty:
                 pass
+
             logic.act()
             time.sleep(0.01)
     finally:

@@ -50,7 +50,7 @@ class Plan(Action[Action[Step]]):
         ylen: float,
         alt: float,
         heading: int,
-        clockwise: bool = ...,
+        clockwise: bool = True,
     ) -> ENUPoses: ...
 
     @staticmethod
@@ -59,8 +59,8 @@ class Plan(Action[Action[Step]]):
         xlen: float,
         ylen: float,
         alt: float,
-        heading: None = ...,
-        clockwise: bool = ...,
+        heading: None = None,
+        clockwise: bool = True,
     ) -> ENUs: ...
 
     @staticmethod
@@ -81,18 +81,18 @@ class Plan(Action[Action[Step]]):
     @overload
     def create_square_path(
         heading: int,
-        side_len: float = ...,
-        alt: float = ...,
-        clockwise: bool = ...,
+        side_len: float = 10,
+        alt: float = 5,
+        clockwise: bool = True,
     ) -> ENUPoses: ...
 
     @staticmethod
     @overload
     def create_square_path(
-        heading: None = ...,
-        side_len: float = ...,
-        alt: float = ...,
-        clockwise: bool = ...,
+        heading: None = None,
+        side_len: float = 10,
+        alt: float = 5,
+        clockwise: bool = True,
     ) -> ENUs: ...
 
     @staticmethod

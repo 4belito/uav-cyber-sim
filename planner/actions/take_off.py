@@ -33,7 +33,7 @@ class TakeOff(Step):
     def exec_fn(self) -> None:
         """Send TAKEOFF command to reach target altitude."""
         self.conn.mav.command_long_send(
-            self.sysid,
+            self.conn.target_system,
             self.conn.target_component,
             CmdNav.TAKEOFF,
             0,
@@ -58,7 +58,9 @@ class TakeOff(Step):
         pos = self.origin.get_enu_position(self.conn)
         if pos is not None:
             self.current_pos = pos
-            logging.info(f"Vehicle {self.sysid}: 📍 Position: {pos.short()}")
+            logging.info(
+                f"Vehicle {self.conn.target_system}: 📍 Position: {pos.short()}"
+            )
         if take_off:
             stop_msg(self.conn, MsgID.EXTENDED_SYS_STATE)
         if self._ask_position and self._stop_msg_position:

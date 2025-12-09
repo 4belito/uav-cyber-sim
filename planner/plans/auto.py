@@ -4,7 +4,7 @@ from pymavlink.dialects.v20.ardupilotmega import MAVLink_mission_item_message as
 
 from helpers.connections.mavlink.customtypes.mission import MissionLoader
 from helpers.connections.mavlink.enums import Cmd, CmdNav, Frame
-from helpers.coordinates import GRAs
+from helpers.coordinates import ENUPose, ENUs, GRAPose, GRAs
 from planner.actions import make_start_mission, make_upload_mission
 from planner.actions.monitoring import make_monitoring
 from planner.plan import Plan
@@ -106,3 +106,18 @@ class AutoPlan(Plan):
                 )
             )
         mission_loader.save(self.mission_path)
+
+    def save_basic_mission_from_relative(
+        self,
+        sysid: int,
+        gra_origin: GRAPose,
+        relative_home: ENUPose,
+        relative_path: ENUs,
+        land: bool = True,
+        speed: float = 5.0,
+    ) -> None:
+        """Convert ENU waypoints to GRAs and save the mission to file."""
+        gra_home = gra_origin.to_abs(relative_home)
+        grapose_wps = gra_home.to_abs_all(relative_path)
+        gra_wps = GRAPose.unpose_all(grapose_wps)
+        self.save_basic_mission(sysid, gra_wps, land, speed)

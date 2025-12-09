@@ -620,7 +620,7 @@ LLAPoses = list[LLAPose]
 XYZRPYs = list[XYZRPY]
 
 ENUs = list[ENU]
-ENUPoses = list[ENUPose]
+ENUPoses = Iterable[ENUPose]
 NEDs = list[NED]
 NEDPoses = list[NEDPose]
 GRAs = list[GRA]

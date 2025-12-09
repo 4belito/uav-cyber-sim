@@ -17,7 +17,7 @@ class Arm(Step):
     def exec_fn(self) -> None:
         """Send ARM command to the UAV."""
         self.conn.mav.command_long_send(
-            self.sysid,
+            self.conn.target_system,
             self.conn.target_component,
             Cmd.COMPONENT_ARM_DISARM,
             0,

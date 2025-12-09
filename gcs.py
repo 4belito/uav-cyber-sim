@@ -3,6 +3,11 @@ Define the GCS class to monitor UAVs through MAVLink messages and run GCS
 instances.
 """
 
+# def save_pos(self):
+#     """Save the current global position of each UAV to their trajectory path."""
+#     for sysid, pos in self.pos.items():
+#         self.paths[sysid].append(pos)
+
 import argparse
 import json
 import logging
@@ -15,7 +20,7 @@ import zmq
 from pymavlink import mavutil
 
 from config import DATA_PATH, ENV_CMD_ARP, ENV_CMD_PYT, BasePort
-from helpers.connections.mavlink.conn import create_udp_conn
+from helpers.connections.mavlink.conn import create_udp_conn, send_heartbeat
 from helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from helpers.connections.zeromq import create_zmq_socket
 from helpers.coordinates import GRAs
@@ -114,8 +119,8 @@ class GCS(UAVMonitor):
         while not self.is_plan_done(sysid):
             self.get_global_pos(sysid)
             self.save_pos()
-            # if heartbeat_period.trigger():
-            #     send_heartbeat(self.conns[sysid])
+            if heartbeat_event.trigger():
+                send_heartbeat(self.conns[sysid])
             time.sleep(0.1)
         self.remove_uav(sysid)
         logging.info(f"UAV {sysid} mission completed")

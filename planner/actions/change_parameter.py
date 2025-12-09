@@ -25,7 +25,7 @@ class SetSpeed(Step):
         """Send a SET_PARAM command to change WPNAV_SPEED (navigation speed)."""
         speed_cmps = self.speed * 100  # ArduPilot uses cm/s
         self.conn.mav.param_set_send(
-            self.sysid,
+            self.conn.target_system,
             self.conn.target_component,
             WPNav.SPEED,
             speed_cmps,

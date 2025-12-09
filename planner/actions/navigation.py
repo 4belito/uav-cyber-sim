@@ -43,7 +43,7 @@ class GoTo(Step):
         gra_wp = self.origin.to_abs(self.wp)
         go_msg = mavutil.mavlink.MAVLink_set_position_target_global_int_message(
             10,
-            self.sysid,
+            self.conn.target_system,
             self.conn.target_component,
             Frame.GLOBAL_INT,
             self.type_mask,
@@ -69,7 +69,9 @@ class GoTo(Step):
         if pos is not None:
             self.curr_pos = pos
             dist = ENU.distance(pos, self.wp)
-            logging.debug(f"📍 Vehicle {self.sysid}: Distance to target: {dist:.2f} m")
+            logging.debug(
+                f"📍 Vehicle {self.conn.target_system}: Distance to target: {dist:.2f} m"
+            )
             reached = dist < self.wp_margin
         else:
             reached = False
