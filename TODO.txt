@@ -1,6 +1,6 @@
 TODO:
+- differentiate remote ID(system  id) from mavlink connection sysid
 - organize data collection
-- study GAZEBO Model
 - Launch vehicles at any time
 - Add support to use different UAV models other than Iris.
 - Fix: [Errno 111] Connection refused — sleeping.
