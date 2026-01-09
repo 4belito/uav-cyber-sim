@@ -9,3 +9,6 @@ logs/
 eeprom.bin
 **/eeprom.bin
 eeprom*.bin
+
+# Jupyter notebook autosaves
+.ipynb_checkpoints/

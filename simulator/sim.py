@@ -9,7 +9,7 @@ import socket
 from pathlib import Path
 from typing import Callable, Generic, Literal
 
-from config import (
+from simulator.config import (
     ARDU_LOGS_PATH,
     ARDUPILOT_VEHICLE_PATH,
     DATA_PATH,
@@ -17,11 +17,11 @@ from config import (
     VEH_PARAMS_PATH,
     BasePort,
 )
-from helpers import create_process, setup_logging
-from oracle import Oracle
+from simulator.helpers.processes import create_process
+from simulator.helpers.setup_log import setup_logging
+from simulator.oracle import Oracle
 from simulator.visualizer import Visualizer
-
-from .vehicle import SimVehicle, SimVehicles, V
+from simulator.visualizer.vehicle import SimVehicle, SimVehicles, V
 
 SimProcess = Literal["launcher", "veh", "logic", "proxy", "gcs"]
 
@@ -57,11 +57,13 @@ class Simulator(Generic[V]):
         self.vehs: SimVehicles = []
         self.logic_cmd: Callable[[int, str, int], str] = (
             lambda _, config_path, verbose: (
-                f'python3 logic.py --config-path "{config_path}" --verbose {verbose} '
+                f'python3 -m simulator.logic --config-path "{config_path}" '
+                f"--verbose {verbose} "
             )
         )
         self.gcs_cmd: Callable[[int, str, int], str] = lambda _, config_path, verbose: (
-            f'python3 gcs.py --config-path "{config_path}" --verbose {verbose}'
+            f'python3 -m simulator.gcs --config-path "{config_path}" '
+            f"--verbose {verbose}"
         )
         self.transmission_range = transmission_range  # meters
 
@@ -178,7 +180,7 @@ class Simulator(Generic[V]):
                             self.verbose,
                         ),
                         "proxy_cmd": (
-                            f"python3 proxy.py --sysid {sysid} "
+                            f"python3 -m simulator.proxy --sysid {sysid} "
                             f"--port-offset={self.uav_port_offsets[j]} "
                             f"--verbose {self.verbose}"
                         ),

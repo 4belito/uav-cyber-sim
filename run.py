@@ -11,19 +11,24 @@ Usage:
 import argparse
 from typing import Callable, Tuple, cast
 
-from config import DATA_PATH, Color
-from helpers import ALL_PROCESSES, clean
-from helpers.coordinates import ENUPose, GRAPose
-from planner import Plan
-from planner.plans.auto import AutoPlan
-from simulator import QGC, Gazebo, NoVisualizer, Simulator
-from simulator.gazebo.preview import GazMarker
-from simulator.QGroundControl.qgc import QGCMarker
-from simulator.vehicle import SimVehicle, Vehicle
-from simulator.visualizer import Visualizer
+from simulator import Simulator
+from simulator.config import DATA_PATH, Color
+from simulator.helpers import ALL_PROCESSES, clean
+from simulator.helpers.coordinates import ENUPose, GRAPose
+from simulator.planner import AutoPlan, Plan
+from simulator.visualizer import (
+    QGC,
+    Gazebo,
+    GazMarker,
+    NoVisualizer,
+    QGCMarker,
+    SimVehicle,
+    Visualizer,
+)
+from simulator.visualizer.vehicle import Vehicle
 
 VISUALIZER_CHOICES = ("novis", "gazebo", "QGroundControl")
-GAZEBO_WORLD = "simulator/gazebo/worlds/runway.world"
+GAZEBO_WORLD = "simulator/visualizer/gazebo/worlds/runway.world"
 
 vis_trajs: dict[str, Callable[[int, int, float], Tuple[float, float, float, float]]] = {
     "novis": lambda i, j, side_len: (i * 50 * side_len, j * 50 * side_len, 0.0, 0.0),
@@ -124,8 +129,7 @@ def main():
     )
 
     base_paths = [
-        Plan.create_square_path(side_len=side_len, alt=altitude, heading=0)
-        for _ in base_homes
+        Plan.create_square_path(side_len=side_len, alt=altitude) for _ in base_homes
     ]
 
     enu_homes = enu_origin.to_abs_all(base_homes)

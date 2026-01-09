@@ -1,4 +1,5 @@
 TODO:
+- Take generated and examples data out
 - differentiate remote ID(system  id) from mavlink connection sysid
 - organize data collection
 - Launch vehicles at any time

@@ -61,7 +61,7 @@
         "strings": false
     },
     "editor.suggestOnTriggerCharacters": true,
-    "editor.hover.enabled": true,
+    "editor.hover.enabled": "on",
     // ----------------------------
     // Notebook
     // ----------------------------
