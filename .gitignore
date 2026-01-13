@@ -12,3 +12,8 @@ eeprom*.bin
 
 # Jupyter notebook autosaves
 .ipynb_checkpoints/
+
+
+# experimental code
+1-auto_mode2.ipynb
+test.*

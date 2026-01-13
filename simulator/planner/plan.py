@@ -5,26 +5,42 @@ Supports static and dynamic waypoint modes and includes predefined plans.
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
+from dataclasses import asdict, dataclass
+from typing import Any, Callable, ClassVar, TypeVar
+
 from simulator.helpers.connections.mavlink.enums import CopterMode
 from simulator.helpers.coordinates import ENU, XY, ENUs, XYs
 from simulator.planner.action import Action
 from simulator.planner.actions import (
     make_arm,
     make_change_nav_speed,
-    make_land,
-    make_monitoring,
-    make_path,
     make_pre_arm,
     make_set_mode,
-    make_start_mission,
-    make_takeoff,
-    make_upload_mission,
 )
 from simulator.planner.step import Step
 
+P = TypeVar("P", bound="Plan")
 
-class Plan(Action[Action[Step]]):
+ActionSequence = Action[Action[Step]]
+
+
+@dataclass(frozen=True)
+class PlanSpec:
+    """Specification for building a Plan."""
+
+    plan_class: str
+    kwargs: dict[str, Any]
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert PlanSpec to a dictionary."""
+        return asdict(self)
+
+
+class Plan(ActionSequence, ABC):
     """A high-level mission plan composed of sequential UAV actions."""
+
+    _REGISTRY: ClassVar[dict[str, type[Plan]]] = {}
 
     def __init__(
         self,
@@ -32,11 +48,24 @@ class Plan(Action[Action[Step]]):
         emoji: str = "📋",
     ) -> None:
         super().__init__(name, emoji=emoji)
+        self._spec: PlanSpec | None = None
 
-    def extend(self, plan: Plan) -> None:
+    @classmethod
+    @abstractmethod
+    def from_spec(cls, **kwargs: Any) -> Plan:
+        """Build a Plan from JSON-serializable arguments."""
+        raise NotImplementedError
+
+    def extend(self, action_suqnece: ActionSequence) -> None:
         """Append another plan's steps to this plan."""
-        for action in plan.steps:
+        for action in action_suqnece.steps:
             self.add(action)
+
+    def get_spec(self) -> PlanSpec:
+        """Get the specification of this plan."""
+        if self._spec is None:
+            raise RuntimeError(f"Plan '{self.name}' does not expose a specification")
+        return self._spec
 
     @staticmethod
     def create_rectangle_path(
@@ -86,94 +115,35 @@ class Plan(Action[Action[Step]]):
         return coords
 
     @classmethod
-    def square(
-        cls,
-        side_len: float = 10,
-        alt: float = 5,
-        wp_margin: float = 0.5,
-        clockwise: bool = True,
-        navegation_speed: float = 5,
-    ):
-        """Create a square-shaped trajectory with takeoff and landing."""
-        wps = cls.create_square_path(side_len=side_len, alt=alt, clockwise=clockwise)
-        return cls.basic(
-            wps=wps,
-            wp_margin=wp_margin,
-            navegation_speed=navegation_speed,
-            name="Square Trajectory",
-        )
-
-    @classmethod
     def arm(
         cls,
         name: str = "ARM",
-        navegation_speed: float = 5,
-    ):
+        navigation_speed: float = 5,
+    ) -> ActionSequence:
         """Create a plan to execute a mission in auto mode."""
-        plan = cls(name)
-        plan.add(make_pre_arm())
-        plan.add(make_set_mode(CopterMode.GUIDED))
-        if navegation_speed != 5:
-            plan.add(make_change_nav_speed(speed=navegation_speed))
-        plan.add(make_arm())
-        return plan
+        actions = ActionSequence(name, emoji="🔐")
+        actions.add(make_pre_arm())
+        actions.add(make_set_mode(CopterMode.GUIDED))
+        if navigation_speed != 5:
+            actions.add(make_change_nav_speed(speed=navigation_speed))
+        actions.add(make_arm())
+        return actions
 
     @classmethod
-    def hover(
-        cls,
-        wps: ENUs,
-        wp_margin: float = 0.5,
-        navegation_speed: float = 5,
-        name: str = "hover",
-        takeoff_alt: float = 5.0,
-    ):
-        """Create a plan to take off, reach a point, and hover."""
-        plan = cls.arm(name=name, navegation_speed=navegation_speed)
-        plan.add(make_takeoff(altitude=takeoff_alt))
-        plan.add(make_path(wps=wps, wp_margin=wp_margin))
-        return plan
+    def register(cls, name: str) -> Callable[[type[P]], type[P]]:
+        """Register a Plan subclass."""
+
+        def decorator(plan_cls: type[P]) -> type[P]:
+            cls._REGISTRY[name] = plan_cls
+            return plan_cls
+
+        return decorator
 
     @classmethod
-    def basic(
-        cls,
-        wps: ENUs,
-        name: str = "basic",
-        wp_margin: float = 0.5,
-        navegation_speed: float = 5,
-        takeoff_alt: float = 1.0,
-    ) -> Plan:
-        """Create a basic plan with configurable waypoints and options."""
-        land_wp = ENU(wps[-1][0], wps[-1][1], 0)
-        plan = cls.hover(
-            name=name,
-            navegation_speed=navegation_speed,
-            wps=wps,
-            wp_margin=wp_margin,
-            takeoff_alt=takeoff_alt,
-        )
-        plan.add(make_land(final_wp=land_wp))
-        return plan
-
-    @classmethod
-    def auto(
-        cls,
-        name: str,
-        mission_path: str,
-        from_scratch: bool = True,
-        navegation_speed: float = 5,
-    ):
-        """Create a plan to execute a mission in auto mode."""
-        plan = cls(name)
-        plan.add(make_upload_mission(mission_path, from_scratch))
-        plan.extend(
-            cls.arm(
-                name="auto_arm",
-                navegation_speed=navegation_speed,
-            )
-        )
-        plan.add(make_start_mission())
-        plan.add(make_monitoring())
-        return plan
+    def build(cls, spec: PlanSpec) -> Plan:
+        """Build a Plan from its specification."""
+        plan_cls = cls._REGISTRY[spec.plan_class]
+        return plan_cls.from_spec(**spec.kwargs)
 
 
 Plans = list[Plan]

@@ -1,8 +1,9 @@
 """Init file for plan package."""
 
 from .action import Action, State
-from .plan import Plan, Plans
+from .plan import Plan, Plans, PlanSpec
 from .plans.auto import AutoPlan
+from .plans.guided import GuidedPlan
 from .step import Step
 
 __all__ = [
@@ -12,4 +13,6 @@ __all__ = [
     "Plan",
     "Plans",
     "AutoPlan",
+    "GuidedPlan",
+    "PlanSpec",
 ]

@@ -7,7 +7,7 @@ import json
 import logging
 import time
 from queue import Empty
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from pymavlink import mavutil
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
@@ -24,7 +24,7 @@ from simulator.helpers.coordinates import ENU, GRA, XY
 from simulator.helpers.rid import RIDData, RIDManager
 from simulator.helpers.setup_log import setup_logging
 from simulator.params.simulation import HEARTBEAT_FREQUENCY, REMOTE_ID_FREQUENCY
-from simulator.planner import Action, Plan, State, Step
+from simulator.planner import Action, Plan, PlanSpec, State, Step
 from simulator.planner.actions import make_set_mode
 from simulator.planner.actions.navigation import GoTo
 
@@ -47,7 +47,7 @@ def start_logic(config: LogicConfig):
     sysid = config["sysid"]
     port_offset = config["port_offset"]
     gra_orign = GRA(**config["gra_origin_dict"])
-    navegation_speed = config["navegation_speed"]
+    plan_spec = PlanSpec(**config["plan_spec"])
 
     lg_conn = create_tcp_conn(
         base_port=BasePort.LOG,
@@ -56,7 +56,7 @@ def start_logic(config: LogicConfig):
         src_sysid=sysid,
         src_compid=140,  # free for custom modules, companion computers, routing modules
     )
-
+    logging.info(f"Vehicle {sysid}: Logic connection established")
     cs_conn = create_udp_conn(
         base_port=BasePort.GCS,
         offset=port_offset,
@@ -64,15 +64,10 @@ def start_logic(config: LogicConfig):
         src_sysid=sysid,
         src_compid=140,
     )
-
     rid_mnng = RIDManager(sysid, port_offset, gra_orign)
     rid_mnng.start()
 
-    plan = Plan.auto(
-        name="auto",
-        mission_path=str(DATA_PATH / f"mission_{sysid}.waypoints"),
-        navegation_speed=navegation_speed,
-    )
+    plan = Plan.build(plan_spec)
     logic = VehicleLogic(lg_conn, plan=plan, gra_origin=gra_orign)
 
     try:
@@ -88,7 +83,6 @@ def start_logic(config: LogicConfig):
                 except Exception as e:
                     logging.error(f"Error sending RID data: {e}")
                     pass
-            # logging.info(f"Vehicle {sysid} plan_state: {logic.plan.state}")
             if logic.plan.state == State.DONE:
                 logic.send_done_msgs(cs_conn)
                 break
@@ -119,7 +113,7 @@ class LogicConfig(TypedDict):
     gra_origin_dict: dict[str, float]
     port_offset: int
     monitored_items: list[int]
-    navegation_speed: float
+    plan_spec: dict[str, Any]
 
 
 class VehicleLogic:

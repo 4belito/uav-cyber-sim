@@ -148,7 +148,7 @@ class Simulator(Generic[V]):
                     "alt": self.gra_origin.alt,
                 },
                 "port_offset": self.uav_port_offsets[i],
-                "navegation_speed": 5,
+                "plan_spec": self.vehs[i].plan.get_spec().to_dict(),
             }
             config_path = folder_name / f"logic_config_{sysid}.json"
             with config_path.open("w") as f:

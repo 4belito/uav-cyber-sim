@@ -1,5 +1,33 @@
 LOG_BACKEND_TYPE 0
 
+# ===============================
+# ArduCopter 4.7 – ADS-B Avoidance
+# ===============================
+
+# Enable generic avoidance framework
+# AVOID_ENABLE      1
+
+# Enable ADS-B avoidance logic
+# AVD_ENABLE        1
+
+# Enable ADS-B via MAVLink
+# ADSB_TYPE         1
+
+AVOID_MARGIN  50
+# Avoidance behavior:
+# 0 = SLIDE (recommended)
+# 1 = STOP
+# 2 = GUIDED
+#AVOID_BEHAVE      0
+
+# Safety margin (meters)
+# AVOID_MARGIN      50
+
+# Optional: make avoidance messages visible
+# STATUSTEXT_MASK  0
+
+
+
 | Value | Description                                               |
 | ----- | --------------------------------------------------------- |
 | `0`   | **Disable all logging** (no logs are saved)               |
