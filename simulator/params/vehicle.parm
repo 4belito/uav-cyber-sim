@@ -1,40 +1,41 @@
-LOG_BACKEND_TYPE 0
-
 # ===============================
 # ArduCopter 4.7 – ADS-B Avoidance
 # ===============================
 
-# Enable generic avoidance framework
-# AVOID_ENABLE      1
+LOG_BACKEND_TYPE 0
 
-# Enable ADS-B avoidance logic
-# AVD_ENABLE        1
+# ===============================
+# Serial Port Configuration
+# (for ADS-B input via virtual serial)
+# ===============================
+SERIAL5_PROTOCOL 2
+SERIAL5_BAUD 57
 
-# Enable ADS-B via MAVLink
-# ADSB_TYPE         1
+# ===============================
+# ADS-B Receiver Configuration
+# ===============================
+# ADS-B type: 1 = MAVLink protocol
+ADSB_TYPE 1
 
-AVOID_MARGIN  50
-# Avoidance behavior:
-# 0 = SLIDE (recommended)
-# 1 = STOP
-# 2 = GUIDED
-#AVOID_BEHAVE      0
+# Maximum number of ADS-B vehicles to track
+ADSB_LIST_MAX 25
 
-# Safety margin (meters)
-# AVOID_MARGIN      50
+# ===============================
+# ADS-B Avoidance Configuration
+# ===============================
+# Enable ADS-B avoidance system
+AVD_ENABLE 1
 
-# Optional: make avoidance messages visible
-# STATUSTEXT_MASK  0
+# Fail-safe action when collision predicted
+# 0 = None, 1 = Report, 2 = Climb/Descend, 3 = Move Horizontally
+# 4 = Move Perpendicular 3D, 5 = RTL, 6 = Hover
+AVD_F_ACTION 6
 
+# Fail-safe horizontal distance threshold (meters)
+AVD_F_DIST_XY 50
 
+# Fail-safe vertical distance threshold (meters)
+AVD_F_DIST_Z 50
 
-| Value | Description                                               |
-| ----- | --------------------------------------------------------- |
-| `0`   | **Disable all logging** (no logs are saved)               |
-| `1`   | **Log to dataflash** (on-board storage, typically `.bin`) | (default)
-| `2`   | **Log to mavlink** (sent to GCS via telemetry)            |
-| `3`   | **Both dataflash and mavlink**                            |
-| `4`   | **Log to file system** (e.g., when using Linux targets)   |
-| `5`   | **Both mavlink and file system**                          |
-| `6`   | **Both dataflash and file system**                        |
-| `7`   | **Log to all three**: dataflash, mavlink, and file system |
+# Fail-safe time lookahead (seconds)
+AVD_F_TIME 50
