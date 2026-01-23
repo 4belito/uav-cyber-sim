@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install --yes --no-install-recommends \
     git \
     gnome-terminal \
     locales \
+    socat \
     sudo \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
@@ -151,7 +152,8 @@ RUN source ~/miniconda3/bin/activate && \
     numpy \
     plotly \
     pymap3d \
-    pymavlink
+    pymavlink \
+    pyserial
 
 # CLONE THE REPO
 RUN git clone https://github.com/4belito/uav-cyber-sim.git
