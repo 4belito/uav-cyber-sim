@@ -49,7 +49,6 @@ DEPENDENCIES:
 #!/usr/bin/env python3
 
 import argparse
-import math
 import time
 from dataclasses import dataclass
 from typing import Optional
@@ -370,32 +369,32 @@ def generate_sample_traffic(
     """
     t = time.time()
 
-    radius_m = 7  # 5
-    period_s = 60  # 10
+    # radius_m = 7  # 5
+    # period_s = 60  # 10
 
     # Calculate position on circle
-    angle = 2 * math.pi * t / period_s
+    # angle = 2 * math.pi * t / period_s
 
     # Convert radius to degrees (approximate)
-    radius_deg = radius_m / 111000  # ~111km per degree
+    # radius_deg = radius_m / 111000  # ~111km per degree
 
-    lat = center_lat + radius_deg * math.cos(angle)
-    lon = center_lon + radius_deg * math.sin(angle) / math.cos(math.radians(center_lat))
+    # lat = center_lat + radius_deg * math.cos(angle)
+    # lon = center_lon + radius_deg * math.sin(angle) / math.cos(math.radians(center_lat))
 
     # Heading tangent to circle
-    heading = math.degrees(angle + math.pi / 2) % 360
+    # heading = math.degrees(angle + math.pi / 2) % 360
 
     # Speed = circumference / period
-    speed = (2 * math.pi * radius_m) / period_s
+    # speed = (2 * math.pi * radius_m) / period_s
 
     beacon = RemoteIDBeacon(
         uas_id="RIDTEST",
-        latitude=lat,
-        longitude=lon,
+        latitude=center_lat,
+        longitude=center_lon,
         altitude_msl=center_alt,
-        speed_horizontal=speed,
+        speed_horizontal=0.0,  # speed
         speed_vertical=0.0,
-        heading=heading,
+        heading=0.0,  # heading
         callsign="TEST",
         timestamp=t,
     )
