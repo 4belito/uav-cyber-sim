@@ -3,6 +3,7 @@
 # ===============================
 
 LOG_BACKEND_TYPE 0
+#AVOID_ENABLE 1
 
 # ===============================
 # Serial Port Configuration
@@ -29,13 +30,13 @@ AVD_ENABLE 1
 # Fail-safe action when collision predicted
 # 0 = None, 1 = Report, 2 = Climb/Descend, 3 = Move Horizontally
 # 4 = Move Perpendicular 3D, 5 = RTL, 6 = Hover
-AVD_F_ACTION 6
+AVD_F_ACTION 4
 
 # Fail-safe horizontal distance threshold (meters)
-AVD_F_DIST_XY 50
+AVD_F_DIST_XY 10
 
 # Fail-safe vertical distance threshold (meters)
-AVD_F_DIST_Z 50
+AVD_F_DIST_Z 10
 
 # Fail-safe time lookahead (seconds)
-AVD_F_TIME 50
+AVD_F_TIME 10
