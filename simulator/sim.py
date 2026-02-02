@@ -167,6 +167,7 @@ class Simulator(Generic[V]):
                         "ardupilot_cmd": (
                             f"python3 {ARDUPILOT_VEHICLE_PATH}"
                             f" -v ArduCopter -I{j} --sysid {sysid} --no-rebuild"
+                            f' -A "--serial5=uart:/tmp/adsb_{sysid}_ardupilot:57600"'
                             f" --use-dir={ARDU_LOGS_PATH}"
                             f" --add-param-file {VEH_PARAMS_PATH}"
                             f" --no-mavproxy"
