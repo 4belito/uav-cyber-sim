@@ -3,7 +3,6 @@
 # ===============================
 
 LOG_BACKEND_TYPE 0
-#AVOID_ENABLE 1
 
 # ===============================
 # Serial Port Configuration
@@ -30,16 +29,16 @@ AVD_ENABLE 1
 # Fail-safe action when collision predicted
 # 0 = None, 1 = Report, 2 = Climb/Descend, 3 = Move Horizontally
 # 4 = Move Perpendicular 3D, 5 = RTL, 6 = Hover
-AVD_F_ACTION 2
+AVD_F_ACTION 4
 
 # Fail-safe horizontal distance threshold (meters)
-AVD_F_DIST_XY 10
+AVD_F_DIST_XY 5
 
 # Fail-safe vertical distance threshold (meters)
-AVD_F_DIST_Z 10
+AVD_F_DIST_Z 5
 
 # Fail-safe time lookahead (seconds)
-AVD_F_TIME 10
+AVD_F_TIME 2
 
 # Sets how the vehicle behaves after the vehicle has cleanned the nera area
 AVD_F_RCVRY 1

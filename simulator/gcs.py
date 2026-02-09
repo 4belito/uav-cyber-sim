@@ -6,6 +6,7 @@ instances.
 import argparse
 import json
 import logging
+import os
 import pickle
 import time
 from concurrent import futures
@@ -133,6 +134,47 @@ class GCS(UAVMonitor):
         uav_config = self.uavs[i]
         sysid = uav_config["sysid"]
 
+        # -----------------------
+        # 1. ADS-B virtual cable
+        # -----------------------
+        socat_cmd = (
+            f"socat -d -d "
+            f"pty,raw,echo=0,link=/tmp/adsb_{sysid}_ardupilot "
+            f"pty,raw,echo=0,link=/tmp/adsb_{sysid}_injector"
+        )
+
+        p = create_process(
+            socat_cmd,
+            after="exec bash",
+            visible="adsb_socat" in self.terminals,
+            suppress_output="adsb_socat" in self.suppress,
+            title=f"ADSB socat: Vehicle {sysid}",
+        )
+        logging.debug(f"ADSB socat for vehicle {sysid} launched (PID {p.pid})")
+        self._wait_for_pty(f"/tmp/adsb_{sysid}_injector")
+
+        # -----------------------
+        # 2. ADS-B injector
+        # -----------------------
+        adsb_cmd = (
+            f"python3 -m simulator.adsb_injector "
+            f"--uart /tmp/adsb_{sysid}_injector "
+            f"--port-offset {uav_config['port_offset']}"
+        )
+
+        p = create_process(
+            adsb_cmd,
+            after="exec bash",
+            visible="adsb_injector" in self.terminals,
+            suppress_output="adsb_injector" in self.suppress,
+            title=f"ADSB injector: Vehicle {sysid}",
+            env_cmd=ENV_CMD_PYT,
+        )
+        logging.debug(f"ADSB injector for vehicle {sysid} launched (PID {p.pid})")
+
+        # -----------------------
+        # 3. ArduPilot + Proxy + Logic
+        # -----------------------
         p = create_process(
             uav_config["logic_cmd"],
             after="exec bash",
@@ -179,6 +221,13 @@ class GCS(UAVMonitor):
         with open(config_path) as f:
             gcs_config: GCSConfig = json.load(f)
         return gcs_config
+
+    def _wait_for_pty(self, path: str, timeout: float = 3.0):
+        t0 = time.time()
+        while not os.path.exists(path):
+            if time.time() - t0 > timeout:
+                raise RuntimeError(f"PTY not created: {path}")
+            time.sleep(0.05)
 
 
 def parse_arguments() -> tuple[str, int]:
