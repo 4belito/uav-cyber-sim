@@ -1,0 +1,194 @@
+#!/usr/bin/env python3
+"""
+ADS-B Injector for ArduPilot SITL (device adapter).
+
+This module behaves like a real ADS-B receiver:
+- subscribes to ADSBBeacon objects from Oracle (ZMQ)
+- converts them to MAVLink ADSB_VEHICLE messages
+- injects them into ArduPilot via a serial port
+
+It does NOT generate traffic and does NOT know about Remote ID.
+"""
+
+from __future__ import annotations
+
+import argparse
+import time
+
+import zmq
+from pymavlink import mavutil
+from pymavlink.dialects.v20 import common as mavlink2
+
+from simulator.config import BasePort
+from simulator.helpers.adsb import ADSBBeacon
+from simulator.helpers.connections import create_zmq_socket
+
+# =============================================================================
+# MAVLink ADS-B constants
+# =============================================================================
+
+ADSB_ALTITUDE_TYPE_GEOMETRIC = 1
+ADSB_EMITTER_TYPE_UAV = 14
+
+ADSB_FLAGS_VALID_COORDS = 1
+ADSB_FLAGS_VALID_ALTITUDE = 2
+ADSB_FLAGS_VALID_HEADING = 4
+ADSB_FLAGS_VALID_VELOCITY = 8
+ADSB_FLAGS_VALID_CALLSIGN = 16
+ADSB_FLAGS_SIMULATED = 64
+ADSB_FLAGS_VERTICAL_VELOCITY_VALID = 128
+
+
+# =============================================================================
+# ADS-B Injector
+# =============================================================================
+
+
+class ADSBInjector:
+    """ADS-B device adapter: ZMQ ADSBBeacon -> MAVLink ADSB_VEHICLE -> serial."""
+
+    def __init__(self, uart: str, baudrate: int, port_offset: int):
+        self.uart = uart
+        self.baudrate = baudrate
+        self.port_offset = port_offset
+
+        self.conn: mavutil.mavlink_connection | None = None
+        self.mav = None
+
+        # ZMQ (Oracle -> injector)
+        self.ctx = zmq.Context()
+        self.sub = create_zmq_socket(
+            self.ctx,
+            zmq.SUB,
+            BasePort.ADSB_DOWN,
+            port_offset,
+        )
+
+    # -------------------------------------------------------------------------
+    # Lifecycle
+    # -------------------------------------------------------------------------
+
+    def connect(self) -> None:
+        """Open serial connection to ArduPilot."""
+        print(f"[ADSB] Connecting to {self.uart} @ {self.baudrate} baud")
+
+        self.conn = mavutil.mavlink_connection(
+            self.uart,
+            baud=self.baudrate,
+            source_system=1,
+            source_component=156,  # MAV_COMP_ID_ADSB
+        )
+        self.mav = self.conn.mav
+        print("[ADSB] Connected")
+
+    def close(self) -> None:
+        if self.conn:
+            self.conn.close()
+        self.sub.close(linger=0)
+        self.ctx.term()
+
+    # -------------------------------------------------------------------------
+    # MAVLink output
+    # -------------------------------------------------------------------------
+
+    def send_heartbeat(self) -> None:
+        """Identify as an ADS-B peripheral."""
+        assert self.mav is not None
+
+        self.mav.heartbeat_send(
+            type=mavlink2.MAV_TYPE_ADSB,
+            autopilot=mavlink2.MAV_AUTOPILOT_INVALID,
+            base_mode=0,
+            custom_mode=0,
+            system_status=mavlink2.MAV_STATE_ACTIVE,
+        )
+
+    def send_adsb_vehicle(self, beacon: ADSBBeacon) -> None:
+        """Convert ADSBBeacon -> MAVLink ADSB_VEHICLE."""
+        assert self.mav is not None
+
+        self.mav.adsb_vehicle_send(
+            ICAO_address=beacon.icao,
+            lat=int(beacon.lat_deg * 1e7),
+            lon=int(beacon.lon_deg * 1e7),
+            altitude_type=ADSB_ALTITUDE_TYPE_GEOMETRIC,
+            altitude=int(beacon.alt_m * 1000),
+            heading=int(beacon.heading_deg * 100) % 36000,
+            hor_velocity=int(beacon.hor_speed_mps * 100),
+            ver_velocity=int(beacon.ver_speed_mps * 100),
+            callsign=beacon.callsign[:8].ljust(8).encode("ascii"),
+            emitter_type=ADSB_EMITTER_TYPE_UAV,
+            tslc=0,
+            flags=(
+                ADSB_FLAGS_VALID_COORDS
+                | ADSB_FLAGS_VALID_ALTITUDE
+                | ADSB_FLAGS_VALID_HEADING
+                | ADSB_FLAGS_VALID_VELOCITY
+                | ADSB_FLAGS_VALID_CALLSIGN
+                | ADSB_FLAGS_SIMULATED
+                | ADSB_FLAGS_VERTICAL_VELOCITY_VALID
+            ),
+            squawk=1200,
+        )
+
+
+# =============================================================================
+# Main
+# =============================================================================
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="ADS-B injector (Oracle-fed)")
+    parser.add_argument(
+        "--uart",
+        required=True,
+        help="UART device (e.g. /tmp/adsb_<sysid>_injector)",
+    )
+    parser.add_argument(
+        "--baud",
+        type=int,
+        default=57600,
+        help="Serial baudrate (default: 57600)",
+    )
+    parser.add_argument(
+        "--port-offset",
+        type=int,
+        required=True,
+        help="Port offset used for ZMQ ADSB_DOWN socket",
+    )
+
+    args = parser.parse_args()
+
+    injector = ADSBInjector(
+        uart=args.uart,
+        baudrate=args.baud,
+        port_offset=args.port_offset,
+    )
+
+    try:
+        injector.connect()
+
+        last_heartbeat = 0.0
+
+        while True:
+            now = time.time()
+
+            if now - last_heartbeat > 1.0:
+                injector.send_heartbeat()
+                last_heartbeat = now
+
+            try:
+                beacon: ADSBBeacon = injector.sub.recv_pyobj()
+                injector.send_adsb_vehicle(beacon)
+            except zmq.Again:
+                pass
+
+    except KeyboardInterrupt:
+        print("\n[ADSB] Stopping")
+
+    finally:
+        injector.close()
+
+
+if __name__ == "__main__":
+    main()

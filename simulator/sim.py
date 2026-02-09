@@ -23,7 +23,9 @@ from simulator.oracle import Oracle
 from simulator.visualizer import Visualizer
 from simulator.visualizer.vehicle import SimVehicle, SimVehicles, V
 
-SimProcess = Literal["launcher", "veh", "logic", "proxy", "gcs"]
+SimProcess = Literal[
+    "launcher", "veh", "logic", "proxy", "gcs", "adsb_socat", "adsb_injector"
+]
 
 
 class Simulator(Generic[V]):
