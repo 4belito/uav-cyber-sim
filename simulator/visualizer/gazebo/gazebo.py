@@ -75,13 +75,13 @@ class Gazebo(Visualizer[GazVehicle]):
         self.world_path = world_path
         self.markers: GazMarkers = []
 
-    def add_vehicle_cmd(self, i: int) -> str:
+    def add_vehicle_cmd(self, sysid: int) -> str:
         """Add gazebo model (only iris TODO: add others)."""
         return f" -f gazebo-iris --custom-location={self.gra_origin.to_str()}"
 
     def launch(self, port_offsets: list[int]):
         """Launch the Gazebo simulator with the specified UAV and waypoints."""
-        base_models = [f"{veh.model}_{veh.color}" for veh in self.vehicles]
+        base_models = [f"{veh.model}_{veh.color}" for veh in self.vehicles.values()]
         self._generate_drone_models_from_bases(
             base_models, base_port_in=9002, port_step=10
         )
@@ -105,7 +105,7 @@ class Gazebo(Visualizer[GazVehicle]):
         """Render a 3D interactive plot of waypoint trajectories using Plotly."""
         show_markers(self.markers, title=title, frames=frames, ground=ground)
 
-    def get_vehicle(
+    def get_visvehicle(
         self,
         vehicle: SimVehicle,
         radius: float = 0.2,
@@ -221,8 +221,15 @@ class Gazebo(Visualizer[GazVehicle]):
         ET.SubElement(model, "allow_auto_disable").text = "1"
         return model
 
+    # def _add_vehicle_elements(self, world_elem: ET.Element) -> None:
+    #     for sysid, veh in self.vehicles.items():
+    #         x, y, z, h = veh.home
+    #         pose = XYZRPY(x, y, z, 0, 0, heading_to_yaw(h))
+    #         drone_elem = self._generate_drone_element(f"vehicle_{sysid}", pose)
+    #         world_elem.append(drone_elem)
+
     def _add_drone_elements(self, world_elem: ET.Element) -> None:
-        for i, veh in enumerate(self.vehicles):
+        for i, veh in enumerate(self.vehicles.values()):
             x, y, z, h = veh.home
             pose = XYZRPY(x, y, z, 0, 0, heading_to_yaw(h))
             drone_elem = self._generate_drone_element(f"drone{i + 1}", pose)

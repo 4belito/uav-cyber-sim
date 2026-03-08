@@ -66,9 +66,9 @@ class QGC(Visualizer[QGCVehicle]):
         super().__init__(gra_origin)
         self.markers: QGCMarkers = []
 
-    def add_vehicle_cmd(self, i: int):
+    def add_vehicle_cmd(self, sysid: int):
         """Add GRA location to the vehicle command."""
-        homes_str = self.vehicles[i].home.to_str()
+        homes_str = self.vehicles[sysid].home.to_str()
         return f" --custom-location={homes_str}"
 
     def launch(self, port_offsets: list[int]):
@@ -97,7 +97,7 @@ class QGC(Visualizer[QGCVehicle]):
             marker.pos.draw(m, marker.name, marker.color)
         display(m)
 
-    def get_vehicle(self, vehicle: SimVehicle):
+    def get_visvehicle(self, vehicle: SimVehicle):
         """Convert a Vehicle to a QGCVehicle with GRA home position and trajectory."""
         graunpose_origin = self.gra_origin.unpose()
         home = graunpose_origin.pose().to_abs(vehicle.home)

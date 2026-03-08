@@ -15,7 +15,7 @@ class Visualizer(ABC, Generic[V]):
 
     def __init__(self, gra_origin: GRAPose) -> None:
         self.gra_origin = gra_origin
-        self.vehicles: list[V] = []
+        self.vehicles: dict[int, V] = {}
         self.num_vehicles: int = 0
 
     @abstractmethod
@@ -24,7 +24,7 @@ class Visualizer(ABC, Generic[V]):
         raise NotImplementedError
 
     @abstractmethod
-    def get_vehicle(self, vehicle: SimVehicle) -> V:
+    def get_visvehicle(self, vehicle: SimVehicle) -> V:
         """Convert a Vehicle to the visualizer-specific vehicle type."""
         raise NotImplementedError
 
@@ -33,20 +33,20 @@ class Visualizer(ABC, Generic[V]):
         """Show a stathic preview visualization."""
         raise NotImplementedError
 
-    def add_vehicle_cmd(self, i: int) -> str:
+    def add_vehicle_cmd(self, sysid: int) -> str:
         """Add optional command-line for the ith vehicle."""
         return ""
 
     def add_vehicle(self, vehicle: SimVehicle) -> None:
         """Add a vehicle to the visualizer."""
-        veh = self.get_vehicle(vehicle)
-        self.vehicles.append(veh)
+        visveh = self.get_visvehicle(vehicle)
+        self.vehicles[vehicle.sysid] = visveh
         self.num_vehicles += 1
 
-    def remove_vehicle_at(self, index: int) -> bool:
-        """Remove a vehicle by index."""
-        if 0 <= index < len(self.vehicles):
-            del self.vehicles[index]
+    def remove_vehicle(self, sysid: int) -> bool:
+        """Remove a vehicle by system ID."""
+        if sysid in self.vehicles:
+            del self.vehicles[sysid]
             self.num_vehicles -= 1
             return True
         return False
