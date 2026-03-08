@@ -24,6 +24,7 @@ from simulator.helpers.connections import (
 from simulator.helpers.connections.mavlink.enums import DataStream, MsgID
 from simulator.helpers.connections.mavlink.streams import (
     ask_msg,
+    decode_unknown_message,
     request_sensor_streams,
     stop_msg,
 )
@@ -175,8 +176,8 @@ class MessageRouter(threading.Thread):
         while not self.stop_event.is_set():
             msg = self.source.recv_match(blocking=True, timeout=0.1)
 
-            # if msg and msg.get_type().startswith("UNKNOWN"):
-            # msg = decode_unknown_message(msg)
+            if msg and msg.get_type().startswith("UNKNOWN"):
+                msg = decode_unknown_message(msg)
 
             if msg and not self.stop_event.is_set():
                 # logging.debug(f"UAV ({self.sysid}): Received {msg}")
