@@ -16,12 +16,13 @@ import argparse
 import time
 
 import zmq
-from pymavlink import mavutil
-from pymavlink.dialects.v20 import common as mavlink2
+from pymavlink.dialects.v20 import ardupilotmega as mavlink2
 
 from simulator.config import BasePort
 from simulator.helpers.adsb import ADSBBeacon
 from simulator.helpers.connections import create_zmq_socket
+from simulator.helpers.connections.mavlink.conn import connect
+from simulator.helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 
 # =============================================================================
 # MAVLink ADS-B constants
@@ -52,7 +53,7 @@ class ADSBInjector:
         self.baudrate = baudrate
         self.port_offset = port_offset
 
-        self.conn: mavutil.mavlink_connection | None = None
+        self.conn: MAVConnection | None = None
         self.mav = None
 
         # ZMQ (Oracle -> injector)
@@ -72,16 +73,17 @@ class ADSBInjector:
         """Open serial connection to ArduPilot."""
         print(f"[ADSB] Connecting to {self.uart} @ {self.baudrate} baud")
 
-        self.conn = mavutil.mavlink_connection(
+        self.conn = connect(
             self.uart,
             baud=self.baudrate,
-            source_system=1,
-            source_component=156,  # MAV_COMP_ID_ADSB
+            src_sysid=1,
+            src_compid=156,  # MAV_COMP_ID_ADSB
         )
         self.mav = self.conn.mav
         print("[ADSB] Connected")
 
     def close(self) -> None:
+        """Clean up connections."""
         if self.conn:
             self.conn.close()
         self.sub.close(linger=0)
@@ -138,6 +140,7 @@ class ADSBInjector:
 
 
 def main() -> None:
+    """Run the ADS-B injector."""
     parser = argparse.ArgumentParser(description="ADS-B injector (Oracle-fed)")
     parser.add_argument(
         "--uart",

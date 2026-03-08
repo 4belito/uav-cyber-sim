@@ -2,6 +2,8 @@
 
 import logging
 
+import pymavlink.dialects.v20.ardupilotmega as mavlink
+
 from simulator.helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from simulator.helpers.connections.mavlink.enums import CmdSet, DataStream, MsgID
 from simulator.helpers.coordinates import ENU, GRA
@@ -80,3 +82,18 @@ def get_GRA_position(conn: MAVConnection) -> GRA | None:
     if msg:
         return GRA.from_global_int(msg.lat, msg.lon, msg.relative_alt)  # type: ignore
     return None
+
+
+# Secondary MAVLink decoder (used to decode UNKNOWN_* messages)
+secondary_decoder = mavlink.MAVLink(None)
+
+
+def decode_unknown_message(msg: mavlink.MAVLink_message) -> mavlink.MAVLink_message:
+    """Attempt to decode an UNKNOWN_* message using a secondary MAVLink parser."""
+    try:
+        decoded = secondary_decoder.parse_char(msg.get_msgbuf())
+        if decoded:
+            return decoded
+    except Exception:
+        pass
+    return msg

@@ -34,7 +34,9 @@ DATA_STREAM_IDS = [
     DataStream.RAW_SENSORS,
     DataStream.EXTENDED_STATUS,
     DataStream.POSITION,
-    DataStream.EXTRA1,
+    DataStream.EXTRA1,  # Required to receive some ArduPilot custom telemetry
+    # (e.g. ESC_TELEMETRY_*).If disabled, these messages are not streamed and the
+    # UNKNOWN message decoding logic is never exercised.
     DataStream.EXTRA2,
 ]
 RID_INTERVAL = int(1_000_000 / REMOTE_ID_FREQUENCY)
@@ -172,6 +174,10 @@ class MessageRouter(threading.Thread):
         """Continuously receive messages and dispatch them until stopped."""
         while not self.stop_event.is_set():
             msg = self.source.recv_match(blocking=True, timeout=0.1)
+
+            # if msg and msg.get_type().startswith("UNKNOWN"):
+            # msg = decode_unknown_message(msg)
+
             if msg and not self.stop_event.is_set():
                 # logging.debug(f"UAV ({self.sysid}): Received {msg}")
                 if (

@@ -10,7 +10,13 @@ from simulator.helpers.connections.mavlink.customtypes.mavconn import MAVConnect
 from simulator.helpers.connections.mavlink.enums import Autopilot, Type
 
 
-def connect(device: str, src_sysid: int, src_compid: int) -> MAVConnection:
+def connect(
+    device: str,
+    src_sysid: int,
+    src_compid: int,
+    dialect: str = "ardupilotmega",
+    baud: int = 115200,
+) -> MAVConnection:
     """
     Wrap `mavlink_connection` with a type cast to `MAVConnection`
     to enable clean static typing.
@@ -19,7 +25,11 @@ def connect(device: str, src_sysid: int, src_compid: int) -> MAVConnection:
     return cast(
         MAVConnection,
         mavutil.mavlink_connection(  # type: ignore[arg-type]
-            device, source_system=src_sysid, source_component=src_compid
+            device,
+            source_system=src_sysid,
+            source_component=src_compid,
+            dialect=dialect,
+            baud=baud,
         ),
     )
 
@@ -41,14 +51,19 @@ def create_udp_conn(
     mode: Literal["receiver", "sender"],
     src_sysid: int,
     src_compid: int,
+    dialect: str = "ardupilotmega",
 ) -> MAVConnection:
     """Create a MAVLink-over-UDP connection."""
     port = base_port + offset
     if mode == "receiver":
-        conn = connect(f"udp:127.0.0.1:{port}", src_sysid, src_compid)  # recv+send
+        conn = connect(
+            f"udp:127.0.0.1:{port}", src_sysid, src_compid, dialect
+        )  # recv+send
         conn.wait_heartbeat()
     else:  # mode == "sender"
-        conn = connect(f"udpout:127.0.0.1:{port}", src_sysid, src_compid)  # send-only
+        conn = connect(
+            f"udpout:127.0.0.1:{port}", src_sysid, src_compid, dialect
+        )  # send-only
     return conn
 
 
