@@ -3,7 +3,6 @@
 from .autopilot import Autopilot
 from .cmd import Cmd
 from .cmdcond import CmdCond
-from .cmdcustom import CmdCustom
 from .cmddo import CmdDo
 from .cmdnav import CmdNav
 from .cmdset import CmdSet
@@ -17,6 +16,7 @@ from .modeflag import ModeFlag
 from .msgid import MsgID
 from .paramtype import ParamType
 from .sensorflag import SensorFlag
+from .state import State
 from .type import Type
 
 __all__ = [
@@ -36,6 +36,6 @@ __all__ = [
     "MsgID",
     "ParamType",
     "SensorFlag",
+    "State",
     "Type",
-    "CmdCustom",
 ]

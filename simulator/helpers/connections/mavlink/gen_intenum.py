@@ -7,8 +7,8 @@ manual use—typically after updating or regenerating MAVLink definitions—rath
 than regular execution during normal operation.
 
 Run from the repo root:
-
     python -m helpers.connections.mavlink.gen_intenum
+
 
 This ensures proper imports like:
     from helpers.codegen import write_init_file
@@ -24,6 +24,12 @@ from simulator.helpers.codegen import make_docstring, write_init_file
 
 # Define constants to loop over
 ENUM_DEFS = [
+    {
+        "key": "MAV_STATE",
+        "group": "MAV_STATE_",  # No prefix filtering
+        "name": "State",
+        "doc": "",
+    },
     {
         "key": "MAV_DATA_STREAM",
         "group": "MAV_DATA_STREAM_",  # No prefix filtering

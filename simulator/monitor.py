@@ -6,10 +6,10 @@ Currently provides basic global position tracking and mission completion detecti
 import logging
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
-from pymavlink.dialects.v20 import common as mavlink2  # type: ignore
+from pymavlink.dialects.v20 import ardupilotmega as mavlink2  # type: ignore
 
 from simulator.helpers.connections import MAVConnection
-from simulator.helpers.connections.mavlink.enums import CmdCustom
+from simulator.helpers.connections.mavlink.customenums.customcmd import CustomCmd
 from simulator.helpers.connections.mavlink.streams import get_GRA_position
 from simulator.helpers.coordinates import GRA  # ,global2local
 
@@ -61,7 +61,7 @@ class UAVMonitor:
         """Check for a STATUSTEXT("DONE") message and respond with COMMAND_ACK."""
         if msg.text == "LOGIC_DONE":
             conn.mav.command_ack_send(
-                command=CmdCustom.LOGIC_DONE, result=mavlink2.MAV_RESULT_ACCEPTED
+                command=CustomCmd.LOGIC_DONE, result=mavlink2.MAV_RESULT_ACCEPTED
             )
             logging.info(f"✅ Vehicle {sysid} completed its mission")
             return True

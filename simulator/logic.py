@@ -19,7 +19,8 @@ from simulator.helpers.connections import (
     create_udp_conn,
     send_heartbeat,
 )
-from simulator.helpers.connections.mavlink.enums import CmdCustom, CopterMode
+from simulator.helpers.connections.mavlink.customenums.customcmd import CustomCmd
+from simulator.helpers.connections.mavlink.enums import CopterMode
 from simulator.helpers.coordinates import ENU, GRA, XY
 from simulator.helpers.rid import RIDData, RIDManager
 from simulator.helpers.setup_log import setup_logging
@@ -171,13 +172,13 @@ class VehicleLogic:
         done_msg = mavlink.MAVLink_statustext_message(severity=6, text=b"LOGIC_DONE")
         logging.info(f"Proxy ← Logic {self.sysid}: Sending LOGIC_DONE")
         self.conn.mav.send(done_msg)  # This is tcp connection, no ack need it.
-        self.send_msg_until_ack(cs_conn, done_msg, CmdCustom.LOGIC_DONE)
+        self.send_msg_until_ack(cs_conn, done_msg, CustomCmd.LOGIC_DONE)
 
     def send_msg_until_ack(
         self,
         conn: MAVConnection,
         msg: mavlink.MAVLink_statustext_message,
-        ack_cmd: CmdCustom,
+        ack_cmd: CustomCmd,
         max_tries: float = float("inf"),
     ):
         """

@@ -16,13 +16,13 @@ import argparse
 import time
 
 import zmq
-from pymavlink.dialects.v20 import ardupilotmega as mavlink2
 
 from simulator.config import BasePort
 from simulator.helpers.adsb import ADSBBeacon
 from simulator.helpers.connections import create_zmq_socket
-from simulator.helpers.connections.mavlink.conn import connect
+from simulator.helpers.connections.mavlink.conn import connect, send_heartbeat
 from simulator.helpers.connections.mavlink.customtypes.mavconn import MAVConnection
+from simulator.helpers.connections.mavlink.enums import Autopilot, State, Type
 
 # =============================================================================
 # MAVLink ADS-B constants
@@ -71,7 +71,7 @@ class ADSBInjector:
 
     def connect(self) -> None:
         """Open serial connection to ArduPilot."""
-        print(f"[ADSB] Connecting to {self.uart} @ {self.baudrate} baud")
+        # print(f"[ADSB] Connecting to {self.uart} @ {self.baudrate} baud")
 
         self.conn = connect(
             self.uart,
@@ -80,7 +80,7 @@ class ADSBInjector:
             src_compid=156,  # MAV_COMP_ID_ADSB
         )
         self.mav = self.conn.mav
-        print("[ADSB] Connected")
+        # print("[ADSB] Connected")
 
     def close(self) -> None:
         """Clean up connections."""
@@ -95,14 +95,14 @@ class ADSBInjector:
 
     def send_heartbeat(self) -> None:
         """Identify as an ADS-B peripheral."""
-        assert self.mav is not None
-
-        self.mav.heartbeat_send(
-            type=mavlink2.MAV_TYPE_ADSB,
-            autopilot=mavlink2.MAV_AUTOPILOT_INVALID,
+        assert self.conn is not None
+        send_heartbeat(
+            self.conn,
+            sys_type=Type.ADSB,
+            autopilot=Autopilot.INVALID,
             base_mode=0,
             custom_mode=0,
-            system_status=mavlink2.MAV_STATE_ACTIVE,
+            system_status=State.ACTIVE,
         )
 
     def send_adsb_vehicle(self, beacon: ADSBBeacon) -> None:
