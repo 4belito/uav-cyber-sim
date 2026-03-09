@@ -151,14 +151,17 @@ def start_logic(config: LogicConfig):
             if heartbeat_event.trigger():
                 send_heartbeat(ap_conn)
                 send_heartbeat(cs_conn)
-
-            if rid_event.trigger() and rid_mnng.pending:
-                try:
-                    logic.rid = rid_mnng.data
-                    rid_mnng.publish()
-                except Exception as e:
-                    logging.error(f"Error sending RID data: {e}")
-                    pass
+            if rid_event.trigger():
+                pos = vehicle_state.get("GLOBAL_POSITION_INT")
+                if pos:
+                    rid_mnng.update(pos.to_dict())
+                if rid_mnng.pending:
+                    try:
+                        logic.rid = rid_mnng.data
+                        rid_mnng.publish()
+                    except Exception as e:
+                        logging.error(f"Error sending RID data: {e}")
+                        pass
             if logic.plan.state == State.DONE:
                 logic.send_done_msgs(cs_conn)
                 break

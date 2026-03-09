@@ -293,7 +293,10 @@ class Oracle:  # UAVMonitor
             # Extract color name from filename: trajectories_COLOR_EMOJI.pkl
             stem_parts = file.stem.split("_")
             color_name = stem_parts[1]
-            gcs_color = Color(color_name.lower())
+            if color_name.lower() not in Color.__members__:
+                gcs_color = Color.BLACK  # Default to gray if color not recognized
+            else:
+                gcs_color = Color(color_name.lower())
             fig = plt.figure(figsize=(8, 8))  # type: ignore
             ax = fig.add_subplot(projection="3d", proj_type="ortho")  # type: ignore
             ax.set_title(f"{gcs_color} ENU Trajectories")  # type: ignore

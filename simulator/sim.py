@@ -41,7 +41,7 @@ class Simulator(Generic[VehT]):
         # visualization
         visualizer: Visualizer[VehT],
         terminals: list[SimProcess] = [],
-        supress_output: list[SimProcess] = ["launcher"],
+        supress_output: list[SimProcess] = ["launcher", "adsb_socat", "adsb_injector"],
         verbose: int = 1,
         # oracle
         transmission_range: int = 100,  # meters for inter-UAV communication
