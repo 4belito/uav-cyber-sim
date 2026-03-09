@@ -28,7 +28,7 @@ class StartMission(Step):
 
     def check_fn(self) -> bool:
         """Check if the mission has started by listening for a STATUSTEXT message."""
-        msg = self.conn.recv_match(type="STATUSTEXT")
+        msg = self.vehicle_state.get("STATUSTEXT")
         if msg:
             text = msg.text.strip().lower()
             if text.startswith("mission"):

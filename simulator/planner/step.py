@@ -12,6 +12,7 @@ from typing import Self
 
 from simulator.helpers.connections import MAVConnection
 from simulator.helpers.coordinates import ENU, GRA
+from simulator.vehicle.state import VehicleState
 
 
 class State(StrEnum):
@@ -54,6 +55,7 @@ class MissionElement(ABC):
         self.conn: MAVConnection
         self.origin: GRA
         self.sysid: int
+        self.vehicle_state: VehicleState
         self.onair: bool | None = None  # Default onair status
         self.target_pos: ENU | None = None  # Default target (global) position
         self.curr_pos: ENU | None = None  # Default current (global) position
@@ -70,13 +72,19 @@ class MissionElement(ABC):
     def __repr__(self) -> str:
         return f"{self.state.emoji} <{self.class_name} '{self.emoji} {self.name}'>"
 
-    def bind(self, connection: MAVConnection, origin: GRA) -> None:
+    def bind(
+        self,
+        connection: MAVConnection,
+        origin: GRA,
+        vehicle_state: VehicleState,
+    ) -> None:
         """
-        Binds the mission element to a MAVLink connection and sets verbosity
-        level.
+        Binds the mission element to a MAVLink connection, origin, and vehicle
+        state.
         """
-        self.conn = connection  # Set later from the parent Action
+        self.conn = connection
         self.origin = origin
+        self.vehicle_state = vehicle_state
         self.sysid = connection.target_system
         logging.debug(
             f"🔗 Vehicle {self.sysid}: {self.class_name} '{self.name}' is now connected"

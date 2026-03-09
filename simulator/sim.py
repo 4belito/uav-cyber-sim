@@ -169,11 +169,11 @@ class Simulator(Generic[VehT]):
                             str(DATA_PATH / f"logic_config_{sysid}.json"),
                             self.verbose,
                         ),
-                        "proxy_cmd": (
-                            f"python3 -m simulator.proxy --sysid {sysid} "
-                            f"--port-offset={port_offset} "
-                            f"--verbose {self.verbose}"
-                        ),
+                        # "proxy_cmd": (
+                        #     f"python3 -m simulator.proxy --sysid {sysid} "
+                        #     f"--port-offset={port_offset} "
+                        #     f"--verbose {self.verbose}"
+                        # ),
                     }
                 )
                 inst += 1

@@ -14,14 +14,15 @@ from typing import TypedDict
 
 import zmq
 from pymavlink import mavutil
+from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
 from simulator.config import DATA_PATH, ENV_CMD_ARP, ENV_CMD_PYT, BasePort
 from simulator.helpers.connections import (
     MAVConnection,
     create_udp_conn,
     create_zmq_socket,
-    send_heartbeat,
 )
+from simulator.helpers.connections.mavlink.customenums.customcmd import CustomCmd
 from simulator.helpers.coordinates import GRAs
 from simulator.helpers.processes import create_process
 from simulator.helpers.setup_log import setup_logging
@@ -118,11 +119,30 @@ class GCS(UAVMonitor):
         while not self.is_plan_done(sysid):
             self.get_global_pos(sysid)
             self.save_pos()
-            if heartbeat_event.trigger():
-                send_heartbeat(self.conns[sysid])
-            time.sleep(0.1)
-        self.remove_uav(sysid)
-        logging.info(f"UAV {sysid} mission completed")
+
+    def _handle_message(self, sysid: int, msg: mavlink.MAVLink_message) -> bool:
+        """Process MAVLink messages from a UAV."""
+        if msg.get_type() == "STATUSTEXT":
+            text = getattr(msg, "text", b"")
+            if isinstance(text, bytes):
+                text = text.decode(errors="ignore")
+
+            if text == "LOGIC_DONE":
+                logging.info(f"GCS: received LOGIC_DONE from UAV {sysid}")
+
+                # Send COMMAND_ACK back
+                ack = mavutil.mavlink.MAVLink_command_ack_message(
+                    command=CustomCmd.LOGIC_DONE,
+                    result=0,
+                )
+                self.conns[sysid].mav.send(ack)
+                logging.info(f"GCS: sent LOGIC_DONE ACK to UAV {sysid}")
+
+                # Mark UAV as done
+                self.remove_uav(sysid)
+                return True
+
+        return False
 
     def _launch_vehicles(self) -> list[MAVConnection]:
         """Launch ArduPilot and logic processes for each UAV."""
@@ -130,7 +150,7 @@ class GCS(UAVMonitor):
             conns = list(executor.map(self._launch_vehicle, range(self.n_uavs)))
         return conns
 
-    def _launch_vehicle(self, i: int):
+    def _launch_vehicle(self, i: int) -> MAVConnection:
         uav_config = self.uavs[i]
         sysid = uav_config["sysid"]
 
@@ -185,15 +205,15 @@ class GCS(UAVMonitor):
         )  # "exit"
         logging.debug(f"UAV logic for vehicle {sysid} launched (PID {p.pid})")
 
-        p = create_process(
-            uav_config["proxy_cmd"],
-            after="exec bash",
-            visible="proxy" in self.terminals,
-            suppress_output="proxy" in self.suppress,
-            title=f"Proxy: Vehicle {sysid}",
-            env_cmd=ENV_CMD_PYT,
-        )  # "exit"
-        logging.debug(f"Proxy for vehicle {sysid} launched (PID {p.pid})")
+        # p = create_process(
+        #     uav_config["proxy_cmd"],
+        #     after="exec bash",
+        #     visible="proxy" in self.terminals,
+        #     suppress_output="proxy" in self.suppress,
+        #     title=f"Proxy: Vehicle {sysid}",
+        #     env_cmd=ENV_CMD_PYT,
+        # )  # "exit"
+        # logging.debug(f"Proxy for vehicle {sysid} launched (PID {p.pid})")
 
         p = create_process(
             uav_config["ardupilot_cmd"],

@@ -34,7 +34,7 @@ class CheckItems(Step):
     def check_fn(self) -> bool:
         """Check the next waypoint from the UAV."""
         if not self._mission_count:
-            msg = self.conn.recv_match(type="MISSION_COUNT")
+            msg = self.vehicle_state.get("MISSION_COUNT")
             if msg:
                 self._mission_count = msg.count
                 logging.info(
@@ -43,7 +43,7 @@ class CheckItems(Step):
             else:
                 return False
 
-        curr_msg = self.conn.recv_match(type="MISSION_CURRENT")
+        curr_msg = self.vehicle_state.get("MISSION_CURRENT")
         if not curr_msg or curr_msg.seq == self._item_seq:
             return False
         while self._item_seq < curr_msg.seq:
@@ -54,7 +54,7 @@ class CheckItems(Step):
         self.conn.mav.mission_request_send(
             self.conn.target_system, self.conn.target_component, self._item_seq
         )
-        item = self.conn.recv_match(type="MISSION_ITEM", blocking=True)
+        item = self.vehicle_state.wait_for("MISSION_ITEM")
         gra_wp = GRA(lat=float(item.x), lon=float(item.y), alt=float(item.z))  # type: ignore
         self.target_pos = self.origin.to_rel(gra_wp)
         logging.info(
@@ -74,7 +74,7 @@ class CheckEndMission(Step):
 
     def check_fn(self) -> bool:
         """Check mission completion."""
-        msg = self.conn.recv_match(type="STATUSTEXT")
+        msg = self.vehicle_state.wait_for("STATUSTEXT")
         if msg:
             text = msg.text.strip().lower()
             if "disarming" in text:
@@ -110,7 +110,7 @@ class ReachedItem(Step):
 
     def check_fn(self) -> bool:
         """Check if a item is reached."""
-        msg = self.conn.recv_match(type="MISSION_ITEM_REACHED")
+        msg = self.vehicle_state.get("MISSION_ITEM_REACHED")
         # logging.debug(f"Vehicle {conn.target_system}: MISSION_ITEM_REACHED: {msg}")
         if msg:
             if msg.seq == self._item:

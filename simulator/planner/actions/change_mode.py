@@ -27,7 +27,7 @@ class SwitchMode(Step):
 
     def check_fn(self) -> bool:
         """Verify the UAV has switched to the target flight mode."""
-        msg = self.conn.recv_match(type="HEARTBEAT")
+        msg = self.vehicle_state.get("HEARTBEAT")
         if msg and msg.custom_mode == self.flight_mode.value:
             return True
         return False

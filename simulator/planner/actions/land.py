@@ -47,7 +47,7 @@ class Land(Step):
     def check_fn(self) -> bool:
         """Check if the UAV has landed using EXTENDED_SYS_STATE."""
         # parameter 4 is confirmation(it may be increased)
-        msg = self.conn.recv_match(type="EXTENDED_SYS_STATE")
+        msg = self.vehicle_state.get("EXTENDED_SYS_STATE")
         current_pos = self.origin.get_enu_position(self.conn)
         if current_pos is not None:
             self.current_pos = current_pos

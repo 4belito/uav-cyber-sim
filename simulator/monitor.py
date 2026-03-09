@@ -10,8 +10,7 @@ from pymavlink.dialects.v20 import ardupilotmega as mavlink2  # type: ignore
 
 from simulator.helpers.connections import MAVConnection
 from simulator.helpers.connections.mavlink.customenums.customcmd import CustomCmd
-from simulator.helpers.connections.mavlink.streams import get_GRA_position
-from simulator.helpers.coordinates import GRA  # ,global2local
+from simulator.helpers.coordinates import GRA
 
 
 class UAVMonitor:
@@ -47,7 +46,7 @@ class UAVMonitor:
         self, msg: mavlink.MAVLink_global_position_int_message, sysid: int
     ):
         """Get the current global position of the specified vehicle."""
-        self.pos[sysid] = get_GRA_position(self.conns[sysid])  # type: ignore
+        self.pos[sysid] = GRA.from_global_int(msg.lat, msg.lon, msg.relative_alt)
 
     def is_plan_done(self, sysid: int) -> bool:
         """Listen for a STATUSTEXT("DONE") message and respond with COMMAND_ACK."""

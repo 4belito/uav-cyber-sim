@@ -32,7 +32,7 @@ class Arm(Step):
 
     def check_fn(self) -> bool:
         """Check if the UAV is armed by inspecting HEARTBEAT messages."""
-        msg = self.conn.recv_match(type="HEARTBEAT")
+        msg = self.vehicle_state.get("HEARTBEAT")
         if msg:
             if msg.base_mode & ModeFlag.SAFETY_ARMED:
                 return True

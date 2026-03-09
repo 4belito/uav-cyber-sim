@@ -34,7 +34,7 @@ class SetSpeed(Step):
 
     def check_fn(self) -> bool:
         """Check whether the WPNAV_SPEED parameter has been updated."""
-        msg = self.conn.recv_match(type="PARAM_VALUE")
+        msg = self.vehicle_state.get("PARAM_VALUE")
         if not msg:
             return False
 
