@@ -3,8 +3,8 @@
 import logging
 from dataclasses import dataclass
 
+from simulator.entities.simvehicle import SimVehicle, Vehicle
 from simulator.helpers.coordinates import ENUPose, GRAPose
-from simulator.visualizer.vehicle import SimVehicle, Vehicle
 from simulator.visualizer.visualizer import Visualizer  # ConfigVis,
 
 

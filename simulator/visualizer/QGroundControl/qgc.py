@@ -14,12 +14,12 @@ import folium
 from IPython.display import display  # type: ignore
 
 from simulator.config import QGC_INI_PATH, QGC_PATH, BasePort, Color
+from simulator.entities.simvehicle import SimVehicle, Vehicle
 from simulator.helpers.coordinates import (
     GRA,
     GRAPose,
 )
 from simulator.helpers.processes import create_process
-from simulator.visualizer.vehicle import SimVehicle, Vehicle
 from simulator.visualizer.visualizer import Visualizer
 
 

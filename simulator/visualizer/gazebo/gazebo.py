@@ -22,11 +22,11 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from simulator.config import ARDUPILOT_GAZEBO_MODELS, ENV_CMD_GAZ, Color
+from simulator.entities.simvehicle import SimVehicle, Vehicle
 from simulator.helpers.coordinates import XYZRPY, ENUPose, GRAPose
 from simulator.helpers.math import heading_to_yaw
 from simulator.helpers.processes import create_process
 from simulator.visualizer.gazebo.preview import GazMarker, GazMarkers, show_markers
-from simulator.visualizer.vehicle import SimVehicle, Vehicle
 from simulator.visualizer.visualizer import Visualizer
 
 Trace = tuple[

@@ -17,18 +17,18 @@ from simulator.config import (
     VEH_PARAMS_PATH,
     BasePort,
 )
+from simulator.entities import SimGCS, SimVehicle, VehT
 from simulator.helpers.processes import create_process
 from simulator.helpers.setup_log import setup_logging
 from simulator.oracle import Oracle
 from simulator.visualizer import Visualizer
-from simulator.visualizer.vehicle import SimVehicle, V
 
 SimProcess = Literal[
     "launcher", "veh", "logic", "proxy", "gcs", "adsb_socat", "adsb_injector"
 ]
 
 
-class Simulator(Generic[V]):
+class Simulator(Generic[VehT]):
     """
     Manages a full multi-UAV simulation, including SITL, logic, proxy, GCS,
     and visualization.
@@ -39,7 +39,7 @@ class Simulator(Generic[V]):
     def __init__(
         self,
         # visualization
-        visualizer: Visualizer[V],
+        visualizer: Visualizer[VehT],
         terminals: list[SimProcess] = [],
         supress_output: list[SimProcess] = ["launcher"],
         verbose: int = 1,
@@ -51,10 +51,10 @@ class Simulator(Generic[V]):
         self.terminals = set(terminals)
         self.suppress = set(supress_output)
         self.vehs: dict[int, SimVehicle] = {}
-        self.gcs: dict[str, list[int]] = {}
+        self.gcs: dict[str, SimGCS] = {}
         self.verbose = verbose
-        self.uav_port_offsets: dict[int, int] = {}
-        self.gcs_port_offsets: dict[str, int] = {}
+        # self.uav_port_offsets: dict[int, int] = {}
+        # self.gcs_port_offsets: dict[str, int] = {}
 
         self.logic_cmd: Callable[[int, str, int], str] = (
             lambda _, config_path, verbose: (
@@ -74,23 +74,20 @@ class Simulator(Generic[V]):
         """Add a vehicle to the simulation."""
         self.vehs[vehicle.sysid] = vehicle
         if vehicle.gcs_name not in self.gcs:
-            self.gcs[vehicle.gcs_name] = []
-        self.gcs[vehicle.gcs_name].append(vehicle.sysid)
+            self.gcs[vehicle.gcs_name] = SimGCS(name=vehicle.gcs_name)
+        self.gcs[vehicle.gcs_name].sysids.append(vehicle.sysid)
         self.visualizer.add_vehicle(vehicle)
 
     def launch(self) -> Oracle:
         """Launch vehicle instances and visualizer."""
         uav_port_offsets = self._find_uav_port_offsets()
         gcs_port_offsets = self._find_gcs_port_offsets()
-
-        # Use explicit key lists when zipping to avoid surprises from
-        # iterating dicts directly. This ensures offsets map deterministically
-        # to the vehicle sysids and GCS names added via add_vehicle().
-        sysids = list(self.vehs.keys())
-        self.uav_port_offsets = dict(zip(sysids, uav_port_offsets))
-
-        gcs_names = list(self.gcs.keys())
-        self.gcs_port_offsets = dict(zip(gcs_names, gcs_port_offsets))
+        for veh, offset in zip(self.vehs.values(), uav_port_offsets):
+            veh.port_offset = offset
+        for gcs, offset in zip(self.gcs.values(), gcs_port_offsets):
+            gcs.port_offset = offset
+        # self.uav_port_offsets = dict(zip(self.vehs, uav_port_offsets))
+        # self.gcs_port_offsets = dict(zip(self.gcs, gcs_port_offsets))
         self._save_logic_configs(DATA_PATH)
         self._save_gcs_configs(DATA_PATH)
         if not self.visualizer.delay:
@@ -100,8 +97,7 @@ class Simulator(Generic[V]):
             self.visualizer.launch(list(uav_port_offsets))
         return Oracle(
             self.gra_origin,
-            self.uav_port_offsets,
-            self.gcs_port_offsets,
+            self.vehs,
             self.gcs,
             transmission_range=self.transmission_range,
         )
@@ -131,7 +127,7 @@ class Simulator(Generic[V]):
 
     def _save_logic_configs(self, folder_name: Path):
         """Save the logic configurations for each UAV."""
-        for sysid in self.vehs:
+        for sysid, veh in self.vehs.items():
             logic_config = {
                 "sysid": sysid,
                 "gra_origin_dict": {
@@ -139,8 +135,8 @@ class Simulator(Generic[V]):
                     "lon": self.gra_origin.lon,
                     "alt": self.gra_origin.alt,
                 },
-                "port_offset": self.uav_port_offsets[sysid],
-                "plan_spec": self.vehs[sysid].plan.get_spec().to_dict(),
+                "port_offset": veh.port_offset,
+                "plan_spec": veh.plan.get_spec().to_dict(),
             }
             config_path = folder_name / f"logic_config_{sysid}.json"
             with config_path.open("w") as f:
@@ -148,13 +144,15 @@ class Simulator(Generic[V]):
 
     def _save_gcs_configs(self, folder_name: Path):
         inst = 0
-        for gcs_name, sysids in self.gcs.items():
+        for gcs_name, gcs in self.gcs.items():
             uavs: list[dict[str, int | str]] = []
-            for sysid in sysids:
+            for sysid in gcs.sysids:
+                port_offset = self.vehs[sysid].port_offset
+                assert port_offset is not None, f"Port offset for UAV {sysid} not set"
                 uavs.append(
                     {
                         "sysid": sysid,
-                        "port_offset": self.uav_port_offsets[sysid],
+                        "port_offset": port_offset,
                         "ardupilot_cmd": (
                             f"python3 {ARDUPILOT_VEHICLE_PATH}"
                             f" -v ArduCopter -I{inst} --sysid {sysid} --no-rebuild"
@@ -162,7 +160,7 @@ class Simulator(Generic[V]):
                             f" --use-dir={ARDU_LOGS_PATH}"
                             f" --add-param-file {VEH_PARAMS_PATH}"
                             f" --no-mavproxy"
-                            f" --port-offset={self.uav_port_offsets[sysid]}"
+                            f" --port-offset={port_offset}"
                             + (" --terminal" if "veh" in self.terminals else "")
                             + self.visualizer.add_vehicle_cmd(sysid)
                         ),
@@ -173,7 +171,7 @@ class Simulator(Generic[V]):
                         ),
                         "proxy_cmd": (
                             f"python3 -m simulator.proxy --sysid {sysid} "
-                            f"--port-offset={self.uav_port_offsets[sysid]} "
+                            f"--port-offset={port_offset} "
                             f"--verbose {self.verbose}"
                         ),
                     }
@@ -182,7 +180,7 @@ class Simulator(Generic[V]):
 
             gcs_config = {
                 "name": gcs_name,
-                "port_offset": self.gcs_port_offsets[gcs_name],
+                "port_offset": gcs.port_offset,
                 "uavs": uavs,
                 "terminals": list(self.terminals),
                 "suppress": list(self.suppress),

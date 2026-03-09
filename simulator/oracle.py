@@ -11,149 +11,21 @@ import logging
 import pickle
 import threading
 import time
-from collections import defaultdict
-from collections.abc import Iterable
-from math import floor
 from pathlib import Path
-from typing import Dict, Literal
+from typing import Literal
 
 import matplotlib.pyplot as plt
 import zmq
 
 from simulator.config import DATA_PATH, BasePort, Color
+from simulator.entities import Grid, SimGCS, SimVehicle
 from simulator.helpers.adsb import rid_to_adsb_beacon
 from simulator.helpers.connections import create_zmq_sockets
-from simulator.helpers.coordinates import ENU, GRAPose
+from simulator.helpers.coordinates import GRAPose
 from simulator.helpers.rid import RIDData
-
-CellKey = tuple[int, int, int]
 
 TX_LOOP_SLEEP = 0.01
 RX_LOOP_SLEEP = 0.10
-Cell = set[int]
-
-
-class Grid:
-    """Lightweight 3D spatial index for neighbor queries."""
-
-    def __init__(self, cell_size: float) -> None:
-        assert cell_size > 0
-        self.cell_size = cell_size
-        self._cell: Dict[CellKey, Cell] = defaultdict(set)
-        self._rid: Dict[int, RIDData] = {}
-        self._key: Dict[int, CellKey] = {}
-        self._lock = threading.RLock()  # single structure lock
-        self._pending_rid: defaultdict[int, bool] = defaultdict(lambda: False)
-        # track if RID has been retransmitted
-
-    # === Core methods ===
-    def _idx(self, coor: float) -> int:
-        return int(floor(coor / self.cell_size))
-
-    def _pos2key(self, pos: ENU) -> CellKey:
-        return (self._idx(pos.x), self._idx(pos.y), self._idx(pos.z))
-
-    def rid(self, sysid: int) -> RIDData:
-        """Return RID object only if it exists and has pending data."""
-        with self._lock:
-            return self._rid[sysid]
-
-    def pop_rid(self, sysid: int) -> RIDData | None:
-        """Pop RID object if it has pending data, else return None."""
-        with self._lock:
-            if self._pending_rid.get(sysid):
-                rid = self.rid(sysid)
-                self._pending_rid[sysid] = False
-                return rid
-            return None
-
-    # === Sysid management ===
-    def add_rid(self, sysid: int, rid: RIDData) -> None:
-        """
-        Insert a new UAV at the given position.
-        It assumes sysid is not already present.
-        """
-        pos = rid.enu_pos
-        k = self._pos2key(pos)
-        with self._lock:
-            if sysid in self._rid:
-                raise ValueError(f"sysid {sysid} already exists in grid")
-            self._cell[k].add(sysid)
-            self._key[sysid] = k
-            self._rid[sysid] = rid
-            self._pending_rid[sysid] = True
-
-    def remove_sysid(self, sysid: int) -> None:
-        """Completely remove a UAV from the grid."""
-        with self._lock:
-            k = self._key.pop(sysid, None)
-            self._rid.pop(sysid, None)
-            self._pending_rid.pop(sysid, None)
-            if k is None:
-                return
-            cell = self._cell.get(k)
-            if cell:
-                cell.discard(sysid)
-                if not cell:
-                    self._cell.pop(k, None)
-
-    def update(self, sysid: int, rid: RIDData) -> None:
-        """Incrementally move sysid between cells if needed."""
-        pos = rid.enu_pos
-        k_new = self._pos2key(pos)
-        with self._lock:
-            k_old = self._key.get(sysid)
-            if k_old != k_new:
-                # Remove from old cell (if any), avoiding accidental creation
-                if k_old is not None:
-                    old_cell = self._cell.get(k_old)  # get avoids new cell
-                    if old_cell:
-                        old_cell.discard(sysid)
-                        if not old_cell:
-                            self._cell.pop(k_old, None)
-                # Add to new cell
-                self._cell[k_new].add(sysid)
-                self._key[sysid] = k_new
-            self._rid[sysid] = rid
-            self._pending_rid[sysid] = True
-
-    # === Neighbor queries ===
-    def _iter_neighbor_keys(self, pos: ENU) -> Iterable[CellKey]:
-        cx, cy, cz = self._pos2key(pos)
-        for dx in (-1, 0, 1):
-            for dy in (-1, 0, 1):
-                for dz in (-1, 0, 1):
-                    key = (cx + dx, cy + dy, cz + dz)
-                    if key in self._cell:
-                        yield key
-
-    def iter_neighbor_sysids_snapshot(self, pos: ENU) -> list[int]:
-        """Return a snapshot of sysids in 3x3x3 neighborhood (safe, no locks held)."""
-        with self._lock:
-            cell: list[int] = []
-            for key in self._iter_neighbor_keys(pos):
-                cell.extend(self._cell[key])
-            return cell
-
-    def iter_neighbors_within(
-        self, sysid: int, pos: ENU, radius: float | None = None
-    ) -> Iterable[int]:
-        """
-        Yield neighbor sysids within optional Euclidean radius.
-        Assumes radius = None or 0<radius<=cell_size for correctness.
-        """
-        r2 = None if radius is None else radius * radius
-        neighbor_ids = self.iter_neighbor_sysids_snapshot(pos)
-        for o_sysid in neighbor_ids:
-            if o_sysid == sysid:
-                continue
-            with self._lock:
-                o_rid = self._rid.get(o_sysid)
-            if o_rid is None:
-                continue
-            if r2 is not None and ENU.distance_squared(pos, o_rid.enu_pos) > r2:
-                continue
-            yield o_sysid
 
 
 class Oracle:  # UAVMonitor
@@ -167,16 +39,23 @@ class Oracle:  # UAVMonitor
     def __init__(
         self,
         gra_origin: GRAPose,
-        uav_port_offsets: dict[int, int],
-        gcs_port_offsets: dict[str, int],
-        gcs_sysids: dict[str, list[int]],
+        vehs: dict[int, SimVehicle],
+        gcss: dict[str, SimGCS],
         transmission_range: float = 40.0,
     ) -> None:
+        # Narrow types for the type checker now that we've asserted no None values
         self.gra_origin = gra_origin.unpose()
-        self.gcs_sysids = gcs_sysids
-        self.sysids = list(uav_port_offsets.keys())
+
+        self.gcss = gcss
+        self.sysids = list(vehs.keys())
         self.grid = Grid(cell_size=transmission_range * 1.01)
         self._seen_in_grid: set[int] = set()
+        uav_port_offsets = {
+            sysid: veh.port_offset_required for sysid, veh in vehs.items()
+        }
+        gcs_port_offsets = {
+            name: gcs.port_offset_required for name, gcs in gcss.items()
+        }
 
         # Sockets
         zmq_ctx = zmq.Context()
@@ -209,7 +88,7 @@ class Oracle:  # UAVMonitor
 
         self.gcs_threads = {
             name: threading.Thread(target=self.wait_gcs_done, args=(name,))
-            for name in gcs_sysids.keys()
+            for name in gcss
         }
 
     def run(self):
@@ -239,7 +118,7 @@ class Oracle:  # UAVMonitor
                 msg = self.gcs_socks[gcs_name].recv_string(flags=zmq.NOBLOCK)
                 if msg == "DONE":
                     logging.info(f"Received DONE from GCS {gcs_name}")
-                    for sysid in self.gcs_sysids[gcs_name]:
+                    for sysid in self.gcss[gcs_name].sysids:
                         self.rid_in_threads[sysid].join()
                         self.rid_out_threads[sysid].join()
                     break
@@ -444,7 +323,7 @@ class Oracle:  # UAVMonitor
 
     def wait_for_trajectory_files(self, poll_interval: float = 0.1):
         """Wait until n_expected trajectory files exist in DATA_PATH, or timeout."""
-        n_expected = len(self.gcs_sysids)
+        n_expected = len(self.gcss)
         while True:
             traj_files = list(Path(DATA_PATH).glob("trajectories_*.pkl"))
             if len(traj_files) == n_expected:

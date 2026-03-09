@@ -3,11 +3,11 @@
 from abc import ABC, abstractmethod
 from typing import Generic
 
+from simulator.entities import SimVehicle, VehT
 from simulator.helpers.coordinates import GRAPose
-from simulator.visualizer.vehicle import SimVehicle, V
 
 
-class Visualizer(ABC, Generic[V]):
+class Visualizer(ABC, Generic[VehT]):
     """Abstract base class for UAV simulation visualizers."""
 
     name: str
@@ -15,7 +15,7 @@ class Visualizer(ABC, Generic[V]):
 
     def __init__(self, gra_origin: GRAPose) -> None:
         self.gra_origin = gra_origin
-        self.vehicles: dict[int, V] = {}
+        self.vehicles: dict[int, VehT] = {}
         self.num_vehicles: int = 0
 
     @abstractmethod
@@ -24,7 +24,7 @@ class Visualizer(ABC, Generic[V]):
         raise NotImplementedError
 
     @abstractmethod
-    def get_visvehicle(self, vehicle: SimVehicle) -> V:
+    def get_visvehicle(self, vehicle: SimVehicle) -> VehT:
         """Convert a Vehicle to the visualizer-specific vehicle type."""
         raise NotImplementedError
 
