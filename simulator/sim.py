@@ -53,6 +53,7 @@ class Simulator(Generic[VehT]):
         self.vehs: dict[int, SimVehicle] = {}
         self.gcs: dict[str, SimGCS] = {}
         self.verbose = verbose
+        self.instance = 0
         # self.uav_port_offsets: dict[int, int] = {}
         # self.gcs_port_offsets: dict[str, int] = {}
 
@@ -72,22 +73,30 @@ class Simulator(Generic[VehT]):
 
     def add_vehicle(self, vehicle: SimVehicle):
         """Add a vehicle to the simulation."""
+        vehicle.instance = self.instance
+        self.instance += 1
         self.vehs[vehicle.sysid] = vehicle
         if vehicle.gcs_name not in self.gcs:
             self.gcs[vehicle.gcs_name] = SimGCS(name=vehicle.gcs_name)
         self.gcs[vehicle.gcs_name].sysids.append(vehicle.sysid)
         self.visualizer.add_vehicle(vehicle)
 
+    def remove_vehicle(self, sysid: int) -> bool:
+        """Remove a vehicle by system ID."""
+        if sysid in self.vehs:
+            del self.vehs[sysid]
+            self.visualizer.remove_vehicle(sysid)
+            return True
+        return False
+
     def launch(self) -> Oracle:
         """Launch vehicle instances and visualizer."""
         uav_port_offsets = self._find_uav_port_offsets()
         gcs_port_offsets = self._find_gcs_port_offsets()
-        for veh, offset in zip(self.vehs.values(), uav_port_offsets):
-            veh.port_offset = offset
+        for sysid, offset in zip(self.vehs, uav_port_offsets):
+            self.vehs[sysid].port_offset = offset
         for gcs, offset in zip(self.gcs.values(), gcs_port_offsets):
             gcs.port_offset = offset
-        # self.uav_port_offsets = dict(zip(self.vehs, uav_port_offsets))
-        # self.gcs_port_offsets = dict(zip(self.gcs, gcs_port_offsets))
         self._save_logic_configs(DATA_PATH)
         self._save_gcs_configs(DATA_PATH)
         if not self.visualizer.delay:
@@ -143,11 +152,11 @@ class Simulator(Generic[VehT]):
                 json.dump(logic_config, f, indent=2)
 
     def _save_gcs_configs(self, folder_name: Path):
-        inst = 0
         for gcs_name, gcs in self.gcs.items():
             uavs: list[dict[str, int | str]] = []
             for sysid in gcs.sysids:
                 port_offset = self.vehs[sysid].port_offset
+                inst = self.vehs[sysid].instance
                 assert port_offset is not None, f"Port offset for UAV {sysid} not set"
                 uavs.append(
                     {
@@ -162,7 +171,7 @@ class Simulator(Generic[VehT]):
                             f" --no-mavproxy"
                             f" --port-offset={port_offset}"
                             + (" --terminal" if "veh" in self.terminals else "")
-                            + self.visualizer.add_vehicle_cmd(sysid)
+                            + self.visualizer.add_vehicle_cmd(self.vehs[sysid])
                         ),
                         "logic_cmd": self.logic_cmd(
                             sysid,
@@ -176,7 +185,6 @@ class Simulator(Generic[VehT]):
                         # ),
                     }
                 )
-                inst += 1
 
             gcs_config = {
                 "name": gcs_name,

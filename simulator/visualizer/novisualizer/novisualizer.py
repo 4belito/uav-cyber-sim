@@ -33,9 +33,9 @@ class NoVisualizer(Visualizer[NovisVehicle]):
         """Convert a Vehicle to a NovisVehicle with GRA home position."""
         return NovisVehicle(home=vehicle.home)
 
-    def add_vehicle_cmd(self, sysid: int) -> str:
+    def add_vehicle_cmd(self, vehicle: SimVehicle) -> str:
         """Add GRA location to the vehicle command."""
-        homes_str = self.gra_origin.to_abs(self.vehicles[sysid].home).to_str()
+        homes_str = self.gra_origin.to_abs(vehicle.home).to_str()
         return f" --custom-location={homes_str}"
 
     def launch(self, port_offsets: list[int], verbose: int = 1):

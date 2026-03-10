@@ -16,7 +16,11 @@ class Visualizer(ABC, Generic[VehT]):
     def __init__(self, gra_origin: GRAPose) -> None:
         self.gra_origin = gra_origin
         self.vehicles: dict[int, VehT] = {}
-        self.num_vehicles: int = 0
+
+    @property
+    def num_vehicles(self) -> int:
+        """Return the number of vehicles in the visualizer."""
+        return len(self.vehicles)
 
     @abstractmethod
     def launch(self, port_offsets: list[int]) -> None:
@@ -33,7 +37,7 @@ class Visualizer(ABC, Generic[VehT]):
         """Show a stathic preview visualization."""
         raise NotImplementedError
 
-    def add_vehicle_cmd(self, sysid: int) -> str:
+    def add_vehicle_cmd(self, vehicle: SimVehicle) -> str:
         """Add optional command-line for the ith vehicle."""
         return ""
 
@@ -41,13 +45,11 @@ class Visualizer(ABC, Generic[VehT]):
         """Add a vehicle to the visualizer."""
         visveh = self.get_visvehicle(vehicle)
         self.vehicles[vehicle.sysid] = visveh
-        self.num_vehicles += 1
 
     def remove_vehicle(self, sysid: int) -> bool:
         """Remove a vehicle by system ID."""
         if sysid in self.vehicles:
             del self.vehicles[sysid]
-            self.num_vehicles -= 1
             return True
         return False
 

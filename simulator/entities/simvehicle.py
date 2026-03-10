@@ -30,6 +30,7 @@ class SimVehicle(Vehicle):
     waypoints: ENUs
     model: str = "iris"
     port_offset: int | None = None
+    instance: int | None = None
 
     def set_port_offset(self, offset: int):
         """Set the port offset for the vehicle."""

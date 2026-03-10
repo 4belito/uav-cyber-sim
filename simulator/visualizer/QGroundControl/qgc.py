@@ -57,7 +57,7 @@ class QGC(Visualizer[QGCVehicle]):
     """
 
     name = "QGroundControl"
-    delay = True
+    delay = False
 
     def __init__(
         self,
@@ -66,14 +66,16 @@ class QGC(Visualizer[QGCVehicle]):
         super().__init__(gra_origin)
         self.markers: QGCMarkers = []
 
-    def add_vehicle_cmd(self, sysid: int):
+    def add_vehicle_cmd(self, vehicle: SimVehicle) -> str:
         """Add GRA location to the vehicle command."""
-        homes_str = self.vehicles[sysid].home.to_str()
+        visveh = self.vehicles[vehicle.sysid]
+        homes_str = visveh.home.to_str()
         return f" --custom-location={homes_str}"
 
     def launch(self, port_offsets: list[int]):
         """Launch the Gazebo."""
         self._delete_all_links()
+        self._disable_autoconnect_udp()
         self._add_tcp_links(port_offsets)
         sim_cmd = [os.path.expanduser(QGC_PATH), "--appimage-extract-and-run"]
         create_process(
@@ -224,16 +226,15 @@ class QGC(Visualizer[QGCVehicle]):
         new_lines: list[str] = []
         n_ports = len(port_offsets)
         for i in range(n_ports):
-            idx = count + i
             port = BasePort.QGC + port_offsets[i]
             new_lines.extend(
                 [
-                    f"Link{idx}\\auto=true\n",
-                    f"Link{idx}\\high_latency=false\n",
-                    f"Link{idx}\\host=127.0.0.1\n",
-                    f"Link{idx}\\name=drone{idx + 1}\n",
-                    f"Link{idx}\\port={port}\n",
-                    f"Link{idx}\\type=2\n",
+                    f"Link{i}\\auto=true\n",
+                    f"Link{i}\\high_latency=false\n",
+                    f"Link{i}\\host=127.0.0.1\n",
+                    f"Link{i}\\name=drone{i + 1}\n",
+                    f"Link{i}\\port={port}\n",
+                    f"Link{i}\\type=2\n",
                 ]
             )
 

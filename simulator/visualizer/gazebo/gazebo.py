@@ -75,7 +75,7 @@ class Gazebo(Visualizer[GazVehicle]):
         self.world_path = world_path
         self.markers: GazMarkers = []
 
-    def add_vehicle_cmd(self, sysid: int) -> str:
+    def add_vehicle_cmd(self, vehicle: SimVehicle) -> str:
         """Add gazebo model (only iris TODO: add others)."""
         return f" -f gazebo-iris --custom-location={self.gra_origin.to_str()}"
 
