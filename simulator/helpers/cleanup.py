@@ -5,7 +5,7 @@ import shutil
 from pathlib import Path
 from typing import List
 
-from simulator.config import DATA_PATH, LOGS_PATH
+from simulator.config import ARDU_LOGS_PATH, DATA_PATH, LOGS_PATH
 
 ALL_PROCESSES = [
     "QGroundControl",
@@ -29,7 +29,7 @@ def kill_processes(victims: List[str]):
 def clean(
     victim_processes: List[str] = ALL_PROCESSES,
     del_folders: list[Path] = [],
-    reset_folders: list[Path] = [DATA_PATH, LOGS_PATH],
+    reset_folders: list[Path] = [DATA_PATH, LOGS_PATH, ARDU_LOGS_PATH],
 ):
     """End the simulation."""
     kill_processes(victim_processes)
