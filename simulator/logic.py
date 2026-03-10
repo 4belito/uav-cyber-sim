@@ -61,7 +61,7 @@ def wait_for_vehicle_link(
     hb = vehicle_state.wait_for("HEARTBEAT", timeout=timeout)
     if hb is None:
         raise TimeoutError("Timed out waiting for vehicle HEARTBEAT")
-    return hb
+    return hb  # type: ignore
 
 
 def main():

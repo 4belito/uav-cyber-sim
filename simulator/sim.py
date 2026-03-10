@@ -156,8 +156,10 @@ class Simulator(Generic[VehT]):
             uavs: list[dict[str, int | str]] = []
             for sysid in gcs.sysids:
                 port_offset = self.vehs[sysid].port_offset
-                inst = self.vehs[sysid].instance
                 assert port_offset is not None, f"Port offset for UAV {sysid} not set"
+                inst = int(port_offset / 10)
+                param_file = ARDU_LOGS_PATH / f"uav_{sysid}"
+                param_file.mkdir(parents=True, exist_ok=True)
                 uavs.append(
                     {
                         "sysid": sysid,
@@ -166,10 +168,9 @@ class Simulator(Generic[VehT]):
                             f"python3 {ARDUPILOT_VEHICLE_PATH}"
                             f" -v ArduCopter -I{inst} --sysid {sysid} --no-rebuild"
                             f' -A "--serial5=uart:/tmp/adsb_{sysid}_ardupilot:57600"'
-                            f" --use-dir={ARDU_LOGS_PATH}"
+                            f" --use-dir={param_file}"
                             f" --add-param-file {VEH_PARAMS_PATH}"
                             f" --no-mavproxy"
-                            f" --port-offset={port_offset}"
                             + (" --terminal" if "veh" in self.terminals else "")
                             + self.visualizer.add_vehicle_cmd(self.vehs[sysid])
                         ),
