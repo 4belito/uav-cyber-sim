@@ -51,9 +51,9 @@ class TakeOff(Step):
 
     def check_fn(self) -> bool:
         """Check if UAV is in TAKEOFF state."""
-        msg = self.vehicle_state.wait_for("EXTENDED_SYS_STATE")
+        msg = self.vehicle_state.get("EXTENDED_SYS_STATE")
         take_off = bool(msg and msg.landed_state == LandState.TAKEOFF)
-        pos = self.origin.get_enu_position(self.conn)
+        pos = self.get_enu_position()
         if pos is not None:
             self.current_pos = pos
             logging.info(

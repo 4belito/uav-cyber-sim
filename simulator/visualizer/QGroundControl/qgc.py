@@ -56,15 +56,17 @@ class QGC(Visualizer[QGCVehicle]):
 
     """
 
-    name = "QGroundControl"
-    delay = False
-
     def __init__(
         self,
         gra_origin: GRAPose,
     ):
         super().__init__(gra_origin)
         self.markers: QGCMarkers = []
+
+    @property
+    def name(self) -> str:
+        """Name of the visualizer."""
+        return "QGroundControl"
 
     def add_vehicle_cmd(self, vehicle: SimVehicle) -> str:
         """Add GRA location to the vehicle command."""

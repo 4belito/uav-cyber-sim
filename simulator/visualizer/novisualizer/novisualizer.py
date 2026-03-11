@@ -21,13 +21,16 @@ NovisVehicles = list[NovisVehicle]
 class NoVisualizer(Visualizer[NovisVehicle]):
     """No-op visualizer for headless simulation."""
 
-    name = "novis"
-
     def __init__(
         self,
         gra_origin: GRAPose,
     ):
         super().__init__(gra_origin)
+
+    @property
+    def name(self) -> str:
+        """Name of the visualizer."""
+        return "novis"
 
     def get_visvehicle(self, vehicle: SimVehicle) -> NovisVehicle:
         """Convert a Vehicle to a NovisVehicle with GRA home position."""

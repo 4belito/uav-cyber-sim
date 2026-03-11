@@ -5,9 +5,13 @@ from __future__ import annotations
 import queue
 import threading
 from collections import defaultdict
-from typing import DefaultDict
+from typing import DefaultDict, cast
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
+
+from simulator.helpers.connections.mavlink.customtypes.vehicle_state import (
+    VehicleStateP,
+)
 
 
 class VehicleState:
@@ -33,12 +37,9 @@ class VehicleState:
         - pushed into the transactional queue for that message type
         """
         msg_type: str = msg.get_type()
-
-        # Update latest telemetry cache
         with self._lock:
             self.messages[msg_type] = msg
 
-        # Push into queue for transactional consumers
         self.queues[msg_type].put(msg)
 
     def get(self, msg_type: str) -> mavlink.MAVLink_message | None:
@@ -60,3 +61,12 @@ class VehicleState:
             return self.queues[msg_type].get(timeout=timeout)
         except queue.Empty:
             return None
+
+    # -------------------------------
+    # Factory
+    # -------------------------------
+
+    @staticmethod
+    def create() -> VehicleStateP:
+        """Create a typed VehicleState."""
+        return cast(VehicleStateP, VehicleState())

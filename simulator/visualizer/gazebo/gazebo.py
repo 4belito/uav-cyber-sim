@@ -63,9 +63,6 @@ class Gazebo(Visualizer[GazVehicle]):
     It configures drone models, world markers, and coordinates with ArduPilot logic.
     """
 
-    name = "Gazebo"
-    delay = False
-
     def __init__(
         self,
         gra_origin: GRAPose,
@@ -74,6 +71,11 @@ class Gazebo(Visualizer[GazVehicle]):
         super().__init__(gra_origin)
         self.world_path = world_path
         self.markers: GazMarkers = []
+
+    @property
+    def name(self) -> str:
+        """Name of the visualizer."""
+        return "Gazebo"
 
     def add_vehicle_cmd(self, vehicle: SimVehicle) -> str:
         """Add gazebo model (only iris TODO: add others)."""
@@ -220,13 +222,6 @@ class Gazebo(Visualizer[GazVehicle]):
         ET.SubElement(model, "static").text = "0"
         ET.SubElement(model, "allow_auto_disable").text = "1"
         return model
-
-    # def _add_vehicle_elements(self, world_elem: ET.Element) -> None:
-    #     for sysid, veh in self.vehicles.items():
-    #         x, y, z, h = veh.home
-    #         pose = XYZRPY(x, y, z, 0, 0, heading_to_yaw(h))
-    #         drone_elem = self._generate_drone_element(f"vehicle_{sysid}", pose)
-    #         world_elem.append(drone_elem)
 
     def _add_drone_elements(self, world_elem: ET.Element) -> None:
         for i, veh in enumerate(self.vehicles.values()):

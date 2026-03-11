@@ -38,7 +38,6 @@ class Simulator(Generic[VehT]):
 
     def __init__(
         self,
-        # visualization
         visualizer: Visualizer[VehT],
         terminals: list[SimProcess] = [],
         supress_output: list[SimProcess] = ["launcher", "adsb_socat", "adsb_injector"],
@@ -54,8 +53,6 @@ class Simulator(Generic[VehT]):
         self.gcs: dict[str, SimGCS] = {}
         self.verbose = verbose
         self.instance = 0
-        # self.uav_port_offsets: dict[int, int] = {}
-        # self.gcs_port_offsets: dict[str, int] = {}
 
         self.logic_cmd: Callable[[int, str, int], str] = (
             lambda _, config_path, verbose: (
@@ -93,17 +90,14 @@ class Simulator(Generic[VehT]):
         """Launch vehicle instances and visualizer."""
         uav_port_offsets = self._find_uav_port_offsets()
         gcs_port_offsets = self._find_gcs_port_offsets()
-        for sysid, offset in zip(self.vehs, uav_port_offsets):
+        for sysid, offset in zip(sorted(self.vehs), uav_port_offsets):
             self.vehs[sysid].port_offset = offset
-        for gcs, offset in zip(self.gcs.values(), gcs_port_offsets):
-            gcs.port_offset = offset
+        for gcs_name, offset in zip(sorted(self.gcs), gcs_port_offsets):
+            self.gcs[gcs_name].port_offset = offset
         self._save_logic_configs(DATA_PATH)
         self._save_gcs_configs(DATA_PATH)
-        if not self.visualizer.delay:
-            self.visualizer.launch(list(uav_port_offsets))
+        self.visualizer.launch(uav_port_offsets)
         self._launch_gcses()
-        if self.visualizer.delay:
-            self.visualizer.launch(list(uav_port_offsets))
         return Oracle(
             self.gra_origin,
             self.vehs,
@@ -157,7 +151,8 @@ class Simulator(Generic[VehT]):
             for sysid in gcs.sysids:
                 port_offset = self.vehs[sysid].port_offset
                 assert port_offset is not None, f"Port offset for UAV {sysid} not set"
-                inst = int(port_offset / 10)
+                inst = self.vehs[sysid].instance  # int(port_offset / 10)  #
+                assert inst is not None, f"Instance for UAV {sysid} not set"
                 param_file = ARDU_LOGS_PATH / f"uav_{sysid}"
                 param_file.mkdir(parents=True, exist_ok=True)
                 uavs.append(
@@ -171,6 +166,7 @@ class Simulator(Generic[VehT]):
                             f" --use-dir={param_file}"
                             f" --add-param-file {VEH_PARAMS_PATH}"
                             f" --no-mavproxy"
+                            f" --port-offset={port_offset}"
                             + (" --terminal" if "veh" in self.terminals else "")
                             + self.visualizer.add_vehicle_cmd(self.vehs[sysid])
                         ),

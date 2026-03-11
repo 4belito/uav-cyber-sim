@@ -429,23 +429,23 @@ class GRA(LLA):
             location=[self.lat, self.lon], popup=label, icon=folium.Icon(color=color)
         ).add_to(map_obj)
 
-    @classmethod
-    def get_position(cls, conn: MAVConnection) -> GRA | None:
-        """
-        Request and return the UAV's current global position.
-        It requires GLOBAL_POSITION_INT mesages to be emited from ardupilot.
-        """
-        msg = conn.recv_match(type="GLOBAL_POSITION_INT", blocking=True, timeout=0.001)
-        if msg:
-            return cls.from_global_int(msg.lat, msg.lon, msg.alt)  # type: ignore
-        return None
+    # @classmethod
+    # def get_position(cls, conn: MAVConnection) -> GRA | None:
+    #     """
+    #     Request and return the UAV's current global position.
+    #     It requires GLOBAL_POSITION_INT mesages to be emited from ardupilot.
+    #     """
+    #     msg = conn.recv_match(type="GLOBAL_POSITION_INT", blocking=True, timeout=0.001)
+    #     if msg:
+    #         return cls.from_global_int(msg.lat, msg.lon, msg.alt)  # type: ignore
+    #     return None
 
-    def get_enu_position(self, conn: MAVConnection) -> ENU | None:
-        """Get the ENU position of the UAV relative to this GRA origin."""
-        gra_pos = GRA.get_position(conn)
-        if gra_pos is None:
-            return None
-        return self.to_rel(gra_pos)
+    # def get_enu_position(self, conn: MAVConnection) -> ENU | None:
+    #     """Get the ENU position of the UAV relative to this GRA origin."""
+    #     gra_pos = GRA.get_position(conn)
+    #     if gra_pos is None:
+    #         return None
+    #     return self.to_rel(gra_pos)
 
     def short(self, decimal_places: int = 6, alt_decimal_places: int = 2) -> GRA:
         """Return a copy of this GRA with coordinates rounded if needed."""

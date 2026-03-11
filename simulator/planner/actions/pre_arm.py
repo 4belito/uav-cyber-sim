@@ -134,7 +134,8 @@ class CheckSystem(Step):
         if msg.battery_remaining < 20:
             raise Exception(
                 (
-                    f"🔋 Vehicle {self.conn.target_system}: Battery too low ({msg.battery_remaining}%)"
+                    f"🔋 Vehicle {self.conn.target_system}: Battery too low"
+                    f" ({msg.battery_remaining}%)"
                 )
             )
         healthy = msg.onboard_control_sensors_health

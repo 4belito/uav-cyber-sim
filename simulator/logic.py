@@ -35,7 +35,7 @@ from simulator.params.simulation import (
 )
 from simulator.planner import Action, Plan, PlanSpec, State, Step
 from simulator.vehicle.router import MAVLinkRouter
-from simulator.vehicle.state import VehicleState
+from simulator.vehicle.state import VehicleState, VehicleStateP
 
 DATA_STREAM_IDS = [
     DataStream.RAW_SENSORS,
@@ -54,14 +54,14 @@ rid_event = mavutil.periodic_event(REMOTE_ID_FREQUENCY)
 
 
 def wait_for_vehicle_link(
-    vehicle_state: VehicleState,
+    vehicle_state: VehicleStateP,
     timeout: float = 10.0,
 ) -> mavlink.MAVLink_heartbeat_message:
     """Wait until the first HEARTBEAT is received from the vehicle."""
     hb = vehicle_state.wait_for("HEARTBEAT", timeout=timeout)
     if hb is None:
         raise TimeoutError("Timed out waiting for vehicle HEARTBEAT")
-    return hb  # type: ignore
+    return hb
 
 
 def main():
@@ -80,13 +80,6 @@ def start_logic(config: LogicConfig):
     gra_orign = GRA(**config["gra_origin_dict"])
     plan_spec = PlanSpec(**config["plan_spec"])
 
-    # lg_conn = create_tcp_conn(
-    #     base_port=BasePort.LOG,
-    #     offset=port_offset,
-    #     role="server",
-    #     src_sysid=sysid,
-    #     src_compid=140,  # free for custom modules, companion computers, routing modules
-    # )
     ap_conn = create_tcp_conn(
         base_port=BasePort.ARP,
         offset=port_offset,
@@ -105,7 +98,7 @@ def start_logic(config: LogicConfig):
     logging.info(f"Vehicle {sysid}: GCS connection established")
 
     # Shared telemetry state
-    vehicle_state = VehicleState()
+    vehicle_state = VehicleState.create()
 
     # Router stop signal
     router_stop = threading.Event()
@@ -196,7 +189,7 @@ class VehicleLogic:
         connection: MAVConnection,
         plan: Plan,
         gra_origin: GRA,
-        vehicle_state: VehicleState,
+        vehicle_state: VehicleStateP,
     ):
         # Vehicle Creation
         self.conn = connection
@@ -217,6 +210,7 @@ class VehicleLogic:
     def act(self):
         """Perform the next step in the mission plan."""
         self.plan.act()
+        time.sleep(0.01)  # Avoid busy loop if plan.act() returns immediately
 
     def send_done_msgs(self, cs_conn: MAVConnection) -> None:
         """Notify the GCS that the mission is done."""

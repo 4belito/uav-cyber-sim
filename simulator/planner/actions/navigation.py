@@ -65,9 +65,10 @@ class GoTo(Step):
         Check if the UAV has reached the target altitude within an acceptable
         margin.
         """
-        pos = self.origin.get_enu_position(self.conn)
+        # pos = self.origin.get_enu_position(self.conn)
+        pos = self.get_enu_position()
         if pos is not None:
-            self.curr_pos = pos
+            self.current_pos = pos
             dist = ENU.distance(pos, self.wp)
             logging.info(
                 f"📍 Vehicle {self.conn.target_system}: Distance to target: {dist:.2f}m"

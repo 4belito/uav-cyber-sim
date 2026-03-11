@@ -11,8 +11,10 @@ from enum import StrEnum
 from typing import Self
 
 from simulator.helpers.connections import MAVConnection
+from simulator.helpers.connections.mavlink.customtypes.vehicle_state import (
+    VehicleStateP,
+)
 from simulator.helpers.coordinates import ENU, GRA
-from simulator.vehicle.state import VehicleState
 
 
 class State(StrEnum):
@@ -55,7 +57,7 @@ class MissionElement(ABC):
         self.conn: MAVConnection
         self.origin: GRA
         self.sysid: int
-        self.vehicle_state: VehicleState
+        self.vehicle_state: VehicleStateP
         self.onair: bool | None = None  # Default onair status
         self.target_pos: ENU | None = None  # Default target (global) position
         self.curr_pos: ENU | None = None  # Default current (global) position
@@ -76,7 +78,7 @@ class MissionElement(ABC):
         self,
         connection: MAVConnection,
         origin: GRA,
-        vehicle_state: VehicleState,
+        vehicle_state: VehicleStateP,
     ) -> None:
         """
         Binds the mission element to a MAVLink connection, origin, and vehicle
@@ -150,6 +152,15 @@ class Step(MissionElement, ABC):
             logging.warning("⚠️ Already done! Cannot perform this step again!")
         elif self.state == State.FAILED:
             logging.warning("⚠️ Already failed! Cannot perform this step again!")
+
+    def get_enu_position(self) -> ENU | None:
+        """Get the current ENU position of the UAV."""
+        msg = self.vehicle_state.get("GLOBAL_POSITION_INT")
+        if msg:
+            gra_pos = GRA.from_global_int(msg.lat, msg.lon, msg.alt)
+            pos = self.origin.to_rel(gra_pos)
+            return pos
+        return None
 
     def reset(self):
         """Reset the step state and clear current position."""

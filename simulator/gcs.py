@@ -205,16 +205,6 @@ class GCS(UAVMonitor):
         )  # "exit"
         logging.debug(f"UAV logic for vehicle {sysid} launched (PID {p.pid})")
 
-        # p = create_process(
-        #     uav_config["proxy_cmd"],
-        #     after="exec bash",
-        #     visible="proxy" in self.terminals,
-        #     suppress_output="proxy" in self.suppress,
-        #     title=f"Proxy: Vehicle {sysid}",
-        #     env_cmd=ENV_CMD_PYT,
-        # )  # "exit"
-        # logging.debug(f"Proxy for vehicle {sysid} launched (PID {p.pid})")
-
         p = create_process(
             uav_config["ardupilot_cmd"],
             after="exec bash",

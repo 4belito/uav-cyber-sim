@@ -9,8 +9,10 @@ import logging
 import threading
 
 from simulator.helpers.connections import MAVConnection
+from simulator.helpers.connections.mavlink.customtypes.vehicle_state import (
+    VehicleStateP,
+)
 from simulator.helpers.connections.mavlink.streams import decode_unknown_message
-from simulator.vehicle.state import VehicleState
 
 
 class MAVLinkRouter(threading.Thread):
@@ -22,7 +24,7 @@ class MAVLinkRouter(threading.Thread):
     def __init__(
         self,
         conn: MAVConnection,
-        state: VehicleState,
+        state: VehicleStateP,
         stop_event: threading.Event,
     ) -> None:
         super().__init__(daemon=True)
@@ -37,8 +39,6 @@ class MAVLinkRouter(threading.Thread):
                 msg = self.conn.recv_match(blocking=True, timeout=0.1)
                 if msg is None:
                     continue
-
-                # Optional: decode UNKNOWN here if needed
                 if msg.get_type().startswith("UNKNOWN"):
                     msg = decode_unknown_message(msg)
 

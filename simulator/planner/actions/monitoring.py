@@ -38,7 +38,8 @@ class CheckItems(Step):
             if msg:
                 self._mission_count = msg.count
                 logging.info(
-                    f"📦 Vehicle {self.conn.target_system} has {msg.count} mission items"
+                    f"📦 Vehicle {self.conn.target_system} has {msg.count}"
+                    " mission items"
                 )
             else:
                 return False
@@ -55,10 +56,13 @@ class CheckItems(Step):
             self.conn.target_system, self.conn.target_component, self._item_seq
         )
         item = self.vehicle_state.wait_for("MISSION_ITEM")
-        gra_wp = GRA(lat=float(item.x), lon=float(item.y), alt=float(item.z))  # type: ignore
+        if not item:
+            return False
+        gra_wp = GRA(lat=float(item.x), lon=float(item.y), alt=float(item.z))
         self.target_pos = self.origin.to_rel(gra_wp)
         logging.info(
-            f"Vehicle {self.conn.target_system}: 📍 Target Position: {self.target_pos.short()}"
+            f"Vehicle {self.conn.target_system}: 📍 Target Position:"
+            f" {self.target_pos.short()}"
         )
         if self._item_seq == self._mission_count - 1:
             return True

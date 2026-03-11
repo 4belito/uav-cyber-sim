@@ -10,36 +10,46 @@ from simulator.helpers.coordinates import GRAPose
 class Visualizer(ABC, Generic[VehT]):
     """Abstract base class for UAV simulation visualizers."""
 
-    name: str
-    delay = False
-
     def __init__(self, gra_origin: GRAPose) -> None:
         self.gra_origin = gra_origin
         self.vehicles: dict[int, VehT] = {}
 
+    # ==================
+    # Abstract interface
+    # ==================
+
     @property
-    def num_vehicles(self) -> int:
-        """Return the number of vehicles in the visualizer."""
-        return len(self.vehicles)
+    @abstractmethod
+    def name(self) -> str:
+        """Name of the visualizer."""
+        pass
 
     @abstractmethod
     def launch(self, port_offsets: list[int]) -> None:
         """Launch the visualizer."""
-        raise NotImplementedError
+        pass
 
     @abstractmethod
     def get_visvehicle(self, vehicle: SimVehicle) -> VehT:
         """Convert a Vehicle to the visualizer-specific vehicle type."""
-        raise NotImplementedError
+        pass
 
     @abstractmethod
     def show(self) -> None:
         """Show a stathic preview visualization."""
-        raise NotImplementedError
+        pass
+
+    # ===================================
+    # Optional (subclasses may override)
+    # ===================================
 
     def add_vehicle_cmd(self, vehicle: SimVehicle) -> str:
         """Add optional command-line for the ith vehicle."""
         return ""
+
+    # ==================
+    # Base functionality
+    # ==================
 
     def add_vehicle(self, vehicle: SimVehicle) -> None:
         """Add a vehicle to the visualizer."""
@@ -52,6 +62,11 @@ class Visualizer(ABC, Generic[VehT]):
             del self.vehicles[sysid]
             return True
         return False
+
+    @property
+    def num_vehicles(self) -> int:
+        """Return the number of vehicles in the visualizer."""
+        return len(self.vehicles)
 
     def __str__(self):
         return self.name

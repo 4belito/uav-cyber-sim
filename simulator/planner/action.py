@@ -10,9 +10,11 @@ from enum import StrEnum
 from typing import Generic, TypeVar
 
 from simulator.helpers.connections import MAVConnection
+from simulator.helpers.connections.mavlink.customtypes.vehicle_state import (
+    VehicleStateP,
+)
 from simulator.helpers.coordinates import GRA
 from simulator.planner.step import MissionElement, State
-from simulator.vehicle.state import VehicleState
 
 # TODO: Check binding of conn in Action and Step,
 # i think conn can be passed when actions/steps are instantiated
@@ -169,7 +171,7 @@ class Action(MissionElement, Generic[T]):
         self,
         connection: MAVConnection,
         origin: GRA,
-        vehicle_state: VehicleState,
+        vehicle_state: VehicleStateP,
     ) -> None:
         """Bind the action to the MAVLink connection."""
         for step in self.steps:
