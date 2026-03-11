@@ -8,6 +8,7 @@ It modifies the QGroundControl.ini file to set up connection links for each UAV.
 
 import logging
 import os
+import time
 from dataclasses import dataclass
 
 import folium
@@ -79,9 +80,9 @@ class QGC(Visualizer[QGCVehicle]):
         self._delete_all_links()
         self._disable_autoconnect_udp()
         self._add_tcp_links(port_offsets)
-        sim_cmd = [os.path.expanduser(QGC_PATH), "--appimage-extract-and-run"]
+        time.sleep(0.05 * self.num_vehicles)
         create_process(
-            cmd=" ".join(sim_cmd),
+            cmd=" ".join([os.path.expanduser(QGC_PATH), "--appimage-extract-and-run"]),
             visible=False,
             title="QGroundControl",
             suppress_output=True,
@@ -139,18 +140,15 @@ class QGC(Visualizer[QGCVehicle]):
                     inside_links = False
 
             new_lines.append(line)
-
-        with open(QGC_INI_PATH, "w", encoding="utf-8") as f:
-            f.writelines(new_lines)
-            f.flush()
+        self._write_ini(new_lines)
 
     def _disable_autoconnect_udp(self):
         """
         Disables QGroundControl's automatic UDP connection (usually on port 14550)
         by updating the [AutoConnect] section in the QGroundControl.ini file.
         """
-        with open(QGC_INI_PATH, "r", encoding="utf-8") as file:
-            lines = file.readlines()
+        with open(QGC_INI_PATH, "r", encoding="utf-8") as f:
+            lines = f.readlines()
 
         new_lines: list[str] = []
         in_autoconnect = False
@@ -186,12 +184,11 @@ class QGC(Visualizer[QGCVehicle]):
             # Append new section
             new_lines.append("\n[AutoConnect]\nUDPLink=false\n")
 
-        with open(QGC_INI_PATH, "w", encoding="utf-8") as file:
-            file.writelines(new_lines)
+        self._write_ini(new_lines)
 
     def _add_tcp_links(self, port_offsets: list[int]):
-        with open(QGC_INI_PATH, "r", encoding="utf-8") as file:
-            lines = file.readlines()
+        with open(QGC_INI_PATH, "r", encoding="utf-8") as f:
+            lines = f.readlines()
 
         section_header = "[LinkConfigurations]"
         start_idx = None
@@ -243,6 +240,10 @@ class QGC(Visualizer[QGCVehicle]):
         # Insert new lines just before count=
         lines[count_line_idx:count_line_idx] = new_lines
         lines[count_line_idx + len(new_lines)] = f"count={count + n_ports}\n"
+        self._write_ini(lines)
 
-        with open(QGC_INI_PATH, "w", encoding="utf-8") as file:
-            file.writelines(lines)
+    def _write_ini(self, lines: list[str]):
+        with open(QGC_INI_PATH, "w", encoding="utf-8") as f:
+            f.writelines(lines)
+            f.flush()
+            os.fsync(f.fileno())

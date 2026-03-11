@@ -147,9 +147,11 @@ class RIDManager:
                 if self.fake_pos and self.sysid == 255:
                     send_data = copy.copy(self.data)
                     send_data.enu_pos = self.fake_pos
+                    logging.debug(f"SEND FAKE DATA RID({self.sysid}): {send_data}")
                 else:
                     send_data = self.data
-                # logging.debug(f"SEND DATA RID({self.sysid}): {send_data}")
+                    logging.debug(f"SEND DATA RID({self.sysid}): {send_data}")
+
                 self._out_sock.send_pyobj(send_data)  # type: ignore
                 self.pending = False
 

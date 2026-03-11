@@ -1,9 +1,8 @@
 """Tools to stop simulation processes and clean up log files."""
 
-import os
 import shutil
+import subprocess
 from pathlib import Path
-from typing import List
 
 from simulator.config import ARDU_LOGS_PATH, DATA_PATH, LOGS_PATH
 
@@ -12,22 +11,21 @@ ALL_PROCESSES = [
     "arducopter",
     "gazebo",
     "mavproxy",
-    "proxy.py",
-    "run_many_uavs.py",
-    "logic.py",
-    "gcs.py",
-    "run.py",
+    "simulator.adsb_injector",
+    "simulator.logic",
+    "simulator.gcs",
+    "exec bash",
 ]
 
 
-def kill_processes(victims: List[str]):
+def kill_processes(victims: list[str]):
     """Kill all related processes or a given list of process names."""
     for process in victims:
-        os.system(f"pkill -9 -f {process}")
+        subprocess.run(["pkill", "-9", "-f", process])
 
 
 def clean(
-    victim_processes: List[str] = ALL_PROCESSES,
+    victim_processes: list[str] = ALL_PROCESSES,
     del_folders: list[Path] = [],
     reset_folders: list[Path] = [DATA_PATH, LOGS_PATH, ARDU_LOGS_PATH],
 ):

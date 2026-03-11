@@ -151,7 +151,7 @@ class Simulator(Generic[VehT]):
             for sysid in gcs.sysids:
                 port_offset = self.vehs[sysid].port_offset
                 assert port_offset is not None, f"Port offset for UAV {sysid} not set"
-                inst = self.vehs[sysid].instance  # int(port_offset / 10)  #
+                inst = int(port_offset / 10)  # self.vehs[sysid].instance  #
                 assert inst is not None, f"Instance for UAV {sysid} not set"
                 param_file = ARDU_LOGS_PATH / f"uav_{sysid}"
                 param_file.mkdir(parents=True, exist_ok=True)
@@ -175,11 +175,6 @@ class Simulator(Generic[VehT]):
                             str(DATA_PATH / f"logic_config_{sysid}.json"),
                             self.verbose,
                         ),
-                        # "proxy_cmd": (
-                        #     f"python3 -m simulator.proxy --sysid {sysid} "
-                        #     f"--port-offset={port_offset} "
-                        #     f"--verbose {self.verbose}"
-                        # ),
                     }
                 )
 
@@ -210,8 +205,6 @@ class Simulator(Generic[VehT]):
             BasePort.RID_DATA,
         ]
         return self._find_port_offsets(base_ports, len(self.vehs))
-
-    # excluded_offsets=[160]
 
     def _find_gcs_port_offsets(self) -> list[int]:
         base_ports = [BasePort.GCS_ZMQ]

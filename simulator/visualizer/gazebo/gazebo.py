@@ -85,7 +85,7 @@ class Gazebo(Visualizer[GazVehicle]):
         """Launch the Gazebo simulator with the specified UAV and waypoints."""
         base_models = [f"{veh.model}_{veh.color}" for veh in self.vehicles.values()]
         self._generate_drone_models_from_bases(
-            base_models, base_port_in=9002, port_step=10
+            base_models, base_port_in=9002, port_offsets=port_offsets
         )
         updated_world = self._update_world(self.world_path)
         create_process(
@@ -137,8 +137,8 @@ class Gazebo(Visualizer[GazVehicle]):
     def _generate_drone_models_from_bases(
         self,
         base_models: list[str],
+        port_offsets: list[int],
         base_port_in: int = 9002,
-        port_step: int = 10,
     ) -> None:
         template_path = Path(ARDUPILOT_GAZEBO_MODELS) / "drone"
         output_dir = Path(ARDUPILOT_GAZEBO_MODELS)
@@ -162,7 +162,7 @@ class Gazebo(Visualizer[GazVehicle]):
                 sdf,
             )
 
-            port_in = base_port_in + i * port_step
+            port_in = base_port_in + port_offsets[i]
             port_out = port_in + 1
             sdf = re.sub(
                 r"<fdm_port_in>\d+</fdm_port_in>",
