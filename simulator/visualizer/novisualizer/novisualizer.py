@@ -32,6 +32,11 @@ class NoVisualizer(Visualizer[NovisVehicle]):
         """Name of the visualizer."""
         return "novis"
 
+    @property
+    def delayed_launch(self) -> bool:
+        """No visualizer is launched."""
+        return False
+
     def get_visvehicle(self, vehicle: SimVehicle) -> NovisVehicle:
         """Convert a Vehicle to a NovisVehicle with GRA home position."""
         return NovisVehicle(home=vehicle.home)

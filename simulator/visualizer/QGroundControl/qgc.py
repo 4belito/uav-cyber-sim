@@ -8,7 +8,6 @@ It modifies the QGroundControl.ini file to set up connection links for each UAV.
 
 import logging
 import os
-import time
 from dataclasses import dataclass
 
 import folium
@@ -16,6 +15,7 @@ from IPython.display import display  # type: ignore
 
 from simulator.config import QGC_INI_PATH, QGC_PATH, BasePort, Color
 from simulator.entities.simvehicle import SimVehicle, Vehicle
+from simulator.helpers.connections.ports import wait_for_port
 from simulator.helpers.coordinates import (
     GRA,
     GRAPose,
@@ -69,6 +69,11 @@ class QGC(Visualizer[QGCVehicle]):
         """Name of the visualizer."""
         return "QGroundControl"
 
+    @property
+    def delayed_launch(self) -> bool:
+        """Delay QGroundControl launch until after ArduPilot."""
+        return True
+
     def add_vehicle_cmd(self, vehicle: SimVehicle) -> str:
         """Add GRA location to the vehicle command."""
         visveh = self.vehicles[vehicle.sysid]
@@ -80,7 +85,10 @@ class QGC(Visualizer[QGCVehicle]):
         self._delete_all_links()
         self._disable_autoconnect_udp()
         self._add_tcp_links(port_offsets)
-        time.sleep(0.05 * self.num_vehicles)
+        for offset in port_offsets:
+            port = BasePort.QGC + offset
+            wait_for_port(port)
+
         create_process(
             cmd=" ".join([os.path.expanduser(QGC_PATH), "--appimage-extract-and-run"]),
             visible=False,

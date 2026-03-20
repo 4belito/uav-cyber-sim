@@ -15,8 +15,9 @@ def is_port_open(host: str, port: int, timeout: float = 0.5) -> bool:
             return False
 
 
-def wait_for_port(port: int, timeout: float = 0.5):
+def wait_for_port(port: int, timeout: float = 0.5, verbose: bool = False):
     """Wait until a TCP port is open."""
     while not is_port_open("127.0.0.1", port):
-        print(f"Waiting for port {port} to open...")
+        if verbose:
+            print(f"Waiting for port {port} to open...")
         time.sleep(timeout)

@@ -77,6 +77,11 @@ class Gazebo(Visualizer[GazVehicle]):
         """Name of the visualizer."""
         return "Gazebo"
 
+    @property
+    def delayed_launch(self) -> bool:
+        """Gazebo is launched before ArduPilot."""
+        return True
+
     def add_vehicle_cmd(self, vehicle: SimVehicle) -> str:
         """Add gazebo model (only iris TODO: add others)."""
         return f" -f gazebo-iris --custom-location={self.gra_origin.to_str()}"

@@ -24,6 +24,12 @@ class Visualizer(ABC, Generic[VehT]):
         """Name of the visualizer."""
         pass
 
+    @property
+    @abstractmethod
+    def delayed_launch(self) -> bool:
+        """Whether to launch the visualizer after ArduPilot."""
+        pass
+
     @abstractmethod
     def launch(self, port_offsets: list[int]) -> None:
         """Launch the visualizer."""

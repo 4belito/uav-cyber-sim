@@ -96,8 +96,11 @@ class Simulator(Generic[VehT]):
             self.gcs[gcs_name].port_offset = offset
         self._save_logic_configs(DATA_PATH)
         self._save_gcs_configs(DATA_PATH)
-        self.visualizer.launch(uav_port_offsets)
+        if not self.visualizer.delayed_launch:
+            self.visualizer.launch(uav_port_offsets)
         self._launch_gcses()
+        if self.visualizer.delayed_launch:
+            self.visualizer.launch(uav_port_offsets)
         return Oracle(
             self.gra_origin,
             self.vehs,
