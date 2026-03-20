@@ -12,6 +12,12 @@ SERIAL5_PROTOCOL 2
 SERIAL5_BAUD 57
 
 # ===============================
+# Serial Port Configuration
+# (for QGrounfControl UDP)
+# ===============================
+SERIAL6_PROTOCOL 2
+
+# ===============================
 # ADS-B Receiver Configuration
 # ===============================
 # ADS-B type: 1 = MAVLink protocol

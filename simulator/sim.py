@@ -96,11 +96,8 @@ class Simulator(Generic[VehT]):
             self.gcs[gcs_name].port_offset = offset
         self._save_logic_configs(DATA_PATH)
         self._save_gcs_configs(DATA_PATH)
-        if not self.visualizer.delayed_launch:
-            self.visualizer.launch(uav_port_offsets)
+        self.visualizer.launch(uav_port_offsets)
         self._launch_gcses()
-        if self.visualizer.delayed_launch:
-            self.visualizer.launch(uav_port_offsets)
         return Oracle(
             self.gra_origin,
             self.vehs,
@@ -158,6 +155,10 @@ class Simulator(Generic[VehT]):
                 assert inst is not None, f"Instance for UAV {sysid} not set"
                 param_file = ARDU_LOGS_PATH / f"uav_{sysid}"
                 param_file.mkdir(parents=True, exist_ok=True)
+                sitl_args = (
+                    f"--serial5=uart:/tmp/adsb_{sysid}_ardupilot:57600"
+                    f"{self.visualizer.add_sitl_args()}"
+                )
                 uavs.append(
                     {
                         "sysid": sysid,
@@ -165,7 +166,7 @@ class Simulator(Generic[VehT]):
                         "ardupilot_cmd": (
                             f"python3 {ARDUPILOT_VEHICLE_PATH}"
                             f" -v ArduCopter -I{inst} --sysid {sysid} --no-rebuild"
-                            f' -A "--serial5=uart:/tmp/adsb_{sysid}_ardupilot:57600"'
+                            f' -A "{sitl_args}"'
                             f" --use-dir={param_file}"
                             f" --add-param-file {VEH_PARAMS_PATH}"
                             f" --no-mavproxy"
@@ -201,7 +202,6 @@ class Simulator(Generic[VehT]):
             BasePort.ARP2,
             BasePort.ARP3,
             BasePort.GCS,
-            BasePort.QGC,
             BasePort.LOG,
             BasePort.RID_UP,
             BasePort.RID_DOWN,

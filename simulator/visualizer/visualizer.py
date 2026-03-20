@@ -24,12 +24,6 @@ class Visualizer(ABC, Generic[VehT]):
         """Name of the visualizer."""
         pass
 
-    @property
-    @abstractmethod
-    def delayed_launch(self) -> bool:
-        """Whether to launch the visualizer after ArduPilot."""
-        pass
-
     @abstractmethod
     def launch(self, port_offsets: list[int]) -> None:
         """Launch the visualizer."""
@@ -51,6 +45,10 @@ class Visualizer(ABC, Generic[VehT]):
 
     def add_vehicle_cmd(self, vehicle: SimVehicle) -> str:
         """Add optional command-line for the ith vehicle."""
+        return ""
+
+    def add_sitl_args(self) -> str:
+        """Add optional SITL arguments for a vehicle."""
         return ""
 
     # ==================

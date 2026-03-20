@@ -28,23 +28,30 @@ ARDU_LOGS_PATH.mkdir(parents=True, exist_ok=True)
 
 class BasePort(IntEnum):
     """
-    Base ports for QGroundControl(QGC), ArduPilot (ARP), Ground control Station (GCS),
+    Base ports for QGroundControl (QGC), ArduPilot (ARP), Ground Control Station (GCS),
     and Oracle.
 
-    - QGC and ARP ports increment by +10 per UAV instance.
+    - ARP ports increment by +10 per UAV instance.
     - GCS ports increment by +10 per GCS instance.
-    - Oracle uses a fixed port.
+    - QGC uses a fixed UDP port (default: 14550).
+    - Oracle uses fixed ports.
 
-    All components except QGC connect to the UAVLogic.
+    All components except QGC connect to UAVLogic.
     QGC connects directly to ArduPilot (SITL).
-    Gazebo connects to ArduPilot via UDP 9002 (to ArduPilot) and 9003 (from ArduPilot).
+    Gazebo connects to ArduPilot via UDP:
+        - 9002 (to ArduPilot)
+        - 9003 (from ArduPilot)
+
+    Note:
+    Using a different QGC UDP port requires code changes.
+
     """
 
     # ONE-PER-UAV PORTS
     ARP = 5760  # ArduPilot master port (TCP: PROXY->ARP)
     ARP2 = 5762  # ArduPilot SERIAL1 (TCP: auto-opened by SITL)
     ARP3 = 5763  # ArduPilot SERIAL2 (TCP: auto-opened by SITL)
-    QGC = 5763  # QGroundControl (TCP: QGC->ARP). it must be 5762 or 5763.
+    QGC = 14550  # QGroundControl UDP telemetry (SITL -> QGC)
     LOG = 14551  # Vehicle(TCP: PROXY->LOGIC)
     GCS = 14555  # Ground Control Station(UDP: LOGIC->GCS)
     RID_UP = 14556  # Remote ID (LOGIC->ORC)
