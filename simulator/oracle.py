@@ -76,6 +76,8 @@ class Oracle:  # UAVMonitor
             uav_port_offsets,
         )
 
+        self.adsb_locks = {sysid: threading.Lock() for sysid in self.sysids}
+
         # Threads
         self.rid_in_threads = {
             sysid: threading.Thread(target=self.update_rid, args=(sysid,))
@@ -174,8 +176,8 @@ class Oracle:  # UAVMonitor
                     if o_sysid == sysid:
                         continue
 
-                    # Send ADS-B beacon to neighbor UAV
-                    self.adsb_out_socks[o_sysid].send_pyobj(beacon)  # type: ignore
+                    with self.adsb_locks[o_sysid]:
+                        self.adsb_out_socks[o_sysid].send_pyobj(beacon)  # type: ignore
 
             except Exception as e:
                 logging.error(f"ADSB retransmit error {sysid}: {e}")
