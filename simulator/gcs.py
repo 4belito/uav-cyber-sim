@@ -106,19 +106,22 @@ class GCS(UAVMonitor):
     ###
     def run(self):
         """Run the GCS monitoring loop until all UAVs complete their missions."""
-        with futures.ThreadPoolExecutor() as executor:
-            executor.map(self._monitor_uav, self.sysids)
+        try:
+            with futures.ThreadPoolExecutor() as executor:
+                executor.map(self._monitor_uav, self.sysids)
 
-        logging.info("All UAVs assigned have completed their missions")
-        self.orc_sock.send_string("DONE")  # type: ignore
-        logging.info("DONE message sent to Oracle")
-        self.orc_sock.close(linger=0)
-        self.zmq_ctx.term()
-
-        trajectory_file = DATA_PATH / f"trajectories_{self.name}.pkl"
-        with open(trajectory_file, "wb") as file:
-            pickle.dump(self.paths, file)
-        logging.info(f"Trajectories saved to '{trajectory_file}'")
+            logging.info("All UAVs assigned have completed their missions")
+            self.orc_sock.send_string("DONE")  # type: ignore
+            logging.info("DONE message sent to Oracle")
+            trajectory_file = DATA_PATH / f"trajectories_{self.name}.pkl"
+            with open(trajectory_file, "wb") as file:
+                pickle.dump(self.paths, file)
+            logging.info(f"Trajectories saved to '{trajectory_file}'")
+        finally:
+            self.orc_sock.close(linger=0)
+            self.zmq_ctx.term()
+            for sysid in self.sysids:
+                self._terminate_uav_processes(sysid)
 
     def save_pos(self):
         """Save the current global position of each UAV to their trajectory path."""
@@ -127,35 +130,12 @@ class GCS(UAVMonitor):
 
     def _monitor_uav(self, sysid: int):
         logging.info(f"Monitoring UAV {sysid}")
-        while not self.is_plan_done(sysid):
-            self.get_global_pos(sysid)
-            self.save_pos()
-        self._terminate_uav_processes(sysid)
-
-    # def _handle_message(self, sysid: int, msg: mavlink.MAVLink_message) -> bool:
-    #     """Process MAVLink messages from a UAV."""
-    #     if msg.get_type() == "STATUSTEXT":
-    #         text = getattr(msg, "text", b"")
-    #         if isinstance(text, bytes):
-    #             text = text.decode(errors="ignore")
-
-    #         if text == "LOGIC_DONE":
-    #             logging.info(f"GCS: received LOGIC_DONE from UAV {sysid}")
-
-    #             # Send COMMAND_ACK back
-    #             ack = mavutil.mavlink.MAVLink_command_ack_message(
-    #                 command=CustomCmd.LOGIC_DONE,
-    #                 result=0,
-    #             )
-    #             self.conns[sysid].mav.send(ack)
-    #             logging.info(f"GCS: sent LOGIC_DONE ACK to UAV {sysid}")
-
-    #             # Mark UAV as done
-    #             self._terminate_uav_processes(sysid)
-    #             self.remove_uav(sysid)
-    #             return True
-
-    #     return False
+        try:
+            while not self.is_plan_done(sysid):
+                self.get_global_pos(sysid)
+                self.save_pos()
+        finally:
+            self._terminate_uav_processes(sysid)
 
     def _launch_vehicles(self) -> list[VehicleRuntime]:
         """Launch ArduPilot and logic processes for each UAV."""
@@ -267,7 +247,7 @@ class GCS(UAVMonitor):
             return
 
         for name, proc in runtime.processes.items():
-            terminate_process_group(proc, name, sysid)
+            terminate_process_group(proc, f"{name} for UAV {sysid}")
 
 
 def parse_arguments() -> tuple[str, int]:

@@ -13,6 +13,9 @@ from pymavlink import mavutil
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
 from simulator.config import BasePort
+from simulator.entities.rid import RIDData, RIDManager
+from simulator.entities.vehicle.router import MAVLinkRouter
+from simulator.entities.vehicle.state import VehicleState, VehicleStateP
 from simulator.helpers.connections import (
     MAVConnection,
     create_tcp_conn,
@@ -26,7 +29,6 @@ from simulator.helpers.connections.mavlink.streams import (
     request_sensor_streams,
 )
 from simulator.helpers.coordinates import ENU, GRA
-from simulator.helpers.rid import RIDData, RIDManager
 from simulator.helpers.setup_log import setup_logging
 from simulator.params.simulation import (
     DATA_STREAM_FREQUENCY,
@@ -34,8 +36,6 @@ from simulator.params.simulation import (
     REMOTE_ID_FREQUENCY,
 )
 from simulator.planner import Action, Plan, PlanSpec, State, Step
-from simulator.vehicle.router import MAVLinkRouter
-from simulator.vehicle.state import VehicleState, VehicleStateP
 
 DATA_STREAM_IDS = [
     DataStream.RAW_SENSORS,

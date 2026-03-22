@@ -5,8 +5,8 @@ from collections import defaultdict
 from collections.abc import Iterable
 from math import floor
 
+from simulator.entities.rid import RIDData
 from simulator.helpers.coordinates import ENU
-from simulator.helpers.rid import RIDData
 
 CellKey = tuple[int, int, int]
 Cell = set[int]

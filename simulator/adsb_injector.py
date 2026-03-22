@@ -18,7 +18,7 @@ import time
 import zmq
 
 from simulator.config import BasePort
-from simulator.helpers.adsb import ADSBBeacon
+from simulator.entities.adsb import ADSBBeacon
 from simulator.helpers.connections import create_zmq_socket
 from simulator.helpers.connections.mavlink.conn import connect, send_heartbeat
 from simulator.helpers.connections.mavlink.customtypes.mavconn import MAVConnection

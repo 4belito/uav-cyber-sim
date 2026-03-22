@@ -88,27 +88,28 @@ def create_process(
 def terminate_process_group(
     proc: Popen[bytes],
     name: str,
-    sysid: int,
     timeout: float = 1.0,
 ) -> None:
     """Terminate a process group gracefully, then forcefully if needed."""
     try:
         if proc.poll() is None:
-            os.killpg(proc.pid, signal.SIGTERM)
-            logging.info(f"process {name} for UAV {sysid} terminated")
+            pgid = os.getpgid(proc.pid)
+            os.killpg(pgid, signal.SIGTERM)
+            logging.info(f"process {name} terminated")
     except ProcessLookupError:
         return
     except Exception as e:
-        logging.warning(f"Could not terminate process {name} for UAV {sysid}: {e}")
+        logging.warning(f"Could not terminate process {name}: {e}")
         return
 
     time.sleep(timeout)
 
     try:
         if proc.poll() is None:
-            os.killpg(proc.pid, signal.SIGKILL)
-            logging.info(f"process {name} for UAV {sysid} killed")
+            pgid = os.getpgid(proc.pid)
+            os.killpg(pgid, signal.SIGKILL)
+            logging.info(f"process {name} killed")
     except ProcessLookupError:
         return
     except Exception as e:
-        logging.warning(f"Could not kill process {name} for UAV {sysid}: {e}")
+        logging.warning(f"Could not kill process {name}: {e}")

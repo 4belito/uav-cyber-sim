@@ -19,10 +19,10 @@ import zmq
 
 from simulator.config import DATA_PATH, BasePort, Color
 from simulator.entities import Grid, SimGCS, SimVehicle
-from simulator.helpers.adsb import rid_to_adsb_beacon
+from simulator.entities.adsb import rid_to_adsb_beacon
+from simulator.entities.rid import RIDData
 from simulator.helpers.connections import create_zmq_sockets
 from simulator.helpers.coordinates import GRAPose
-from simulator.helpers.rid import RIDData
 
 TX_LOOP_SLEEP = 0.01
 RX_LOOP_SLEEP = 0.10
