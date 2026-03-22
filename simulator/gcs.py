@@ -10,11 +10,12 @@ import os
 import pickle
 import time
 from concurrent import futures
+from dataclasses import dataclass, field
+from subprocess import Popen
 from typing import TypedDict
 
 import zmq
 from pymavlink import mavutil
-from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
 from simulator.config import DATA_PATH, ENV_CMD_ARP, ENV_CMD_PYT, BasePort
 from simulator.helpers.connections import (
@@ -22,9 +23,8 @@ from simulator.helpers.connections import (
     create_udp_conn,
     create_zmq_socket,
 )
-from simulator.helpers.connections.mavlink.customenums.customcmd import CustomCmd
 from simulator.helpers.coordinates import GRAs
-from simulator.helpers.processes import create_process
+from simulator.helpers.processes import create_process, terminate_process_group
 from simulator.helpers.setup_log import setup_logging
 from simulator.monitor import UAVMonitor
 from simulator.params.simulation import HEARTBEAT_FREQUENCY
@@ -32,14 +32,13 @@ from simulator.params.simulation import HEARTBEAT_FREQUENCY
 heartbeat_event = mavutil.periodic_event(HEARTBEAT_FREQUENCY)
 
 
-def main():
-    """Run a GCS instance to monitor UAVs."""
-    config_path, verbose = parse_arguments()
-    with open(config_path) as f:
-        config = json.load(f)
-    setup_logging(f"GCS_{config['name']}", verbose=verbose, console_output=True)
-    gcs = GCS(**config)
-    gcs.run()
+@dataclass
+class VehicleRuntime:
+    """Runtime object for a vehicle."""
+
+    sysid: int
+    conn: MAVConnection
+    processes: dict[str, Popen[bytes]] = field(default_factory=dict[str, Popen[bytes]])
 
 
 class UAVGCSConfig(TypedDict):
@@ -62,6 +61,16 @@ class GCSConfig(TypedDict):
     suppress: list[str]
 
 
+def main():
+    """Run a GCS instance to monitor UAVs."""
+    config_path, verbose = parse_arguments()
+    with open(config_path) as f:
+        config = json.load(f)
+    setup_logging(f"GCS_{config['name']}", verbose=verbose, console_output=True)
+    gcs = GCS(**config)
+    gcs.run()
+
+
 class GCS(UAVMonitor):
     """Ground Control Station class extending Oracle with trajectory logging."""
 
@@ -80,14 +89,16 @@ class GCS(UAVMonitor):
         self.n_uavs = len(self.sysids)
         self.terminals = set(terminals)
         self.suppress = set(suppress)
-        self.conns = self._launch_vehicles()  # NOTE: add self.conn =
-
+        self.vehruntimes = {
+            vehrun.sysid: vehrun for vehrun in self._launch_vehicles()
+        }  # NOTE: add self.conn =
+        self.conns = {sysid: vehrun.conn for sysid, vehrun in self.vehruntimes.items()}
         self.zmq_ctx = zmq.Context()
         self.orc_sock = create_zmq_socket(
             self.zmq_ctx, zmq.PUB, BasePort.GCS_ZMQ, port_offset
         )
-
-        super().__init__(dict(zip(self.sysids, self.conns)))
+        # TODO: improve this (suppress monitor class)
+        super().__init__(self.conns)
         self.paths: dict[int, GRAs] = {sysid: [] for sysid in self.sysids}
 
         logging.info(f" GCS {self.name} started with {self.n_uavs} UAVs")
@@ -119,41 +130,44 @@ class GCS(UAVMonitor):
         while not self.is_plan_done(sysid):
             self.get_global_pos(sysid)
             self.save_pos()
+        self._terminate_uav_processes(sysid)
 
-    def _handle_message(self, sysid: int, msg: mavlink.MAVLink_message) -> bool:
-        """Process MAVLink messages from a UAV."""
-        if msg.get_type() == "STATUSTEXT":
-            text = getattr(msg, "text", b"")
-            if isinstance(text, bytes):
-                text = text.decode(errors="ignore")
+    # def _handle_message(self, sysid: int, msg: mavlink.MAVLink_message) -> bool:
+    #     """Process MAVLink messages from a UAV."""
+    #     if msg.get_type() == "STATUSTEXT":
+    #         text = getattr(msg, "text", b"")
+    #         if isinstance(text, bytes):
+    #             text = text.decode(errors="ignore")
 
-            if text == "LOGIC_DONE":
-                logging.info(f"GCS: received LOGIC_DONE from UAV {sysid}")
+    #         if text == "LOGIC_DONE":
+    #             logging.info(f"GCS: received LOGIC_DONE from UAV {sysid}")
 
-                # Send COMMAND_ACK back
-                ack = mavutil.mavlink.MAVLink_command_ack_message(
-                    command=CustomCmd.LOGIC_DONE,
-                    result=0,
-                )
-                self.conns[sysid].mav.send(ack)
-                logging.info(f"GCS: sent LOGIC_DONE ACK to UAV {sysid}")
+    #             # Send COMMAND_ACK back
+    #             ack = mavutil.mavlink.MAVLink_command_ack_message(
+    #                 command=CustomCmd.LOGIC_DONE,
+    #                 result=0,
+    #             )
+    #             self.conns[sysid].mav.send(ack)
+    #             logging.info(f"GCS: sent LOGIC_DONE ACK to UAV {sysid}")
 
-                # Mark UAV as done
-                self.remove_uav(sysid)
-                return True
+    #             # Mark UAV as done
+    #             self._terminate_uav_processes(sysid)
+    #             self.remove_uav(sysid)
+    #             return True
 
-        return False
+    #     return False
 
-    def _launch_vehicles(self) -> list[MAVConnection]:
+    def _launch_vehicles(self) -> list[VehicleRuntime]:
         """Launch ArduPilot and logic processes for each UAV."""
         with futures.ThreadPoolExecutor() as executor:
-            conns = list(executor.map(self._launch_vehicle, range(self.n_uavs)))
-        return conns
+            vehruns = list(executor.map(self._launch_vehicle, range(self.n_uavs)))
+        return vehruns
 
-    def _launch_vehicle(self, i: int) -> MAVConnection:
+    def _launch_vehicle(self, i: int) -> VehicleRuntime:
         uav_config = self.uavs[i]
         sysid = uav_config["sysid"]
 
+        procs: dict[str, Popen[bytes]] = {}
         # -----------------------
         # 1. ADS-B virtual cable
         # -----------------------
@@ -163,14 +177,16 @@ class GCS(UAVMonitor):
             f"pty,raw,echo=0,link=/tmp/adsb_{sysid}_injector"
         )
 
-        p = create_process(
+        p_socat = create_process(
             socat_cmd,
             after="exec bash",
             visible="adsb_socat" in self.terminals,
             suppress_output="adsb_socat" in self.suppress,
             title=f"ADSB socat: Vehicle {sysid}",
+            new_process_group=True,
         )
-        logging.debug(f"ADSB socat for vehicle {sysid} launched (PID {p.pid})")
+        logging.debug(f"ADSB socat for vehicle {sysid} launched (PID {p_socat.pid})")
+        procs["socat"] = p_socat
         self._wait_for_pty(f"/tmp/adsb_{sysid}_injector")
 
         # -----------------------
@@ -182,38 +198,43 @@ class GCS(UAVMonitor):
             f"--port-offset {uav_config['port_offset']}"
         )
 
-        p = create_process(
+        p_adsb = create_process(
             adsb_cmd,
             after="exec bash",
             visible="adsb_injector" in self.terminals,
             suppress_output="adsb_injector" in self.suppress,
             title=f"ADSB injector: Vehicle {sysid}",
             env_cmd=ENV_CMD_PYT,
+            new_process_group=True,
         )
-        logging.debug(f"ADSB injector for vehicle {sysid} launched (PID {p.pid})")
-
+        logging.debug(f"ADSB injector for vehicle {sysid} launched (PID {p_adsb.pid})")
+        procs["adsb"] = p_adsb
         # -----------------------
         # 3. ArduPilot + Proxy + Logic
         # -----------------------
-        p = create_process(
+        p_logic = create_process(
             uav_config["logic_cmd"],
             after="exec bash",
             visible="logic" in self.terminals,
             suppress_output="logic" in self.suppress,
             title=f"UAV logic: Vehicle {sysid}",
             env_cmd=ENV_CMD_PYT,
+            new_process_group=True,
         )  # "exit"
-        logging.debug(f"UAV logic for vehicle {sysid} launched (PID {p.pid})")
+        logging.debug(f"UAV logic for vehicle {sysid} launched (PID {p_logic.pid})")
+        procs["logic"] = p_logic
 
-        p = create_process(
+        p_ard = create_process(
             uav_config["ardupilot_cmd"],
             after="exec bash",
             visible="launcher" in self.terminals,
             suppress_output="launcher" in self.suppress,
             title=f"ArduPilot SITL Launcher: Vehicle {sysid}",
             env_cmd=ENV_CMD_ARP,
+            new_process_group=True,
         )  # "exit"
-        logging.debug(f"ArduPilot SITL vehicle {sysid} launched (PID {p.pid})")
+        logging.debug(f"ArduPilot SITL vehicle {sysid} launched (PID {p_ard.pid})")
+        procs["ardupilot"] = p_ard
 
         conn = create_udp_conn(
             base_port=BasePort.GCS,
@@ -223,7 +244,7 @@ class GCS(UAVMonitor):
             src_compid=190,  # estándar GCS commponent ID
         )
         logging.info(f"UAV {sysid} connected")
-        return conn
+        return VehicleRuntime(sysid=sysid, conn=conn, processes=procs)
 
     @staticmethod
     def load_config(config_path: str) -> GCSConfig:
@@ -238,6 +259,15 @@ class GCS(UAVMonitor):
             if time.time() - t0 > timeout:
                 raise RuntimeError(f"PTY not created: {path}")
             time.sleep(0.05)
+
+    def _terminate_uav_processes(self, sysid: int) -> None:
+        runtime = self.vehruntimes.get(sysid)
+        if runtime is None:
+            logging.warning(f"No runtime found for UAV {sysid}")
+            return
+
+        for name, proc in runtime.processes.items():
+            terminate_process_group(proc, name, sysid)
 
 
 def parse_arguments() -> tuple[str, int]:

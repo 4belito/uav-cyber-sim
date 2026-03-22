@@ -156,7 +156,6 @@ def start_logic(config: LogicConfig):
                         logging.error(f"Error sending RID data: {e}")
                         pass
             if logic.plan.state == State.DONE:
-                logic.send_done_msgs(cs_conn)
                 break
 
             logic.act()
@@ -164,10 +163,10 @@ def start_logic(config: LogicConfig):
     finally:
         router_stop.set()
         router.join(timeout=1)
-
-        cs_conn.close()
         ap_conn.close()
         rid_mnng.stop()
+        logic.send_done_msgs(cs_conn)
+        cs_conn.close()
         logging.info(f"Vehicle {sysid} logic stopped")
 
 
