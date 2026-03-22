@@ -10,7 +10,15 @@ ALL_PROCESSES = [
     "QGroundControl",
     "arducopter",
     "gazebo",
+    "gzserver",
+    "gzclient",
     "mavproxy",
+    "sim_vehicle.py",
+    "socat",
+    "adsb_injector.py",
+    "logic.py",
+    "gcs.py",
+    "sim.py",
     "simulator.adsb_injector",
     "simulator.logic",
     "simulator.gcs",
@@ -21,7 +29,7 @@ ALL_PROCESSES = [
 def kill_processes(victims: list[str]):
     """Kill all related processes or a given list of process names."""
     for process in victims:
-        subprocess.run(["pkill", "-9", "-f", process])
+        subprocess.run(["pkill", "-9", "-f", process], check=False)
 
 
 def clean(
