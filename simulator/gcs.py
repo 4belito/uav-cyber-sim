@@ -102,16 +102,6 @@ class GCS:
         self.pos: dict[int, GRA] = {sysid: GRA.nan() for sysid in self.sysids}
         logging.info(f" GCS {self.name} started with {self.n_uavs} UAVs")
 
-    def remove_uav(self, sysid: int):
-        """Remove vehicles from the environment."""
-        self.conns[sysid].close()
-        del self.conns[sysid]
-        del self.vehruntimes[sysid]
-        del self.sysids[self.sysids.index(sysid)]
-        self._terminate_uav_processes(sysid)
-        self.n_uavs -= 1
-        logging.info(f"UAV {sysid} removed from GCS {self.name}")
-
     ###
     def run(self):
         """Run the GCS monitoring loop until all UAVs complete their missions."""
@@ -132,21 +122,6 @@ class GCS:
             for sysid in self.sysids:
                 self._terminate_uav_processes(sysid)
 
-    def save_pos(self):
-        """Save the current global position of each UAV to their trajectory path."""
-        for sysid, pos in self.pos.items():
-            self.paths[sysid].append(pos)
-
-    def _monitor_uav(self, sysid: int):
-        logging.info(f"Monitoring UAV {sysid}")
-        try:
-            while not self.is_plan_done(sysid):
-                self.get_global_pos(sysid)
-                self.save_pos()
-        finally:
-            self._terminate_uav_processes(sysid)
-            logging.debug(f"Monitor thread finished for UAV {sysid}")
-
     def _launch_vehicles(self) -> list[VehicleRuntime]:
         """Launch ArduPilot and logic processes for each UAV."""
         with futures.ThreadPoolExecutor() as executor:
@@ -162,9 +137,9 @@ class GCS:
         # 1. ADS-B virtual cable
         # -----------------------
         socat_cmd = (
-            f"socat -d -d "
-            f"pty,raw,echo=0,link=/tmp/adsb_{sysid}_ardupilot "
-            f"pty,raw,echo=0,link=/tmp/adsb_{sysid}_injector"
+            f"socat -d -d"
+            f" pty,raw,echo=0,link=/tmp/adsb_{sysid}_ardupilot"
+            f" pty,raw,echo=0,link=/tmp/adsb_{sysid}_injector"
         )
 
         p_socat = create_process(
@@ -183,9 +158,9 @@ class GCS:
         # 2. ADS-B injector
         # -----------------------
         adsb_cmd = (
-            f"python3 -m simulator.adsb_injector "
-            f"--uart /tmp/adsb_{sysid}_injector "
-            f"--port-offset {uav_config['port_offset']}"
+            f"python3 -m simulator.adsb_injector"
+            f" --uart /tmp/adsb_{sysid}_injector"
+            f" --port-offset {uav_config['port_offset']}"
         )
 
         p_adsb = create_process(
@@ -236,6 +211,31 @@ class GCS:
         logging.info(f"UAV {sysid} connected")
         return VehicleRuntime(sysid=sysid, conn=conn, processes=procs)
 
+    def _monitor_uav(self, sysid: int):
+        logging.info(f"Monitoring UAV {sysid}")
+        try:
+            while not self._is_vehicle_plan_done(sysid):
+                self._get_global_pos(sysid)
+                self._save_pos()
+        finally:
+            self._remove_uav(sysid)
+            logging.debug(f"Monitor thread finished for UAV {sysid}")
+
+    def _save_pos(self):
+        """Save the current global position of each UAV to their trajectory path."""
+        for sysid, pos in self.pos.items():
+            self.paths[sysid].append(pos)
+
+    def _remove_uav(self, sysid: int):
+        """Remove vehicles from the environment."""
+        self.conns[sysid].close()
+        del self.conns[sysid]
+        del self.vehruntimes[sysid]
+        del self.sysids[self.sysids.index(sysid)]
+        self._terminate_uav_processes(sysid)
+        self.n_uavs -= 1
+        logging.info(f"UAV {sysid} removed from GCS {self.name}")
+
     @staticmethod
     def load_config(config_path: str) -> GCSConfig:
         """Load GCS configuration from a JSON file via command line argument."""
@@ -250,16 +250,7 @@ class GCS:
                 raise RuntimeError(f"PTY not created: {path}")
             time.sleep(0.05)
 
-    def _terminate_uav_processes(self, sysid: int) -> None:
-        runtime = self.vehruntimes.get(sysid)
-        if runtime is None:
-            logging.warning(f"No runtime found for UAV {sysid}")
-            return
-
-        for name, proc in runtime.processes.items():
-            terminate_process_group(proc, f"{name} for UAV {sysid}")
-
-    def is_plan_done(self, sysid: int) -> bool:
+    def _is_vehicle_plan_done(self, sysid: int) -> bool:
         """
         Listen for a STATUSTEXT('LOGIC_DONE') message and respond with a
         COMMAND_ACK mavlink message.
@@ -280,7 +271,16 @@ class GCS:
 
         return False
 
-    def get_global_pos(self, sysid: int):
+    def _terminate_uav_processes(self, sysid: int) -> None:
+        runtime = self.vehruntimes.get(sysid)
+        if runtime is None:
+            logging.warning(f"No runtime found for UAV {sysid}")
+            return
+
+        for name, proc in runtime.processes.items():
+            terminate_process_group(proc, f"{name} for UAV {sysid}")
+
+    def _get_global_pos(self, sysid: int):
         """Get the current global position of the specified vehicle."""
         msg = self.conns[sysid].recv_match(
             type="GLOBAL_POSITION_INT", blocking=True, timeout=0.001
