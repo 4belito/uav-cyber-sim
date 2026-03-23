@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from subprocess import Popen
 from typing import TypedDict
 
+import pymavlink.dialects.v20.ardupilotmega as mavlink
 import zmq
 from pymavlink import mavutil
 
@@ -23,10 +24,10 @@ from simulator.helpers.connections import (
     create_udp_conn,
     create_zmq_socket,
 )
-from simulator.helpers.coordinates import GRAs
+from simulator.helpers.connections.mavlink.customenums.customcmd import CustomCmd
+from simulator.helpers.coordinates import GRA, GRAs
 from simulator.helpers.processes import create_process, terminate_process_group
 from simulator.helpers.setup_log import setup_logging
-from simulator.monitor import UAVMonitor
 from simulator.params.simulation import HEARTBEAT_FREQUENCY
 
 heartbeat_event = mavutil.periodic_event(HEARTBEAT_FREQUENCY)
@@ -71,7 +72,7 @@ def main():
     gcs.run()
 
 
-class GCS(UAVMonitor):
+class GCS:
     """Ground Control Station class extending Oracle with trajectory logging."""
 
     def __init__(
@@ -89,19 +90,27 @@ class GCS(UAVMonitor):
         self.n_uavs = len(self.sysids)
         self.terminals = set(terminals)
         self.suppress = set(suppress)
-        self.vehruntimes = {
-            vehrun.sysid: vehrun for vehrun in self._launch_vehicles()
-        }  # NOTE: add self.conn =
+        self.vehruntimes = {vehrun.sysid: vehrun for vehrun in self._launch_vehicles()}
         self.conns = {sysid: vehrun.conn for sysid, vehrun in self.vehruntimes.items()}
         self.zmq_ctx = zmq.Context()
         self.orc_sock = create_zmq_socket(
             self.zmq_ctx, zmq.PUB, BasePort.GCS_ZMQ, port_offset
         )
-        # TODO: improve this (suppress monitor class)
-        super().__init__(self.conns)
-        self.paths: dict[int, GRAs] = {sysid: [] for sysid in self.sysids}
 
+        # Data structures for trajectory logging
+        self.paths: dict[int, GRAs] = {sysid: [] for sysid in self.sysids}
+        self.pos: dict[int, GRA] = {sysid: GRA.nan() for sysid in self.sysids}
         logging.info(f" GCS {self.name} started with {self.n_uavs} UAVs")
+
+    def remove_uav(self, sysid: int):
+        """Remove vehicles from the environment."""
+        self.conns[sysid].close()
+        del self.conns[sysid]
+        del self.vehruntimes[sysid]
+        del self.sysids[self.sysids.index(sysid)]
+        self._terminate_uav_processes(sysid)
+        self.n_uavs -= 1
+        logging.info(f"UAV {sysid} removed from GCS {self.name}")
 
     ###
     def run(self):
@@ -249,6 +258,38 @@ class GCS(UAVMonitor):
 
         for name, proc in runtime.processes.items():
             terminate_process_group(proc, f"{name} for UAV {sysid}")
+
+    def is_plan_done(self, sysid: int) -> bool:
+        """
+        Listen for a STATUSTEXT('LOGIC_DONE') message and respond with a
+        COMMAND_ACK mavlink message.
+        """
+        conn = self.conns[sysid]
+        msg = conn.recv_match(type="STATUSTEXT", blocking=False)
+
+        if not msg:
+            return False
+
+        if msg.text == "LOGIC_DONE":
+            conn.mav.command_ack_send(
+                command=CustomCmd.LOGIC_DONE,
+                result=mavlink.MAV_RESULT_ACCEPTED,
+            )
+            logging.info(f"✅ Vehicle {sysid} completed its mission")
+            return True
+
+        return False
+
+    def get_global_pos(self, sysid: int):
+        """Get the current global position of the specified vehicle."""
+        msg = self.conns[sysid].recv_match(
+            type="GLOBAL_POSITION_INT", blocking=True, timeout=0.001
+        )
+
+        if not msg:
+            return None
+
+        self.pos[sysid] = GRA.from_global_int(msg.lat, msg.lon, msg.relative_alt)
 
 
 def parse_arguments() -> tuple[str, int]:

@@ -4,27 +4,6 @@ from typing import Literal, Protocol, overload
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 
-MavMsgName = Literal[
-    "HEARTBEAT",
-    "PARAM_VALUE",
-    "EXTENDED_SYS_STATE",
-    "LOCAL_POSITION_NED",
-    "EKF_STATUS_REPORT",
-    "GPS_RAW_INT",
-    "SYS_STATUS",
-    "COMMAND_ACK",
-    "MISSION_ACK",
-    "STATUSTEXT",
-    "MISSION_REQUEST",
-    "MISSION_REQUEST_INT",
-    "MISSION_ITEM_REACHED",
-    "MISSION_ITEM",
-    "MISSION_COUNT",
-    "MISSION_CURRENT",
-    "GLOBAL_POSITION_INT",
-    "OPEN_DRONE_ID_BASIC_ID",
-]
-
 
 class VehicleStateP(Protocol):
     """Typed interface for accessing MAVLink messages from VehicleState."""
