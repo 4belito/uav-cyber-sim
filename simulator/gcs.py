@@ -108,7 +108,7 @@ class GCS(UAVMonitor):
         """Run the GCS monitoring loop until all UAVs complete their missions."""
         try:
             with futures.ThreadPoolExecutor() as executor:
-                executor.map(self._monitor_uav, self.sysids)
+                list(executor.map(self._monitor_uav, self.sysids))
 
             logging.info("All UAVs assigned have completed their missions")
             self.orc_sock.send_string("DONE")  # type: ignore
@@ -136,6 +136,7 @@ class GCS(UAVMonitor):
                 self.save_pos()
         finally:
             self._terminate_uav_processes(sysid)
+            logging.debug(f"Monitor thread finished for UAV {sysid}")
 
     def _launch_vehicles(self) -> list[VehicleRuntime]:
         """Launch ArduPilot and logic processes for each UAV."""

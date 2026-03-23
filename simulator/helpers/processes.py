@@ -95,7 +95,7 @@ def terminate_process_group(
         if proc.poll() is None:
             pgid = os.getpgid(proc.pid)
             os.killpg(pgid, signal.SIGTERM)
-            logging.info(f"process {name} terminated")
+            logging.debug(f"process {name} terminated")
     except ProcessLookupError:
         return
     except Exception as e:
@@ -108,7 +108,7 @@ def terminate_process_group(
         if proc.poll() is None:
             pgid = os.getpgid(proc.pid)
             os.killpg(pgid, signal.SIGKILL)
-            logging.info(f"process {name} killed")
+            logging.debug(f"process {name} killed")
     except ProcessLookupError:
         return
     except Exception as e:

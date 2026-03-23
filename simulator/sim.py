@@ -68,24 +68,6 @@ class Simulator(Generic[VehT]):
 
         setup_logging(self.oracle_name, verbose=verbose, console_output=True)
 
-    def add_vehicle(self, vehicle: SimVehicle):
-        """Add a vehicle to the simulation."""
-        vehicle.instance = self.instance
-        self.instance += 1
-        self.vehs[vehicle.sysid] = vehicle
-        if vehicle.gcs_name not in self.gcs:
-            self.gcs[vehicle.gcs_name] = SimGCS(name=vehicle.gcs_name)
-        self.gcs[vehicle.gcs_name].sysids.append(vehicle.sysid)
-        self.visualizer.add_vehicle(vehicle)
-
-    def remove_vehicle(self, sysid: int) -> bool:
-        """Remove a vehicle by system ID."""
-        if sysid in self.vehs:
-            del self.vehs[sysid]
-            self.visualizer.remove_vehicle(sysid)
-            return True
-        return False
-
     def launch(self) -> Oracle:
         """Launch vehicle instances and visualizer."""
         uav_port_offsets = self._find_uav_port_offsets()
@@ -104,6 +86,24 @@ class Simulator(Generic[VehT]):
             self.gcs,
             transmission_range=self.transmission_range,
         )
+
+    def add_vehicle(self, vehicle: SimVehicle):
+        """Add a vehicle to the simulation."""
+        vehicle.instance = self.instance
+        self.instance += 1
+        self.vehs[vehicle.sysid] = vehicle
+        if vehicle.gcs_name not in self.gcs:
+            self.gcs[vehicle.gcs_name] = SimGCS(name=vehicle.gcs_name)
+        self.gcs[vehicle.gcs_name].sysids.append(vehicle.sysid)
+        self.visualizer.add_vehicle(vehicle)
+
+    def remove_vehicle(self, sysid: int) -> bool:
+        """Remove a vehicle by system ID."""
+        if sysid in self.vehs:
+            del self.vehs[sysid]
+            self.visualizer.remove_vehicle(sysid)
+            return True
+        return False
 
     def show(self):
         """
@@ -201,7 +201,6 @@ class Simulator(Generic[VehT]):
             BasePort.ARP,
             BasePort.ARP2,
             BasePort.ARP3,
-            BasePort.GCS,
             BasePort.LOG,
             BasePort.RID_UP,
             BasePort.RID_DOWN,
@@ -210,7 +209,7 @@ class Simulator(Generic[VehT]):
         return self._find_port_offsets(base_ports, len(self.vehs))
 
     def _find_gcs_port_offsets(self) -> list[int]:
-        base_ports = [BasePort.GCS_ZMQ]
+        base_ports = [BasePort.GCS_ZMQ, BasePort.GCS]
         return self._find_port_offsets(base_ports, len(self.gcs))
 
     def _find_port_offsets(

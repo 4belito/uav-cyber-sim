@@ -87,7 +87,7 @@ def start_logic(config: LogicConfig):
         src_sysid=sysid,
         src_compid=140,
     )
-    logging.info(f"Vehicle {sysid}: Logic connection established")
+    logging.debug(f"Vehicle {sysid}: Logic connection established")
     cs_conn = create_udp_conn(
         base_port=BasePort.GCS,
         offset=port_offset,
@@ -95,7 +95,7 @@ def start_logic(config: LogicConfig):
         src_sysid=sysid,
         src_compid=140,
     )
-    logging.info(f"Vehicle {sysid}: GCS connection established")
+    logging.debug(f"Vehicle {sysid}: GCS connection established")
 
     # Shared telemetry state
     vehicle_state = VehicleState.create()
@@ -107,9 +107,9 @@ def start_logic(config: LogicConfig):
         state=vehicle_state,
         stop_event=router_stop,
     )
-    logging.info("Waiting for MAVLink client connection...")
+    logging.debug("Waiting for MAVLink client connection...")
     ap_conn.wait_heartbeat()
-    logging.info("MAVLink connection established")
+    logging.debug("MAVLink connection established")
 
     ask_msg(ap_conn, MsgID.GLOBAL_POSITION_INT, interval=RID_INTERVAL)
 
@@ -120,9 +120,9 @@ def start_logic(config: LogicConfig):
     )
 
     router.start()
-    logging.info(f"Vehicle {sysid}: MAVLink router started")
+    logging.debug(f"Vehicle {sysid}: MAVLink router started")
     hb = wait_for_vehicle_link(vehicle_state, timeout=10.0)
-    logging.info(
+    logging.debug(
         "Vehicle %s: first heartbeat received from system=%s component=%s",
         sysid,
         hb.get_srcSystem(),
@@ -156,6 +156,8 @@ def start_logic(config: LogicConfig):
                         logging.error(f"Error sending RID data: {e}")
                         pass
             if logic.plan.state == State.DONE:
+                rid_mnng.stop()
+                logic.send_done_msgs(cs_conn)
                 break
 
             logic.act()
@@ -164,8 +166,6 @@ def start_logic(config: LogicConfig):
         router_stop.set()
         router.join(timeout=1)
         ap_conn.close()
-        rid_mnng.stop()
-        logic.send_done_msgs(cs_conn)
         cs_conn.close()
         logging.info(f"Vehicle {sysid} logic stopped")
 
