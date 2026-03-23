@@ -13,7 +13,8 @@ from pymavlink import mavutil
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
 from simulator.config import BasePort
-from simulator.entities.rid import RIDData, RIDManager
+from simulator.entities.rid import RIDManager
+from simulator.entities.riddata import RIDData
 from simulator.entities.vehicle.router import MAVLinkRouter
 from simulator.entities.vehicle.state import VehicleState, VehicleStateP
 from simulator.helpers.connections import (
@@ -22,6 +23,8 @@ from simulator.helpers.connections import (
     create_udp_conn,
     send_heartbeat,
 )
+
+# from simulator.entities.adsb import rid_to_adsb_beacon
 from simulator.helpers.connections.mavlink.customenums.customcmd import CustomCmd
 from simulator.helpers.connections.mavlink.enums import DataStream, MsgID
 from simulator.helpers.connections.mavlink.streams import (

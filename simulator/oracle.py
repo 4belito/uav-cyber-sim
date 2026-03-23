@@ -7,8 +7,10 @@ Currently provides basic global position tracking and mission completion detecti
 
 from __future__ import annotations
 
+import json
 import logging
 import pickle
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -19,10 +21,10 @@ import zmq
 
 from simulator.config import DATA_PATH, BasePort, Color
 from simulator.entities import Grid, SimGCS, SimVehicle
-from simulator.entities.adsb import rid_to_adsb_beacon
 from simulator.entities.rid import RIDData
 from simulator.helpers.connections import create_zmq_sockets
 from simulator.helpers.coordinates import GRAPose
+from simulator.params.simulation import USE_NETWORK_SIM
 
 TX_LOOP_SLEEP = 0.01
 RX_LOOP_SLEEP = 0.10
@@ -69,15 +71,6 @@ class Oracle:  # UAVMonitor
             zmq_ctx, BasePort.GCS_ZMQ, zmq.SUB, gcs_port_offsets
         )
 
-        self.adsb_out_socks = create_zmq_sockets(
-            zmq_ctx,
-            BasePort.ADSB_DOWN,
-            zmq.PUB,
-            uav_port_offsets,
-        )
-
-        self.adsb_locks = {sysid: threading.Lock() for sysid in self.sysids}
-
         # Threads
         self.rid_in_threads = {
             sysid: threading.Thread(target=self.update_rid, args=(sysid,))
@@ -92,6 +85,8 @@ class Oracle:  # UAVMonitor
             name: threading.Thread(target=self.wait_gcs_done, args=(name,))
             for name in gcss
         }
+
+        self.rid_locks = {sysid: threading.Lock() for sysid in self.sysids}
 
     def run(self):
         """Run the Oracle to manage UAV connections and communication."""
@@ -160,130 +155,102 @@ class Oracle:  # UAVMonitor
             if sysid not in self._seen_in_grid:
                 time.sleep(TX_LOOP_SLEEP)
                 continue
-
             try:
                 rid = self.grid.pop_rid(sysid)
                 if rid is None:
                     time.sleep(TX_LOOP_SLEEP)
                     continue
+                # get position and velocity parameters for each drone
+                if USE_NETWORK_SIM:
+                    pos = rid.enu_pos
+                    spd = rid.speed
+                    cog = rid.cog
+                    ele = rid.ele
+                    operands = [
+                        (
+                            f"{sysid},{round(pos.x, 3)},{round(pos.y, 3)},"
+                            f"{round(pos.z, 3)},{round(spd, 3)},"
+                            f"{round(cog, 3)},{round(ele, 3)}"
+                        )
+                    ]
+                    o_sysids: list[int] = []
+                    for o_sysid in self.grid.iter_neighbors_within(
+                        sysid, rid.enu_pos, radius=None
+                    ):
+                        o_rid = self.grid.rid(o_sysid)
+                        logging.debug(
+                            f"{sysid}: {rid.enu_pos} -> {o_sysid}: {o_rid.enu_pos}"
+                        )
+                        o_sysids.append(o_sysid)
+                        o_pos = o_rid.enu_pos
+                        o_spd = o_rid.speed
+                        o_cog = o_rid.cog
+                        o_ele = o_rid.ele
+                        operands.append(
+                            (
+                                f"{o_sysid},{round(o_pos.x, 3)},{round(o_pos.y, 3)},"
+                                f"{round(o_pos.z, 3)},{round(o_spd, 3)},"
+                                f"{round(o_cog, 3)},{round(o_ele, 3)}"
+                            )
+                        )
 
-                beacon = rid_to_adsb_beacon(rid)
-
-                for o_sysid in self.grid.iter_neighbors_within(
-                    sysid, rid.enu_pos, radius=None
-                ):
-                    # IMPORTANT: do NOT send self
-                    if o_sysid == sysid:
+                    # continue if there not at least two drones to simulate
+                    if len(operands) <= 1:
                         continue
 
-                    with self.adsb_locks[o_sysid]:
-                        self.adsb_out_socks[o_sysid].send_pyobj(beacon)  # type: ignore
-
+                    # invoke a one-off uli-net-sim Remote ID broadcast simulation
+                    result = subprocess.run(
+                        [
+                            "./rid-one-off.sh",
+                            "-n",
+                            f"{sysid}",
+                            # TODO: fill in these RID fields later if needed
+                            "-t",
+                            "0",
+                            "-x",
+                            "0",
+                            "-y",
+                            "0",
+                            "-z",
+                            "0",
+                            "-v",
+                            "0",
+                            "-g",
+                            "0",
+                            "-h",
+                            "0",
+                            "-q",
+                            "--",
+                            *operands,
+                        ],
+                        cwd="/usr/uli-net-sim",
+                        capture_output=True,
+                        text=True,
+                    )
+                    logging.debug(
+                        f"rid-one-off:\noperands:\n{operands}\n\nstdout:\n{result.stdout}\n\nstderr:\n{result.stderr}"
+                    )
+                    res = {}
+                    if result.stdout != "":
+                        res = json.loads(result.stdout)
+                    for o_sysid in o_sysids:
+                        if "Serial Number" in res:
+                            if str(o_sysid) in res["Serial Number"]:
+                                if (
+                                    str(sysid)
+                                    in res["Serial Number"][str(o_sysid)]["values"]
+                                ):
+                                    with self.rid_locks[o_sysid]:
+                                        self.rid_out_socks[o_sysid].send_pyobj(rid)  # type: ignore
+                else:
+                    for o_sysid in self.grid.iter_neighbors_within(
+                        sysid, rid.enu_pos, radius=None
+                    ):
+                        with self.rid_locks[o_sysid]:
+                            self.rid_out_socks[o_sysid].send_pyobj(rid)  # type: ignore
             except Exception as e:
-                logging.error(f"ADSB retransmit error {sysid}: {e}")
-
+                logging.error(f"Retransmit error for {sysid} of type {type(e)}: {e}")
             time.sleep(TX_LOOP_SLEEP)
-
-    # def retransmit_rid(self, sysid: int):
-    #     """Retransmit Remote IDs to neighbor UAVs (one-shot per update)."""
-    #     while self.rid_in_threads[sysid].is_alive():
-    #         if sysid not in self._seen_in_grid:
-    #             time.sleep(TX_LOOP_SLEEP)
-    #             continue
-    #         try:
-    #             rid = self.grid.pop_rid(sysid)
-    #             if rid is None:
-    #                 time.sleep(TX_LOOP_SLEEP)
-    #                 continue
-    #             # get position and velocity parameters for each drone
-    #             if USE_NETWORK_SIM:
-    #                 pos = rid.enu_pos
-    #                 spd = rid.speed
-    #                 cog = rid.cog
-    #                 ele = rid.ele
-    #                 operands = [
-    #                     (
-    #                         f"{sysid},{round(pos.x, 3)},{round(pos.y, 3)},"
-    #                         f"{round(pos.z, 3)},{round(spd, 3)},"
-    #                         f"{round(cog, 3)},{round(ele, 3)}"
-    #                     )
-    #                 ]
-    #                 o_sysids: list[int] = []
-    #                 for o_sysid in self.grid.iter_neighbors_within(
-    #                     sysid, rid.enu_pos, radius=None
-    #                 ):
-    #                     o_rid = self.grid.rid(o_sysid)
-    #                     logging.debug(
-    #                         f"{sysid}: {rid.enu_pos} -> {o_sysid}: {o_rid.enu_pos}"
-    #                     )
-    #                     o_sysids.append(o_sysid)
-    #                     o_pos = o_rid.enu_pos
-    #                     o_spd = o_rid.speed
-    #                     o_cog = o_rid.cog
-    #                     o_ele = o_rid.ele
-    #                     operands.append(
-    #                         (
-    #                             f"{o_sysid},{round(o_pos.x, 3)},{round(o_pos.y, 3)},"
-    #                             f"{round(o_pos.z, 3)},{round(o_spd, 3)},"
-    #                             f"{round(o_cog, 3)},{round(o_ele, 3)}"
-    #                         )
-    #                     )
-
-    #                 # continue if there not at least two drones to simulate
-    #                 if len(operands) <= 1:
-    #                     continue
-
-    #                 # invoke a one-off uli-net-sim Remote ID broadcast simulation
-    #                 result = subprocess.run(
-    #                     [
-    #                         "./rid-one-off.sh",
-    #                         "-n",
-    #                         f"{sysid}",
-    #                         # TODO: fill in these RID fields later if needed
-    #                         "-t",
-    #                         "0",
-    #                         "-x",
-    #                         "0",
-    #                         "-y",
-    #                         "0",
-    #                         "-z",
-    #                         "0",
-    #                         "-v",
-    #                         "0",
-    #                         "-g",
-    #                         "0",
-    #                         "-h",
-    #                         "0",
-    #                         "-q",
-    #                         "--",
-    #                         *operands,
-    #                     ],
-    #                     cwd="/usr/uli-net-sim",
-    #                     capture_output=True,
-    #                     text=True,
-    #                 )
-    #                 logging.debug(
-    #                     f"rid-one-off:\noperands:\n{operands}\n\nstdout:\n{result.stdout}\n\nstderr:\n{result.stderr}"
-    #                 )
-    #                 res = {}
-    #                 if result.stdout != "":
-    #                     res = json.loads(result.stdout)
-    #                 for o_sysid in o_sysids:
-    #                     if "Serial Number" in res:
-    #                         if str(o_sysid) in res["Serial Number"]:
-    #                             if (
-    #                                 str(sysid)
-    #                                 in res["Serial Number"][str(o_sysid)]["values"]
-    #                             ):
-    #                                 self.rid_out_socks[o_sysid].send_pyobj(rid)  # type: ignore
-    #             else:
-    #                 for o_sysid in self.grid.iter_neighbors_within(
-    #                     sysid, rid.enu_pos, radius=None
-    #                 ):
-    #                     self.rid_out_socks[o_sysid].send_pyobj(rid)  # type: ignore
-    #         except Exception as e:
-    #             logging.error(f"Retransmit error for {sysid} of type {type(e)}: {e}")
-    #         time.sleep(TX_LOOP_SLEEP)
 
     @staticmethod
     def plot_trajectories(gra_origin: GRAPose):

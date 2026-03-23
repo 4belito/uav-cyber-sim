@@ -3,7 +3,7 @@
 import hashlib
 from dataclasses import dataclass
 
-from simulator.entities.rid import RIDData
+from simulator.entities.riddata import RIDData
 
 
 @dataclass

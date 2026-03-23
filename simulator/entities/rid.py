@@ -8,7 +8,6 @@ import math
 import pickle
 import threading
 import time
-from dataclasses import dataclass
 from queue import Queue
 from typing import cast
 
@@ -17,6 +16,8 @@ import zmq
 from pymavlink import mavutil
 
 from simulator.config import DATA_PATH, BasePort
+from simulator.entities.adsb import rid_to_adsb_beacon
+from simulator.entities.riddata import RIDData
 from simulator.helpers.connections import create_zmq_socket
 from simulator.helpers.coordinates import ENU, GRA
 
@@ -30,22 +31,6 @@ def parse_one(buf: bytes) -> mavlink.MAVLink_gps_raw_int_message:
         return msg
     except Exception as e:
         raise ValueError(f"Failed to parse MAVLink message: {e}")
-
-
-@dataclass
-class RIDData:
-    """Data class for Remote ID information."""
-
-    sysid: int
-    gra_pos: GRA  # global position
-    enu_pos: ENU  # m/s relative to origin
-    enu_vel: ENU  # m/s relative to uav
-    speed: float  # m/s
-    cog: float  # angle of course over ground,(0° = North, 90° = East)
-    ele: float  # elevation angle,(0° = North, 90° = Up)
-    rel_alt: float  # meters relative to takeoff
-    hdg: float  # degrees - like cog but for uav heading
-    last_update: float  # optional, handy for freshness checks
 
 
 class RIDManager:
@@ -80,6 +65,13 @@ class RIDManager:
             self._ctx, zmq.SUB, BasePort.RID_DATA, port_offset
         )
 
+        self._adsb_out_sock = create_zmq_socket(
+            self._ctx,
+            zmq.PUB,
+            BasePort.ADSB_DOWN,
+            port_offset,
+        )
+
         self._threads: list[threading.Thread] = []
 
     # --- lifecycle -------------------------------------------------------------
@@ -104,6 +96,7 @@ class RIDManager:
         self._out_sock.send_pyobj("DONE")  # type: ignore
         self._out_sock.close(linger=0)
         self._data_sock.close(linger=0)
+        self._adsb_out_sock.close(linger=0)
         self._ctx.term()
 
     # --- state update / publish -----------------------------------------------
@@ -183,6 +176,9 @@ class RIDManager:
                 rid: RIDData = sock.recv_pyobj()  # type: ignore
                 self.received_rid.put(rid)
                 logging.debug(f"Uav {self.sysid} received RID: {rid.sysid}")
+                # sent to adsb manager or other logic as needed
+                beacon = rid_to_adsb_beacon(rid)
+                self._adsb_out_sock.send_pyobj(beacon)  # type: ignore
             except zmq.Again:
                 continue
             except Exception as e:
