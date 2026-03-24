@@ -159,7 +159,7 @@ class GCS:
         # -----------------------
         adsb_cmd = (
             f"python3 -m simulator.adsb_injector"
-            f" --uart /tmp/adsb_{sysid}_injector"
+            f" --sysid {sysid}"
             f" --port-offset {uav_config['port_offset']}"
         )
 
@@ -174,9 +174,9 @@ class GCS:
         )
         logging.debug(f"ADSB injector for vehicle {sysid} launched (PID {p_adsb.pid})")
         procs["adsb"] = p_adsb
-        # -----------------------
-        # 3. ArduPilot + Proxy + Logic
-        # -----------------------
+        # -----------
+        # 3. Logic
+        # -----------
         p_logic = create_process(
             uav_config["logic_cmd"],
             after="exec bash",
@@ -189,6 +189,9 @@ class GCS:
         logging.debug(f"UAV logic for vehicle {sysid} launched (PID {p_logic.pid})")
         procs["logic"] = p_logic
 
+        # ----------------
+        # 3. ArduPilot
+        # ----------------
         p_ard = create_process(
             uav_config["ardupilot_cmd"],
             after="exec bash",
@@ -274,7 +277,7 @@ class GCS:
     def _terminate_uav_processes(self, sysid: int) -> None:
         runtime = self.vehruntimes.get(sysid)
         if runtime is None:
-            logging.warning(f"No runtime found for UAV {sysid}")
+            logging.debug(f"No runtime found for UAV {sysid}")
             return
 
         for name, proc in runtime.processes.items():

@@ -179,7 +179,6 @@ class LogicConfig(TypedDict):
     sysid: int
     gra_origin_dict: dict[str, float]
     port_offset: int
-    monitored_items: list[int]
     plan_spec: dict[str, Any]
 
 

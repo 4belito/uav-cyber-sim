@@ -13,6 +13,7 @@ It does NOT generate traffic and does NOT know about Remote ID.
 from __future__ import annotations
 
 import argparse
+import logging
 import time
 
 import zmq
@@ -23,6 +24,7 @@ from simulator.helpers.connections import create_zmq_socket
 from simulator.helpers.connections.mavlink.conn import connect, send_heartbeat
 from simulator.helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from simulator.helpers.connections.mavlink.enums import Autopilot, State, Type
+from simulator.helpers.setup_log import setup_logging
 
 # =============================================================================
 # MAVLink ADS-B constants
@@ -48,8 +50,8 @@ ADSB_FLAGS_VERTICAL_VELOCITY_VALID = 128
 class ADSBInjector:
     """ADS-B device adapter: ZMQ ADSBBeacon -> MAVLink ADSB_VEHICLE -> serial."""
 
-    def __init__(self, uart: str, baudrate: int, port_offset: int):
-        self.uart = uart
+    def __init__(self, sysid: int, baudrate: int, port_offset: int):
+        self.uart = f"/tmp/adsb_{sysid}_injector"
         self.baudrate = baudrate
         self.port_offset = port_offset
 
@@ -71,7 +73,7 @@ class ADSBInjector:
 
     def connect(self) -> None:
         """Open serial connection to ArduPilot."""
-        # print(f"[ADSB] Connecting to {self.uart} @ {self.baudrate} baud")
+        logging.debug(f"[ADSB] Connecting to {self.uart} @ {self.baudrate} baud")
 
         self.conn = connect(
             self.uart,
@@ -80,7 +82,7 @@ class ADSBInjector:
             src_compid=156,  # MAV_COMP_ID_ADSB
         )
         self.mav = self.conn.mav
-        # print("[ADSB] Connected")
+        logging.debug("[ADSB] Connected")
 
     def close(self) -> None:
         """Clean up connections."""
@@ -143,9 +145,10 @@ def main() -> None:
     """Run the ADS-B injector."""
     parser = argparse.ArgumentParser(description="ADS-B injector (Oracle-fed)")
     parser.add_argument(
-        "--uart",
+        "--sysid",
+        type=int,
         required=True,
-        help="UART device (e.g. /tmp/adsb_<sysid>_injector)",
+        help="System ID for the ADS-B injector",
     )
     parser.add_argument(
         "--baud",
@@ -160,10 +163,21 @@ def main() -> None:
         help="Port offset used for ZMQ ADSB_DOWN socket",
     )
 
+    parser.add_argument(
+        "--verbose",
+        type=int,
+        required=False,
+        help="verbosity level (e.g. 0,1,2,3)",
+    )
+
     args = parser.parse_args()
 
+    setup_logging(
+        f"adsb_injector_{args.sysid}", verbose=args.verbose, console_output=True
+    )
+
     injector = ADSBInjector(
-        uart=args.uart,
+        sysid=args.sysid,
         baudrate=args.baud,
         port_offset=args.port_offset,
     )
@@ -187,7 +201,7 @@ def main() -> None:
                 pass
 
     except KeyboardInterrupt:
-        print("\n[ADSB] Stopping")
+        logging.debug("\n[ADSB] Stopping")
 
     finally:
         injector.close()

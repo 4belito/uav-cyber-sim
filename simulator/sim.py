@@ -64,6 +64,7 @@ class Simulator(Generic[VehT]):
             f'python3 -m simulator.gcs --config-path "{config_path}" '
             f"--verbose {verbose}"
         )
+
         self.transmission_range = transmission_range  # meters
 
         setup_logging(self.oracle_name, verbose=verbose, console_output=True)
@@ -194,8 +195,6 @@ class Simulator(Generic[VehT]):
             with config_path.open("w") as f:
                 json.dump(gcs_config, f, indent=2)
 
-    # TODO: Check why BasePort.GCS is in find_uav_port_offset
-    # and no in find_gcs_port_offset
     def _find_uav_port_offsets(self):
         base_ports = [
             BasePort.ARP,
