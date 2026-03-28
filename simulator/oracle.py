@@ -20,11 +20,12 @@ import matplotlib.pyplot as plt
 import zmq
 
 from simulator.config import DATA_PATH, BasePort, Color
-from simulator.entities import Grid, SimGCS, SimVehicle
-from simulator.entities.rid import RIDData
+from simulator.entities import SimGCS, SimVehicle
+from simulator.entities.riddata import RIDData
 from simulator.helpers.connections import create_zmq_sockets
 from simulator.helpers.coordinates import GRAPose
 from simulator.params.simulation import USE_NETWORK_SIM
+from simulator.runtime.grid import Grid
 
 TX_LOOP_SLEEP = 0.01
 RX_LOOP_SLEEP = 0.10

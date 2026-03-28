@@ -5,7 +5,18 @@ import os
 import platform
 import signal
 import time
+from enum import StrEnum
 from subprocess import DEVNULL, Popen
+
+
+class SimProcess(StrEnum):
+    """Enum for different types of simulation processes."""
+
+    ARDUPILOT = "ardupilot"
+    LOGIC = "logic"
+    GCS = "gcs"
+    ADSB_SOCAT = "adsb_socat"
+    ADSB_INJECTOR = "adsb_injector"
 
 
 def create_process(

@@ -1,13 +1,13 @@
 """
-Launches multi-UAV simulation with ArduPilot SITL, logic, proxies,
-and optional visualization.
+Launches multi-UAV simulation with ArduPilot SITL, logic, and optional
+visualization.
 """
 
 import json
 import logging
 import socket
 from pathlib import Path
-from typing import Generic, Literal
+from typing import Generic
 
 from simulator.config import (
     ARDU_LOGS_PATH,
@@ -17,15 +17,12 @@ from simulator.config import (
     VEH_PARAMS_PATH,
     BasePort,
 )
+from simulator.configs.gcs import UAVGCSConfig
 from simulator.entities import SimGCS, SimVehicle, VehT
-from simulator.helpers.processes import create_process
+from simulator.helpers.processes import SimProcess, create_process
 from simulator.helpers.setup_log import setup_logging
 from simulator.oracle import Oracle
 from simulator.visualizer import Visualizer
-
-SimProcess = Literal[
-    "launcher", "veh", "logic", "proxy", "gcs", "adsb_socat", "adsb_injector"
-]
 
 
 class Simulator(Generic[VehT]):
@@ -40,7 +37,10 @@ class Simulator(Generic[VehT]):
         self,
         visualizer: Visualizer[VehT],
         terminals: list[SimProcess] = [],
-        supress_output: list[SimProcess] = ["launcher", "adsb_socat"],
+        supress_output: list[SimProcess] = [
+            SimProcess.ARDUPILOT,
+            SimProcess.ADSB_SOCAT,
+        ],
         verbose: int = 1,
         # oracle
         transmission_range: int = 100,  # meters for inter-UAV communication
@@ -112,8 +112,8 @@ class Simulator(Generic[VehT]):
             p = create_process(
                 gcs_cmd,
                 after="exec bash",
-                visible="gcs" in self.terminals,
-                suppress_output="gcs" in self.suppress,
+                visible=SimProcess.GCS in self.terminals,
+                suppress_output=SimProcess.GCS in self.suppress,
                 title=f"GCS: {gcs_name}",
                 env_cmd=ENV_CMD_PYT,
             )  # "exit"
@@ -138,57 +138,10 @@ class Simulator(Generic[VehT]):
 
     def _save_gcs_configs(self, folder_name: Path):
         for gcs_name, gcs in self.gcs.items():
-            uavs: list[dict[str, int | str]] = []
-            for sysid in gcs.sysids:
-                port_offset = self.vehs[sysid].port_offset
-                assert port_offset is not None, f"Port offset for UAV {sysid} not set"
-                inst = int(port_offset / 10)  # self.vehs[sysid].instance  #
-                assert inst is not None, f"Instance for UAV {sysid} not set"
-                param_file = ARDU_LOGS_PATH / f"uav_{sysid}"
-                param_file.mkdir(parents=True, exist_ok=True)
-                sitl_args = (
-                    f"--serial5=uart:/tmp/adsb_{sysid}_ardupilot:57600"
-                    f"{self.visualizer.add_sitl_args()}"
-                )
-                logic_config_path = str(DATA_PATH / f"logic_config_{sysid}.json")
-                uavs.append(
-                    {
-                        "sysid": sysid,
-                        "port_offset": port_offset,
-                        "ardupilot_cmd": (
-                            f"python3 {ARDUPILOT_VEHICLE_PATH}"
-                            f" -v ArduCopter -I{inst} --sysid {sysid} --no-rebuild"
-                            f' -A "{sitl_args}"'
-                            f" --use-dir={param_file}"
-                            f" --add-param-file {VEH_PARAMS_PATH}"
-                            f" --no-mavproxy"
-                            f" --port-offset={port_offset}"
-                            + (" --terminal" if "veh" in self.terminals else "")
-                            + self.visualizer.add_vehicle_cmd(self.vehs[sysid])
-                        ),
-                        "logic_cmd": (
-                            f"python3 -m simulator.logic"
-                            f' --config-path "{logic_config_path}"'
-                            f" --verbose {self.verbose}"
-                        ),
-                        "socat_cmd": (
-                            f"socat -d -d"
-                            f" pty,raw,echo=0,link=/tmp/adsb_{sysid}_ardupilot"
-                            f" pty,raw,echo=0,link=/tmp/adsb_{sysid}_injector"
-                        ),
-                        "adsb_cmd": (
-                            f"python3 -m simulator.adsb_injector"
-                            f" --sysid {sysid}"
-                            f" --port-offset {port_offset}"
-                            f" --verbose {self.verbose}"
-                        ),
-                    }
-                )
-
             gcs_config = {
                 "name": gcs_name,
                 "port_offset": gcs.port_offset,
-                "uavs": uavs,
+                "uavs": [self._build_uav_config(sysid) for sysid in gcs.sysids],
                 "terminals": list(self.terminals),
                 "suppress": list(self.suppress),
             }
@@ -202,7 +155,6 @@ class Simulator(Generic[VehT]):
             BasePort.ARP,
             BasePort.ARP2,
             BasePort.ARP3,
-            BasePort.LOG,
             BasePort.RID_UP,
             BasePort.RID_DOWN,
             BasePort.RID_DATA,
@@ -236,3 +188,52 @@ class Simulator(Generic[VehT]):
                 offsets.append(cur_offset)
             cur_offset += unit_offset
         return offsets
+
+    def _build_uav_config(self, sysid: int) -> UAVGCSConfig:
+        veh = self.vehs[sysid]
+
+        port_offset = veh.port_offset_required
+        inst = int(port_offset / 10)
+
+        param_file = ARDU_LOGS_PATH / f"uav_{sysid}"
+        param_file.mkdir(parents=True, exist_ok=True)
+
+        sitl_args = (
+            f"--serial5=uart:/tmp/adsb_{sysid}_ardupilot:57600"
+            f"{self.visualizer.add_sitl_args()}"
+        )
+
+        logic_config_path = str(DATA_PATH / f"logic_config_{sysid}.json")
+
+        uav_config: UAVGCSConfig = {
+            "sysid": sysid,
+            "port_offset": port_offset,
+            "ardupilot_cmd": (
+                f"python3 {ARDUPILOT_VEHICLE_PATH}"
+                f" -v ArduCopter -I{inst} --sysid {sysid} --no-rebuild"
+                f' -A "{sitl_args}"'
+                f" --use-dir={param_file}"
+                f" --add-param-file {VEH_PARAMS_PATH}"
+                f" --no-mavproxy"
+                f" --port-offset={port_offset}"
+                + (" --terminal" if "veh" in self.terminals else "")
+                + self.visualizer.add_vehicle_cmd(veh)
+            ),
+            "logic_cmd": (
+                f"python3 -m simulator.logic"
+                f' --config-path "{logic_config_path}"'
+                f" --verbose {self.verbose}"
+            ),
+            "socat_cmd": (
+                f"socat -d -d"
+                f" pty,raw,echo=0,link=/tmp/adsb_{sysid}_ardupilot"
+                f" pty,raw,echo=0,link=/tmp/adsb_{sysid}_injector"
+            ),
+            "adsb_cmd": (
+                f"python3 -m simulator.adsb_injector"
+                f" --sysid {sysid}"
+                f" --port-offset {port_offset}"
+                f" --verbose {self.verbose}"
+            ),
+        }
+        return uav_config

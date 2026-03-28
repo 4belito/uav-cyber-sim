@@ -52,7 +52,6 @@ class BasePort(IntEnum):
     ARP2 = 5762  # ArduPilot SERIAL1 (TCP: auto-opened by SITL)
     ARP3 = 5763  # ArduPilot SERIAL2 (TCP: auto-opened by SITL)
     QGC = 14550  # QGroundControl UDP telemetry (SITL -> QGC)
-    LOG = 14551  # Vehicle(TCP: PROXY->LOGIC)
     GCS = 14555  # Ground Control Station(UDP: LOGIC->GCS)
     RID_UP = 14556  # Remote ID (LOGIC->ORC)
     RID_DOWN = 14557  # Remote ID (ORC->LOGIC)

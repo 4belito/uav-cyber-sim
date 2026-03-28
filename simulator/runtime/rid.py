@@ -16,10 +16,10 @@ import zmq
 from pymavlink import mavutil
 
 from simulator.config import DATA_PATH, BasePort
-from simulator.entities.adsb import rid_to_adsb_beacon
 from simulator.entities.riddata import RIDData
 from simulator.helpers.connections import create_zmq_socket
 from simulator.helpers.coordinates import ENU, GRA
+from simulator.runtime.vehicle.adsb_conversion import rid_to_adsb_beacon
 
 mav = mavutil.mavlink.MAVLink(None)
 

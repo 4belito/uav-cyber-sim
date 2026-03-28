@@ -7,16 +7,13 @@ import json
 import logging
 import threading
 import time
-from typing import Any, TypedDict
 
 from pymavlink import mavutil
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
 from simulator.config import BasePort
-from simulator.entities.rid import RIDManager
+from simulator.configs import LogicConfig
 from simulator.entities.riddata import RIDData
-from simulator.entities.vehicle.router import MAVLinkRouter
-from simulator.entities.vehicle.state import VehicleState, VehicleStateP
 from simulator.helpers.connections import (
     MAVConnection,
     create_tcp_conn,
@@ -39,6 +36,9 @@ from simulator.params.simulation import (
     REMOTE_ID_FREQUENCY,
 )
 from simulator.planner import Action, Plan, PlanSpec, State, Step
+from simulator.runtime.rid import RIDManager
+from simulator.runtime.vehicle.router import MAVLinkRouter
+from simulator.runtime.vehicle.state import VehicleState, VehicleStateP
 
 DATA_STREAM_IDS = [
     DataStream.RAW_SENSORS,
@@ -173,15 +173,6 @@ def start_logic(config: LogicConfig):
         logging.info(f"Vehicle {sysid} logic stopped")
 
 
-class LogicConfig(TypedDict):
-    """UAV logic configuration."""
-
-    sysid: int
-    gra_origin_dict: dict[str, float]
-    port_offset: int
-    plan_spec: dict[str, Any]
-
-
 class VehicleLogic:
     """Handles the logic for executing a UAV's mission plan."""
 
@@ -216,8 +207,7 @@ class VehicleLogic:
     def send_done_msgs(self, cs_conn: MAVConnection) -> None:
         """Notify the GCS that the mission is done."""
         done_msg = mavlink.MAVLink_statustext_message(severity=6, text=b"LOGIC_DONE")
-        logging.info(f"Proxy ← Logic {self.sysid}: Sending LOGIC_DONE")
-        self.conn.mav.send(done_msg)  # This is tcp connection, no ack need it.
+        logging.info(f"GCS ← Logic {self.sysid}: Sending LOGIC_DONE")
         self.send_msg_until_ack(cs_conn, done_msg, CustomCmd.LOGIC_DONE)
 
     def send_msg_until_ack(

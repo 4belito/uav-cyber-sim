@@ -10,58 +10,27 @@ import os
 import pickle
 import time
 from concurrent import futures
-from dataclasses import dataclass, field
 from subprocess import Popen
-from typing import TypedDict
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 import zmq
 from pymavlink import mavutil
 
 from simulator.config import DATA_PATH, ENV_CMD_ARP, ENV_CMD_PYT, BasePort
-from simulator.helpers.connections import (
-    MAVConnection,
-    create_udp_conn,
-    create_zmq_socket,
-)
+from simulator.configs import GCSConfig, UAVGCSConfig
+from simulator.helpers.connections import create_udp_conn, create_zmq_socket
 from simulator.helpers.connections.mavlink.customenums.customcmd import CustomCmd
 from simulator.helpers.coordinates import GRA, GRAs
-from simulator.helpers.processes import create_process, terminate_process_group
+from simulator.helpers.processes import (
+    SimProcess,
+    create_process,
+    terminate_process_group,
+)
 from simulator.helpers.setup_log import setup_logging
 from simulator.params.simulation import HEARTBEAT_FREQUENCY
+from simulator.runtime.gcs_runtime import VehicleRuntime
 
 heartbeat_event = mavutil.periodic_event(HEARTBEAT_FREQUENCY)
-
-
-@dataclass
-class VehicleRuntime:
-    """Runtime object for a vehicle."""
-
-    sysid: int
-    conn: MAVConnection
-    processes: dict[str, Popen[bytes]] = field(default_factory=dict[str, Popen[bytes]])
-
-
-class UAVGCSConfig(TypedDict):
-    """TypedDict for UAV configuration in the GCS."""
-
-    sysid: int
-    port_offset: int
-    ardupilot_cmd: str
-    logic_cmd: str
-    proxy_cmd: str
-    socat_cmd: str
-    adsb_cmd: str
-
-
-class GCSConfig(TypedDict):
-    """Ground Control Station (GCS) Configuration."""
-
-    name: str
-    port_offset: int
-    uavs: list[UAVGCSConfig]
-    terminals: list[str]
-    suppress: list[str]
 
 
 def main():
@@ -82,8 +51,8 @@ class GCS:
         uavs: list[UAVGCSConfig],
         name: str,
         port_offset: int,
-        terminals: list[str],
-        suppress: list[str],
+        terminals: list[SimProcess],
+        suppress: list[SimProcess],
     ) -> None:
         # Configure logging for this GCS process
         self.name = name
@@ -134,20 +103,20 @@ class GCS:
         uav_config = self.uavs[i]
         sysid = uav_config["sysid"]
 
-        procs: dict[str, Popen[bytes]] = {}
+        procs: dict[SimProcess, Popen[bytes]] = {}
         # -----------------------
         # 1. ADS-B virtual cable
         # -----------------------
         p_socat = create_process(
             uav_config["socat_cmd"],
             after="exec bash",
-            visible="adsb_socat" in self.terminals,
-            suppress_output="adsb_socat" in self.suppress,
+            visible=SimProcess.ADSB_SOCAT in self.terminals,
+            suppress_output=SimProcess.ADSB_SOCAT in self.suppress,
             title=f"ADSB socat: Vehicle {sysid}",
             new_process_group=True,
         )
         logging.debug(f"ADSB socat for vehicle {sysid} launched (PID {p_socat.pid})")
-        procs["socat"] = p_socat
+        procs[SimProcess.ADSB_SOCAT] = p_socat
         self._wait_for_pty(f"/tmp/adsb_{sysid}_injector")
 
         # -----------------------
@@ -157,28 +126,28 @@ class GCS:
         p_adsb = create_process(
             uav_config["adsb_cmd"],
             after="exec bash",
-            visible="adsb_injector" in self.terminals,
-            suppress_output="adsb_injector" in self.suppress,
+            visible=SimProcess.ADSB_INJECTOR in self.terminals,
+            suppress_output=SimProcess.ADSB_INJECTOR in self.suppress,
             title=f"ADSB injector: Vehicle {sysid}",
             env_cmd=ENV_CMD_PYT,
             new_process_group=True,
         )
         logging.debug(f"ADSB injector for vehicle {sysid} launched (PID {p_adsb.pid})")
-        procs["adsb"] = p_adsb
+        procs[SimProcess.ADSB_INJECTOR] = p_adsb
         # -----------
         # 3. Logic
         # -----------
         p_logic = create_process(
             uav_config["logic_cmd"],
             after="exec bash",
-            visible="logic" in self.terminals,
-            suppress_output="logic" in self.suppress,
+            visible=SimProcess.LOGIC in self.terminals,
+            suppress_output=SimProcess.LOGIC in self.suppress,
             title=f"UAV logic: Vehicle {sysid}",
             env_cmd=ENV_CMD_PYT,
             new_process_group=True,
         )  # "exit"
         logging.debug(f"UAV logic for vehicle {sysid} launched (PID {p_logic.pid})")
-        procs["logic"] = p_logic
+        procs[SimProcess.LOGIC] = p_logic
 
         # ----------------
         # 3. ArduPilot
@@ -186,14 +155,14 @@ class GCS:
         p_ard = create_process(
             uav_config["ardupilot_cmd"],
             after="exec bash",
-            visible="launcher" in self.terminals,
-            suppress_output="launcher" in self.suppress,
+            visible=SimProcess.ARDUPILOT in self.terminals,
+            suppress_output=SimProcess.ARDUPILOT in self.suppress,
             title=f"ArduPilot SITL Launcher: Vehicle {sysid}",
             env_cmd=ENV_CMD_ARP,
             new_process_group=True,
         )  # "exit"
         logging.debug(f"ArduPilot SITL vehicle {sysid} launched (PID {p_ard.pid})")
-        procs["ardupilot"] = p_ard
+        procs[SimProcess.ARDUPILOT] = p_ard
 
         ## create MAVLink connection to the SITL instance for this UAV
         conn = create_udp_conn(
