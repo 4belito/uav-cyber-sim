@@ -7,7 +7,7 @@ import json
 import logging
 import socket
 from pathlib import Path
-from typing import Callable, Generic, Literal
+from typing import Generic, Literal
 
 from simulator.config import (
     ARDU_LOGS_PATH,
@@ -53,18 +53,6 @@ class Simulator(Generic[VehT]):
         self.gcs: dict[str, SimGCS] = {}
         self.verbose = verbose
         self.instance = 0
-
-        self.logic_cmd: Callable[[int, str, int], str] = (
-            lambda _, config_path, verbose: (
-                f'python3 -m simulator.logic --config-path "{config_path}" '
-                f"--verbose {verbose} "
-            )
-        )
-        self.gcs_cmd: Callable[[str, str, int], str] = lambda _, config_path, verbose: (
-            f'python3 -m simulator.gcs --config-path "{config_path}" '
-            f"--verbose {verbose}"
-        )
-
         self.transmission_range = transmission_range  # meters
 
         setup_logging(self.oracle_name, verbose=verbose, console_output=True)
@@ -116,8 +104,10 @@ class Simulator(Generic[VehT]):
     def _launch_gcses(self):
         """Launch each GCS process and create an Oracle instance."""
         for gcs_name in self.gcs:
-            gcs_cmd = self.gcs_cmd(
-                gcs_name, str(DATA_PATH / f"gcs_config_{gcs_name}.json"), self.verbose
+            gcs_config_path = DATA_PATH / f"gcs_config_{gcs_name}.json"
+            gcs_cmd = (
+                f'python3 -m simulator.gcs --config-path "{gcs_config_path}"'
+                f" --verbose {self.verbose}"
             )
             p = create_process(
                 gcs_cmd,
@@ -160,6 +150,7 @@ class Simulator(Generic[VehT]):
                     f"--serial5=uart:/tmp/adsb_{sysid}_ardupilot:57600"
                     f"{self.visualizer.add_sitl_args()}"
                 )
+                logic_config_path = str(DATA_PATH / f"logic_config_{sysid}.json")
                 uavs.append(
                     {
                         "sysid": sysid,
@@ -175,10 +166,20 @@ class Simulator(Generic[VehT]):
                             + (" --terminal" if "veh" in self.terminals else "")
                             + self.visualizer.add_vehicle_cmd(self.vehs[sysid])
                         ),
-                        "logic_cmd": self.logic_cmd(
-                            sysid,
-                            str(DATA_PATH / f"logic_config_{sysid}.json"),
-                            self.verbose,
+                        "logic_cmd": (
+                            f"python3 -m simulator.logic"
+                            f' --config-path "{logic_config_path}"'
+                            f" --verbose {self.verbose}"
+                        ),
+                        "socat_cmd": (
+                            f"socat -d -d"
+                            f" pty,raw,echo=0,link=/tmp/adsb_{sysid}_ardupilot"
+                            f" pty,raw,echo=0,link=/tmp/adsb_{sysid}_injector"
+                        ),
+                        "adsb_cmd": (
+                            f"python3 -m simulator.adsb_injector"
+                            f" --sysid {sysid}"
+                            f" --port-offset {port_offset}"
                         ),
                     }
                 )

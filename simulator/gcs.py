@@ -50,6 +50,8 @@ class UAVGCSConfig(TypedDict):
     ardupilot_cmd: str
     logic_cmd: str
     proxy_cmd: str
+    socat_cmd: str
+    adsb_cmd: str
 
 
 class GCSConfig(TypedDict):
@@ -136,14 +138,8 @@ class GCS:
         # -----------------------
         # 1. ADS-B virtual cable
         # -----------------------
-        socat_cmd = (
-            f"socat -d -d"
-            f" pty,raw,echo=0,link=/tmp/adsb_{sysid}_ardupilot"
-            f" pty,raw,echo=0,link=/tmp/adsb_{sysid}_injector"
-        )
-
         p_socat = create_process(
-            socat_cmd,
+            uav_config["socat_cmd"],
             after="exec bash",
             visible="adsb_socat" in self.terminals,
             suppress_output="adsb_socat" in self.suppress,
@@ -157,14 +153,9 @@ class GCS:
         # -----------------------
         # 2. ADS-B injector
         # -----------------------
-        adsb_cmd = (
-            f"python3 -m simulator.adsb_injector"
-            f" --sysid {sysid}"
-            f" --port-offset {uav_config['port_offset']}"
-        )
 
         p_adsb = create_process(
-            adsb_cmd,
+            uav_config["adsb_cmd"],
             after="exec bash",
             visible="adsb_injector" in self.terminals,
             suppress_output="adsb_injector" in self.suppress,
