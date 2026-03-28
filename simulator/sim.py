@@ -40,7 +40,7 @@ class Simulator(Generic[VehT]):
         self,
         visualizer: Visualizer[VehT],
         terminals: list[SimProcess] = [],
-        supress_output: list[SimProcess] = ["launcher", "adsb_socat", "adsb_injector"],
+        supress_output: list[SimProcess] = ["launcher", "adsb_socat"],
         verbose: int = 1,
         # oracle
         transmission_range: int = 100,  # meters for inter-UAV communication
@@ -180,6 +180,7 @@ class Simulator(Generic[VehT]):
                             f"python3 -m simulator.adsb_injector"
                             f" --sysid {sysid}"
                             f" --port-offset {port_offset}"
+                            f" --verbose {self.verbose}"
                         ),
                     }
                 )

@@ -195,6 +195,7 @@ class GCS:
         logging.debug(f"ArduPilot SITL vehicle {sysid} launched (PID {p_ard.pid})")
         procs["ardupilot"] = p_ard
 
+        ## create MAVLink connection to the SITL instance for this UAV
         conn = create_udp_conn(
             base_port=BasePort.GCS,
             offset=uav_config["port_offset"],
