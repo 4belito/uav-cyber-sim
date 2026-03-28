@@ -2,7 +2,7 @@
 
 from .cleanup import ALL_PROCESSES, clean, kill_processes
 from .codegen import write_init_file
-from .processes import SimProcess, create_process
+from .processes import SimProcess, create_process, terminate_process_group
 from .setup_log import setup_logging
 
 __all__ = [
@@ -13,4 +13,5 @@ __all__ = [
     "create_process",
     "ALL_PROCESSES",
     "SimProcess",
+    "terminate_process_group",
 ]

@@ -37,7 +37,7 @@ class Simulator(Generic[VehT]):
         self,
         visualizer: Visualizer[VehT],
         terminals: list[SimProcess] = [],
-        supress_output: list[SimProcess] = [
+        suppress_output: list[SimProcess] = [
             SimProcess.ARDUPILOT,
             SimProcess.ADSB_SOCAT,
         ],
@@ -48,7 +48,7 @@ class Simulator(Generic[VehT]):
         self.visualizer = visualizer
         self.gra_origin = self.visualizer.gra_origin
         self.terminals = set(terminals)
-        self.suppress = set(supress_output)
+        self.suppress = set(suppress_output)
         self.vehs: dict[int, SimVehicle] = {}
         self.gcs: dict[str, SimGCS] = {}
         self.verbose = verbose
