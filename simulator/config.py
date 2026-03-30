@@ -55,8 +55,7 @@ class BasePort(IntEnum):
     GCS = 14555  # Ground Control Station(UDP: LOGIC->GCS)
     RID_UP = 14556  # Remote ID (LOGIC->ORC)
     RID_DOWN = 14557  # Remote ID (ORC->LOGIC)
-    RID_DATA = 14558  # Remote ID (PROXY->LOGIC) internal
-    ADSB_DOWN = 14559  # ORC -> ADSB injector (per UAV)
+    ADSB_DOWN = 14558  # ORC -> ADSB injector (per UAV)
 
     # ONE-PER-GCS PORTS
     GCS_ZMQ = 30000  # GCS ZMQ (GCS->ORC)

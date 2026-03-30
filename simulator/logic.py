@@ -110,7 +110,6 @@ def start_logic(config: LogicConfig):
         state=vehicle_state,
         stop_event=router_stop,
     )
-    logging.debug("Waiting for MAVLink client connection...")
     ap_conn.wait_heartbeat()
     logging.debug("MAVLink connection established")
 

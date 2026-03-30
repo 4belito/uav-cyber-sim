@@ -157,7 +157,6 @@ class Simulator(Generic[VehT]):
             BasePort.ARP3,
             BasePort.RID_UP,
             BasePort.RID_DOWN,
-            BasePort.RID_DATA,
         ]
         return self._find_port_offsets(base_ports, len(self.vehs))
 

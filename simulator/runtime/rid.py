@@ -11,26 +11,13 @@ import time
 from queue import Queue
 from typing import cast
 
-import pymavlink.dialects.v20.ardupilotmega as mavlink
 import zmq
-from pymavlink import mavutil
 
 from simulator.config import DATA_PATH, BasePort
 from simulator.entities.riddata import RIDData
 from simulator.helpers.connections import create_zmq_socket
 from simulator.helpers.coordinates import ENU, GRA
 from simulator.runtime.vehicle.adsb_conversion import rid_to_adsb_beacon
-
-mav = mavutil.mavlink.MAVLink(None)
-
-
-def parse_one(buf: bytes) -> mavlink.MAVLink_gps_raw_int_message:
-    """Parse a single MAVLink message from a byte buffer."""
-    msg: mavlink.MAVLink_gps_raw_int_message = mav.parse_buffer(buf)[0]  # type: ignore
-    try:
-        return msg
-    except Exception as e:
-        raise ValueError(f"Failed to parse MAVLink message: {e}")
 
 
 class RIDManager:
@@ -39,7 +26,7 @@ class RIDManager:
     def __init__(self, sysid: int, port_offset: int, gra_origin: GRA) -> None:
         self.gra_origin = gra_origin
         self.sysid = sysid
-        self.data: RIDData
+        self.data: RIDData | None = None
         self.received_rid: Queue[RIDData] = Queue()
         self._lock = threading.Lock()  # ???
         self._stop = threading.Event()
@@ -61,9 +48,6 @@ class RIDManager:
         self._out_sock = create_zmq_socket(
             self._ctx, zmq.PUB, BasePort.RID_UP, port_offset
         )
-        self._data_sock = create_zmq_socket(
-            self._ctx, zmq.SUB, BasePort.RID_DATA, port_offset
-        )
 
         self._adsb_out_sock = create_zmq_socket(
             self._ctx,
@@ -79,9 +63,6 @@ class RIDManager:
     def start(self) -> None:
         """Start background collectors."""
         self._threads = [
-            threading.Thread(
-                target=self._collect, args=(self._data_sock,), daemon=True
-            ),
             threading.Thread(target=self._receive, args=(self._in_sock,), daemon=True),
         ]
         for t in self._threads:
@@ -95,7 +76,6 @@ class RIDManager:
         self._in_sock.close(linger=0)
         self._out_sock.send_pyobj("DONE")  # type: ignore
         self._out_sock.close(linger=0)
-        self._data_sock.close(linger=0)
         self._adsb_out_sock.close(linger=0)
         self._ctx.term()
 
@@ -136,7 +116,7 @@ class RIDManager:
     def publish(self) -> None:
         """Send current RID snapshot (pyobj) to oracle."""
         with self._lock:
-            if self.pending:
+            if self.pending and self.data:
                 if self.fake_pos and self.sysid == 255:
                     send_data = copy.copy(self.data)
                     send_data.enu_pos = self.fake_pos
@@ -149,26 +129,6 @@ class RIDManager:
                 self.pending = False
 
     # --- background loops ------------------------------------------------------
-
-    def _collect(self, sock: zmq.Socket[bytes]) -> None:
-        """Collect RAW data from from the rid_data socket."""
-        while not self._stop.is_set():
-            try:
-                buf = sock.recv()
-                msg = parse_one(buf)
-                # if msg and msg.get_type() == "GPS_RAW_INT" and msg.fix_type > 2:
-                if (
-                    msg
-                    and msg.get_type() == "GLOBAL_POSITION_INT"
-                    and (msg.lat != 0 or msg.lon != 0)
-                ):
-                    # logging.debug(f"RID({self.sysid}) collect: {msg.to_dict()}")
-                    self.update(msg.to_dict())
-            except zmq.Again:
-                continue
-            except Exception as e:
-                logging.debug(f"RID collector noise: {e}")
-
     def _receive(self, sock: zmq.Socket[bytes]) -> None:
         """Receive the RID data retransmitted  from near uavs."""
         while not self._stop.is_set():
