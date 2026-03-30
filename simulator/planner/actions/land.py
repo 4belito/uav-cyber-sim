@@ -28,7 +28,7 @@ class Land(Step):
 
     def exec_fn(self) -> None:
         """Send a MAVLink command to initiate landing."""
-        self.conn.mav.command_long_send(
+        msg = self.conn.mav.command_long_encode(
             self.conn.target_system,
             self.conn.target_component,
             CmdNav.LAND,
@@ -41,8 +41,15 @@ class Land(Step):
             0,
             0,
         )
-        ask_msg(self.conn, MsgID.EXTENDED_SYS_STATE, interval=self.msg_land_interval)
-        ask_msg(self.conn, MsgID.GLOBAL_POSITION_INT, interval=self.msg_pos_interval)
+        self.mav_manager.send(msg)
+        msg = ask_msg(
+            self.conn, MsgID.EXTENDED_SYS_STATE, interval=self.msg_land_interval
+        )
+        self.mav_manager.send(msg)
+        msg = ask_msg(
+            self.conn, MsgID.GLOBAL_POSITION_INT, interval=self.msg_pos_interval
+        )
+        self.mav_manager.send(msg)
 
     def check_fn(self) -> bool:
         """Check if the UAV has landed using EXTENDED_SYS_STATE."""
@@ -55,9 +62,11 @@ class Land(Step):
             )
         on_ground = bool(msg and msg.landed_state == LandState.ON_GROUND)
         if on_ground:
-            stop_msg(self.conn, MsgID.EXTENDED_SYS_STATE)
+            msg = stop_msg(self.conn, MsgID.EXTENDED_SYS_STATE)
+            self.mav_manager.send(msg)
             if self.stop_asking_pos:
-                stop_msg(self.conn, MsgID.LOCAL_POSITION_NED)
+                msg = stop_msg(self.conn, MsgID.LOCAL_POSITION_NED)
+                self.mav_manager.send(msg)
             logging.info(f"Vehicle {self.conn.target_system}: 🛬 Landed successfully.")
         return on_ground
 

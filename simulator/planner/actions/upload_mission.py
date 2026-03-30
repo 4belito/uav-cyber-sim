@@ -20,9 +20,10 @@ class ClearMission(Step):
 
     def exec_fn(self) -> None:
         """Execute the clear mission."""
-        self.conn.mav.mission_clear_all_send(
+        msg = self.conn.mav.mission_clear_all_encode(
             self.conn.target_system, self.conn.target_component
         )
+        self.mav_manager.send(msg)
 
     def check_fn(self) -> bool:
         """Verify that cleared mission was successful."""
@@ -47,7 +48,7 @@ class UploadMission(Step):
         target_sys, target_comp = self.conn.target_system, self.conn.target_component
         mission = MissionLoader(target_sys, target_comp)
         count = mission.load(self.mission_path)
-        logging.info(f"✅ Vehicle {self.conn.target_system}: {count} waypoints read")
+        logging.info(f"✅ Vehicle {self.sysid}: {count} waypoints read")
 
         for i in range(count):
             wp = mission.item(i)
@@ -56,14 +57,17 @@ class UploadMission(Step):
                 f"🧭 Vehicle {self.sysid}: Mission[{i}] → cmd: {cmd_name}, "
                 f"x: {wp.x}, y: {wp.y}, z: {wp.z}, current: {wp.current}"
             )
-        self.conn.mav.mission_count_send(target_sys, target_comp, mission.count())
+        msg = self.conn.mav.mission_count_encode(
+            target_sys, target_comp, mission.count()
+        )
+        self.mav_manager.send(msg)
         for i in range(mission.count()):
             msg = self.vehicle_state.wait_for("MISSION_REQUEST")
             if not msg or msg.seq != i:
                 raise RuntimeError(
                     f"Vehicle {self.sysid}: ❌ Unexpected mission request: {msg}"
                 )
-            self.conn.mav.send(mission.wp(i))
+            self.mav_manager.send(mission.wp(i))
             logging.debug(f"✅ Vehicle {self.sysid}: Sent mission item {i}")
 
     def check_fn(self) -> bool:

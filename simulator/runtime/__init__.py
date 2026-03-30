@@ -2,8 +2,8 @@
 
 from .grid import Grid
 from .vehicle.adsb_conversion import rid_to_adsb_beacon, sysid_to_icao
-from .vehicle.rid import RIDManager
-from .vehicle.router import MAVLinkRouter
+from .vehicle.mav_manager import MAVLinkManager
+from .vehicle.rid_manager import RIDManager
 from .vehicle.state import VehicleState
 
 __all__ = [
@@ -11,6 +11,6 @@ __all__ = [
     "RIDManager",
     "sysid_to_icao",
     "rid_to_adsb_beacon",
-    "MAVLinkRouter",
+    "MAVLinkManager",
     "VehicleState",
 ]

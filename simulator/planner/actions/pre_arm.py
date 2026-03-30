@@ -62,7 +62,8 @@ class EKFStatus(Step):
 
     def exec_fn(self) -> None:
         """No execution needed; just checking."""
-        ask_msg(self.conn, MsgID.EKF_STATUS_REPORT)
+        msg = ask_msg(self.conn, MsgID.EKF_STATUS_REPORT)
+        self.mav_manager.send(msg)
 
     def check_fn(self) -> bool:
         """Check whether all required EKF flags are set."""
@@ -78,7 +79,8 @@ class EKFStatus(Step):
                 f"Pending: {', '.join(missing)}"
             )
             return False
-        stop_msg(self.conn, msg_id=MsgID.EKF_STATUS_REPORT)
+        msg = stop_msg(self.conn, msg_id=MsgID.EKF_STATUS_REPORT)
+        self.mav_manager.send(msg)
         return True
 
 
@@ -87,7 +89,8 @@ class GPSStatus(Step):
 
     def exec_fn(self) -> None:
         """No execution needed; just checking."""
-        ask_msg(self.conn, MsgID.GPS_RAW_INT)
+        msg = ask_msg(self.conn, MsgID.GPS_RAW_INT)
+        self.mav_manager.send(msg)
 
     def check_fn(self) -> bool:
         """Fail if GPS fix is not 3D (fix_type < 3)."""
@@ -124,7 +127,8 @@ class CheckSystem(Step):
 
     def exec_fn(self) -> None:
         """Request SYS_STATUS message to check battery and sensors."""
-        ask_msg(self.conn, MsgID.SYS_STATUS)
+        msg = ask_msg(self.conn, MsgID.SYS_STATUS)
+        self.mav_manager.send(msg)
 
     def check_fn(self) -> bool:
         """Fail if battery is low or any required sensors are unhealthy."""
@@ -151,7 +155,8 @@ class CheckSystem(Step):
                 f"⚠️ Vehicle {self.conn.target_system}: Missing or unhealthy sensors: "
                 f"{', '.join(missing)}"
             )
-        stop_msg(self.conn, msg_id=MsgID.SYS_STATUS)
+        msg = stop_msg(self.conn, msg_id=MsgID.SYS_STATUS)
+        self.mav_manager.send(msg)
         return True
 
 

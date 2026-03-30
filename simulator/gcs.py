@@ -26,7 +26,7 @@ from simulator.helpers.processes import (
     create_process,
     terminate_process_group,
 )
-from simulator.helpers.setup_log import setup_logging
+from simulator.helpers.logging.setup_log import setup_logging
 from simulator.params.simulation import HEARTBEAT_FREQUENCY
 from simulator.runtime.gcs_runtime import VehicleRuntime
 

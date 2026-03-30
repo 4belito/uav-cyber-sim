@@ -2,29 +2,27 @@
 
 import logging
 from collections.abc import Mapping, Sequence
-from typing import Mapping, Union, cast
+from typing import TypeAlias, cast
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 
 from simulator.helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from simulator.helpers.connections.mavlink.enums import CmdSet, DataStream, MsgID
-from simulator.helpers.coordinates import ENU, GRA
 
-JSONScalar = Union[str, int, float, bool, None]
-JSONType = Union[
-    JSONScalar,
-    dict[str, "JSONType"],
-    list["JSONType"],
-]
+# from simulator.helpers.coordinates import ENU, GRA
+
+JSONType: TypeAlias = (
+    dict[str, "JSONType"] | list["JSONType"] | str | int | float | bool | None
+)
 
 
 def ask_msg(
     conn: MAVConnection,
     msg_id: int,
     interval: int = 1_000_000,
-) -> None:
+) -> mavlink.MAVLink_command_long_message:
     """Request periodic sending of a MAVLink message (1 Hz)."""
-    conn.mav.command_long_send(
+    msg = conn.mav.command_long_encode(
         conn.target_system,
         conn.target_component,
         CmdSet.MESSAGE_INTERVAL,
@@ -41,11 +39,12 @@ def ask_msg(
         f"Vehicle {conn.target_system}: 📡 Requested message "
         f"{MsgID(msg_id).name} at {1e6 / interval:.2f} Hz"
     )
+    return msg
 
 
-def stop_msg(conn: MAVConnection, msg_id: int) -> None:
+def stop_msg(conn: MAVConnection, msg_id: int) -> mavlink.MAVLink_command_long_message:
     """Stop sending a specific MAVLink message."""
-    conn.mav.command_long_send(
+    msg = conn.mav.command_long_encode(
         conn.target_system,
         conn.target_component,
         CmdSet.MESSAGE_INTERVAL,
@@ -58,39 +57,42 @@ def stop_msg(conn: MAVConnection, msg_id: int) -> None:
         0,
         0,
     )
+    return msg
 
 
 def request_sensor_streams(
     conn: MAVConnection,
     stream_ids: list[DataStream],
     rate_hz: int = 5,
-) -> None:
+) -> dict[str, mavlink.MAVLink_request_data_stream_message]:
     """Request sensor messages from ArduPilot."""
+    msgs: dict[str, mavlink.MAVLink_request_data_stream_message] = {}
     for stream_id in stream_ids:
-        conn.mav.request_data_stream_send(
+        msgs[stream_id.name] = conn.mav.request_data_stream_encode(
             target_system=conn.target_system,
             target_component=conn.target_component,
             req_stream_id=stream_id,
             req_message_rate=rate_hz,
             start_stop=1,
         )
+    return msgs
 
 
-def get_ENU_position(conn: MAVConnection) -> ENU | None:
-    """Request and return the UAV's current local NED position."""
-    ## Check this to make blocking optional parameter
-    msg = conn.recv_match(type="LOCAL_POSITION_NED", blocking=True, timeout=0.001)
-    if msg:
-        return ENU.from_ned(msg.x, msg.y, msg.z)
-    return None
+# def get_ENU_position(conn: MAVConnection) -> ENU | None:
+#     """Request and return the UAV's current local NED position."""
+#     ## Check this to make blocking optional parameter
+#     msg = conn.recv_match(type="LOCAL_POSITION_NED", blocking=True, timeout=0.001)
+#     if msg:
+#         return ENU.from_ned(msg.x, msg.y, msg.z)
+#     return None
 
 
-def get_GRA_position(conn: MAVConnection) -> GRA | None:
-    """Request and return the UAV's current global position."""
-    msg = conn.recv_match(type="GLOBAL_POSITION_INT", blocking=True, timeout=0.001)
-    if msg:
-        return GRA.from_global_int(msg.lat, msg.lon, msg.relative_alt)  # type: ignore
-    return None
+# def get_GRA_position(conn: MAVConnection) -> GRA | None:
+#     """Request and return the UAV's current global position."""
+#     msg = conn.recv_match(type="GLOBAL_POSITION_INT", blocking=True, timeout=0.001)
+#     if msg:
+#         return GRA.from_global_int(msg.lat, msg.lon, msg.relative_alt)  # type: ignore
+#     return None
 
 
 # Secondary MAVLink decoder (used to decode UNKNOWN_* messages)

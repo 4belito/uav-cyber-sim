@@ -31,6 +31,11 @@ class Grid:
     def _pos2key(self, pos: ENU) -> CellKey:
         return (self._idx(pos.x), self._idx(pos.y), self._idx(pos.z))
 
+    def rid(self, sysid: int) -> RIDData:
+        """Return RID object only if it exists and has pending data."""
+        with self._lock:
+            return self._rid[sysid]
+
     def pop_rid(self, sysid: int) -> RIDData | None:
         """Pop RID object if it has pending data, else return None."""
         with self._lock:

@@ -12,7 +12,7 @@ class StartMission(Step):
 
     def exec_fn(self) -> None:
         """Send MISSION_START command to begin executing the mission."""
-        self.conn.mav.command_long_send(
+        msg = self.conn.mav.command_long_encode(
             self.conn.target_system,
             self.conn.target_component,
             Cmd.MISSION_START,
@@ -25,6 +25,7 @@ class StartMission(Step):
             0,
             0,
         )
+        self.mav_manager.send(msg)
 
     def check_fn(self) -> bool:
         """Check if the mission has started by listening for a STATUSTEXT message."""

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import copy
-import json
 import logging
 import math
 import pickle
@@ -15,13 +14,12 @@ from typing import cast
 import zmq
 
 from simulator.config import DATA_PATH, BasePort
-from simulator.entities.riddata import RIDData, RIDDict
+from simulator.entities.riddata import RIDData
 from simulator.helpers.connections import create_zmq_socket
 from simulator.helpers.connections.mavlink.streams import make_json_safe
 from simulator.helpers.coordinates import ENU, GRA
+from simulator.helpers.logging.data_logger import DataLogger
 from simulator.runtime.vehicle.adsb_conversion import rid_to_adsb_beacon
-
-Record = dict[str, int | float | str | RIDDict | dict[str, str | int | float]]
 
 
 class RIDManager:
@@ -36,7 +34,13 @@ class RIDManager:
         - Record RID input/output streams for dataset generation
     """
 
-    def __init__(self, sysid: int, port_offset: int, gra_origin: GRA) -> None:
+    def __init__(
+        self,
+        sysid: int,
+        port_offset: int,
+        gra_origin: GRA,
+        data_logger: DataLogger | None = None,
+    ) -> None:
         self.gra_origin = gra_origin
         self.sysid = sysid
         self.data: RIDData | None = None
@@ -73,9 +77,7 @@ class RIDManager:
         self._threads: list[threading.Thread] = []
 
         # Dataset file (JSONL stream)
-        self._data_path = DATA_PATH / "msgs"
-        self._data_path.mkdir(parents=True, exist_ok=True)
-        self._data_file = open(self._data_path / f"veh_{self.sysid}.jsonl", "a")
+        self.logger = data_logger
 
     def start(self) -> None:
         """Start background threads for receiving RID data."""
@@ -95,7 +97,6 @@ class RIDManager:
         self._out_sock.close(linger=0)
         self._adsb_out_sock.close(linger=0)
         self._ctx.term()
-        self._data_file.close()
 
     # --- state update / publish -----------------------------------------------
     def update(self, payload: dict[str, str | float | int]) -> None:
@@ -120,11 +121,11 @@ class RIDManager:
 
                 self._out_sock.send_pyobj(send_data)  # type: ignore
                 self.pending = False
-        if send_data is not None:
-            self.write_data(
+        if self.logger and send_data is not None:
+            self.logger.write(
                 {
                     "type": "rid_out",
-                    "data": send_data.to_dict(),
+                    "data": make_json_safe(send_data.to_dict()),
                 }
             )
 
@@ -141,13 +142,14 @@ class RIDManager:
                 self._adsb_out_sock.send_pyobj(beacon)  # type: ignore
 
                 # Record incoming RID
-                self.write_data(
-                    {
-                        "type": "rid_in",
-                        "other_sysid": rid.sysid,
-                        "data": rid.to_dict(),
-                    }
-                )
+                if self.logger:
+                    self.logger.write(
+                        {
+                            "type": "rid_in",
+                            "other_sysid": rid.sysid,
+                            "data": make_json_safe(rid.to_dict()),
+                        }
+                    )
             except zmq.Again:
                 time.sleep(0.001)
                 continue
@@ -186,20 +188,3 @@ class RIDManager:
             hdg=hdg,
             last_update=time.time(),
         )
-
-    def write_data(
-        self,
-        record: Record,
-    ) -> None:
-        """Write a record to the dataset file with error handling."""
-        try:
-            record = {
-                "sysid": self.sysid,
-                "time_logged": time.time(),
-                **record,
-            }
-            save_record = make_json_safe(record)
-            self._data_file.write(json.dumps(save_record) + "\n")
-            self._data_file.flush()
-        except Exception as e:
-            logging.error(f"Data write error: {e}")

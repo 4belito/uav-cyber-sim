@@ -15,6 +15,7 @@ from simulator.helpers.connections.mavlink.customtypes.vehicle_state import (
     VehicleStateP,
 )
 from simulator.helpers.coordinates import ENU, GRA
+from simulator.runtime.vehicle.mav_manager import MAVLinkManager
 
 
 class State(StrEnum):
@@ -58,6 +59,7 @@ class MissionElement(ABC):
         self.origin: GRA
         self.sysid: int
         self.vehicle_state: VehicleStateP
+        self.mav_manager: MAVLinkManager
         self.onair: bool | None = None  # Default onair status
         self.target_pos: ENU | None = None  # Default target (global) position
         self.curr_pos: ENU | None = None  # Default current (global) position
@@ -76,18 +78,19 @@ class MissionElement(ABC):
 
     def bind(
         self,
-        connection: MAVConnection,
         origin: GRA,
-        vehicle_state: VehicleStateP,
+        mav_manager: MAVLinkManager,
     ) -> None:
         """
         Binds the mission element to a MAVLink connection, origin, and vehicle
         state.
         """
-        self.conn = connection
+        self.conn = mav_manager.conn
         self.origin = origin
-        self.vehicle_state = vehicle_state
-        self.sysid = connection.target_system
+        self.vehicle_state = mav_manager.state
+        self.mav_manager = mav_manager
+        ## TODO: Check this
+        self.sysid = mav_manager.conn.target_system
         logging.debug(
             f"🔗 Vehicle {self.sysid}: {self.class_name} '{self.name}' is now connected"
         )

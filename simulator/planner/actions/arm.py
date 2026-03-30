@@ -16,7 +16,7 @@ class Arm(Step):
 
     def exec_fn(self) -> None:
         """Send ARM command to the UAV."""
-        self.conn.mav.command_long_send(
+        msg = self.conn.mav.command_long_encode(
             self.conn.target_system,
             self.conn.target_component,
             Cmd.COMPONENT_ARM_DISARM,
@@ -29,6 +29,7 @@ class Arm(Step):
             0,
             0,  # 1 = arm
         )
+        self.mav_manager.send(msg)
 
     def check_fn(self) -> bool:
         """Check if the UAV is armed by inspecting HEARTBEAT messages."""

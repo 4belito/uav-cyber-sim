@@ -32,7 +32,7 @@ class TakeOff(Step):
 
     def exec_fn(self) -> None:
         """Send TAKEOFF command to reach target altitude."""
-        self.conn.mav.command_long_send(
+        msg = self.conn.mav.command_long_encode(
             self.conn.target_system,
             self.conn.target_component,
             CmdNav.TAKEOFF,
@@ -45,9 +45,12 @@ class TakeOff(Step):
             0,
             self._altitude,
         )
-        ask_msg(self.conn, MsgID.EXTENDED_SYS_STATE)
+        self.mav_manager.send(msg)
+        msg = ask_msg(self.conn, MsgID.EXTENDED_SYS_STATE)
+        self.mav_manager.send(msg)
         if self._ask_position:
-            ask_msg(self.conn, MsgID.GLOBAL_POSITION_INT)
+            msg = ask_msg(self.conn, MsgID.GLOBAL_POSITION_INT)
+            self.mav_manager.send(msg)
 
     def check_fn(self) -> bool:
         """Check if UAV is in TAKEOFF state."""
@@ -60,9 +63,11 @@ class TakeOff(Step):
                 f"Vehicle {self.conn.target_system}: 📍 Position: {pos.short()}"
             )
         if take_off:
-            stop_msg(self.conn, MsgID.EXTENDED_SYS_STATE)
+            msg = stop_msg(self.conn, MsgID.EXTENDED_SYS_STATE)
+            self.mav_manager.send(msg)
         if self._ask_position and self._stop_msg_position:
-            stop_msg(self.conn, MsgID.GLOBAL_POSITION_INT)
+            msg = stop_msg(self.conn, MsgID.GLOBAL_POSITION_INT)
+            self.mav_manager.send(msg)
         return take_off
 
 

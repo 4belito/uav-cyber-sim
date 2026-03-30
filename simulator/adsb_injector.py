@@ -24,7 +24,7 @@ from simulator.helpers.connections import create_zmq_socket
 from simulator.helpers.connections.mavlink.conn import connect, send_heartbeat
 from simulator.helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from simulator.helpers.connections.mavlink.enums import Autopilot, State, Type
-from simulator.helpers.setup_log import setup_logging
+from simulator.helpers.logging.setup_log import setup_logging
 
 # =============================================================================
 # MAVLink ADS-B constants

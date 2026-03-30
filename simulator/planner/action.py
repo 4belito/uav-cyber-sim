@@ -9,12 +9,9 @@ import logging
 from enum import StrEnum
 from typing import Generic, TypeVar
 
-from simulator.helpers.connections import MAVConnection
-from simulator.helpers.connections.mavlink.customtypes.vehicle_state import (
-    VehicleStateP,
-)
 from simulator.helpers.coordinates import GRA
 from simulator.planner.step import MissionElement, State
+from simulator.runtime.vehicle.mav_manager import MAVLinkManager
 
 # TODO: Check binding of conn in Action and Step,
 # i think conn can be passed when actions/steps are instantiated
@@ -169,14 +166,13 @@ class Action(MissionElement, Generic[T]):
 
     def bind(
         self,
-        connection: MAVConnection,
         origin: GRA,
-        vehicle_state: VehicleStateP,
+        mav_manager: MAVLinkManager,
     ) -> None:
         """Bind the action to the MAVLink connection."""
         for step in self.steps:
-            step.bind(connection, origin, vehicle_state)
-        super().bind(connection, origin, vehicle_state)
+            step.bind(origin, mav_manager)
+        super().bind(origin, mav_manager)
         logging.debug(
             f"🔗 Vehicle {self.sysid}: {self.class_name} '{self.name}' is now connected"
         )

@@ -8,24 +8,27 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from typing import Callable
 
-from simulator.entities.riddata import RIDDict
+import pymavlink.dialects.v20.ardupilotmega as mavlink
+
 from simulator.helpers.connections import MAVConnection
 from simulator.helpers.connections.mavlink.customtypes.vehicle_state import (
     VehicleStateP,
 )
-from simulator.helpers.connections.mavlink.streams import decode_unknown_message
+from simulator.helpers.connections.mavlink.streams import (
+    decode_unknown_message,
+    make_json_safe,
+)
+from simulator.helpers.logging.data_logger import DataLogger
 
-DataWriter = Callable[
-    [dict[str, int | float | str | RIDDict | dict[str, str | int | float]]], None
-]
 
-
-class MAVLinkRouter(threading.Thread):
+class MAVLinkManager(threading.Thread):
     """
-    Single MAVLink reader.
-    Reads from the connection and updates the shared vehicle state.
+    MAVLink I/O manager.
+
+    - Receives MAVLink messages (RX)
+    - Sends MAVLink messages (TX)
+    - Logs all traffic
     """
 
     def __init__(
@@ -33,13 +36,13 @@ class MAVLinkRouter(threading.Thread):
         conn: MAVConnection,
         state: VehicleStateP,
         stop_event: threading.Event,
-        data_writer: DataWriter,
+        data_logger: DataLogger | None = None,
     ) -> None:
         super().__init__(daemon=True)
         self.conn = conn
         self.state = state
         self.stop_event = stop_event
-        self.data_writer = data_writer
+        self.data_logger = data_logger
 
     def run(self) -> None:
         """Continuously read messages and update state until stopped."""
@@ -55,17 +58,33 @@ class MAVLinkRouter(threading.Thread):
                 self.state.update(msg)
 
                 # Log all received MAVLink messages with their type and timestamp
-                try:
-                    self.data_writer(
+                if self.data_logger:
+                    self.data_logger.write(
                         {
-                            "type": "ardupilot_msg",
+                            "type": "mavlink_in",
                             "msg_type": msg.get_type(),
-                            "data": msg.to_dict(),
+                            "data": make_json_safe(msg.to_dict()),
                             "time_received": time_received,
                         }
                     )
-                except Exception as e:
-                    logging.error(f"MAVLink data write error: {e}")
 
             except Exception as exc:
                 logging.error("Router failed: %s", exc)
+
+    def send(self, msg: mavlink.MAVLink_message) -> None:
+        """Send a MAVLink message and log it."""
+        try:
+            self.conn.mav.send(msg)
+
+            if self.data_logger:
+                self.data_logger.write(
+                    {
+                        "type": "mavlink_out",
+                        "msg_type": msg.get_type(),
+                        "data": make_json_safe(msg.to_dict()),
+                        "time_sent": time.time(),
+                    }
+                )
+
+        except Exception as e:
+            logging.error(f"MAVLink send error: {e}")

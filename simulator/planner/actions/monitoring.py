@@ -26,10 +26,12 @@ class CheckItems(Step):
 
     def exec_fn(self) -> None:
         """Request the next waypoint from the UAV."""
-        ask_msg(self.conn, msg_id=MsgID.MISSION_CURRENT, interval=100_000)
-        self.conn.mav.mission_request_list_send(
+        msg = ask_msg(self.conn, msg_id=MsgID.MISSION_CURRENT, interval=100_000)
+        self.mav_manager.send(msg)
+        msg = self.conn.mav.mission_request_list_encode(
             self.conn.target_system, self.conn.target_component
         )
+        self.mav_manager.send(msg)
 
     def check_fn(self) -> bool:
         """Check the next waypoint from the UAV."""
@@ -52,9 +54,10 @@ class CheckItems(Step):
                 f"Vehicle {self.conn.target_system}: ⭐ Reached item: {self._item_seq}"
             )
             self._item_seq += 1
-        self.conn.mav.mission_request_send(
+        msg = self.conn.mav.mission_request_encode(
             self.conn.target_system, self.conn.target_component, self._item_seq
         )
+        self.mav_manager.send(msg)
         item = self.vehicle_state.wait_for("MISSION_ITEM")
         if not item:
             return False
@@ -83,7 +86,8 @@ class CheckEndMission(Step):
             text = msg.text.strip().lower()
             if "disarming" in text:
                 logging.info(f"Vehicle {self.conn.target_system}: Mission completed")
-                stop_msg(self.conn, msg_id=MsgID.GLOBAL_POSITION_INT)
+                msg = stop_msg(self.conn, msg_id=MsgID.GLOBAL_POSITION_INT)
+                self.mav_manager.send(msg)
                 return True
         return False
 
@@ -110,7 +114,10 @@ class ReachedItem(Step):
 
     def exec_fn(self) -> None:
         """No execution needed; just checking."""
-        ask_msg(conn=self.conn, msg_id=MsgID.GLOBAL_POSITION_INT, interval=100_000)
+        msg = ask_msg(
+            conn=self.conn, msg_id=MsgID.GLOBAL_POSITION_INT, interval=100_000
+        )
+        self.mav_manager.send(msg)
 
     def check_fn(self) -> bool:
         """Check if a item is reached."""

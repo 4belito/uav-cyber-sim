@@ -24,13 +24,14 @@ class SetSpeed(Step):
     def exec_fn(self) -> None:
         """Send a SET_PARAM command to change WPNAV_SPEED (navigation speed)."""
         speed_cmps = self.speed * 100  # ArduPilot uses cm/s
-        self.conn.mav.param_set_send(
+        msg = self.conn.mav.param_set_encode(
             self.conn.target_system,
             self.conn.target_component,
             WPNav.SPEED,
             speed_cmps,
             ParamType.REAL32,
         )
+        self.mav_manager.send(msg)
 
     def check_fn(self) -> bool:
         """Check whether the WPNAV_SPEED parameter has been updated."""

@@ -11,7 +11,7 @@ import time
 from pymavlink import mavutil
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
-from simulator.config import BasePort
+from simulator.config import DATA_PATH, BasePort
 from simulator.configs import LogicConfig
 from simulator.entities.riddata import RIDData
 from simulator.helpers.connections import (
@@ -29,15 +29,16 @@ from simulator.helpers.connections.mavlink.streams import (
     request_sensor_streams,
 )
 from simulator.helpers.coordinates import ENU, GRA
-from simulator.helpers.setup_log import setup_logging
+from simulator.helpers.logging.data_logger import DataLogger
+from simulator.helpers.logging.setup_log import setup_logging
 from simulator.params.simulation import (
     DATA_STREAM_FREQUENCY,
     HEARTBEAT_FREQUENCY,
     REMOTE_ID_FREQUENCY,
 )
 from simulator.planner import Action, Plan, PlanSpec, State, Step
-from simulator.runtime.vehicle.rid import RIDManager
-from simulator.runtime.vehicle.router import MAVLinkRouter
+from simulator.runtime.vehicle.mav_manager import MAVLinkManager
+from simulator.runtime.vehicle.rid_manager import RIDManager
 from simulator.runtime.vehicle.state import VehicleState, VehicleStateP
 
 DATA_STREAM_IDS = [
@@ -102,28 +103,33 @@ def start_logic(config: LogicConfig):
 
     # Shared telemetry state
     vehicle_state = VehicleState.create()
-    rid_mnng = RIDManager(sysid, port_offset, gra_orign)
+    data_logger = DataLogger(path=DATA_PATH / "msgs", sysid=sysid)
+    rid_mnng = RIDManager(sysid, port_offset, gra_orign, data_logger=data_logger)
     # Router stop signal
-    router_stop = threading.Event()
-    router = MAVLinkRouter(
+    mav_stop = threading.Event()
+
+    mav_mnng = MAVLinkManager(
         conn=ap_conn,
         state=vehicle_state,
-        stop_event=router_stop,
-        data_writer=rid_mnng.write_data,
+        stop_event=mav_stop,
+        data_logger=data_logger,
     )
 
     ap_conn.wait_heartbeat()
     logging.debug("MAVLink connection established")
 
-    ask_msg(ap_conn, MsgID.GLOBAL_POSITION_INT, interval=RID_INTERVAL)
+    msg = ask_msg(ap_conn, MsgID.GLOBAL_POSITION_INT, interval=RID_INTERVAL)
+    mav_mnng.send(msg)
 
-    request_sensor_streams(
+    stream_msgs = request_sensor_streams(
         ap_conn,
         stream_ids=DATA_STREAM_IDS,
         rate_hz=DATA_STREAM_FREQUENCY,
     )
+    for msg in stream_msgs.values():
+        mav_mnng.send(msg)
 
-    router.start()
+    mav_mnng.start()
     logging.debug(f"Vehicle {sysid}: MAVLink router started")
     hb = wait_for_vehicle_link(vehicle_state, timeout=10.0)
     logging.debug(
@@ -137,10 +143,9 @@ def start_logic(config: LogicConfig):
 
     plan = Plan.build(plan_spec)
     logic = VehicleLogic(
-        connection=ap_conn,
         plan=plan,
         gra_origin=gra_orign,
-        vehicle_state=vehicle_state,
+        mav_manager=mav_mnng,
     )
 
     try:
@@ -160,17 +165,25 @@ def start_logic(config: LogicConfig):
                         logging.error(f"Error sending RID data: {e}")
                         pass
             if logic.plan.state == State.DONE:
-                rid_mnng.stop()
                 logic.send_done_msgs(cs_conn)
                 break
 
             logic.act()
             time.sleep(0.01)
     finally:
-        router_stop.set()
-        router.join(timeout=1)
+        # 1. stop producers
+        mav_stop.set()
+        mav_mnng.join()
+
+        rid_mnng.stop()
+
+        # 2. close connections
         ap_conn.close()
         cs_conn.close()
+
+        # 3. close logger
+        data_logger.close()
+
         logging.info(f"Vehicle {sysid} logic stopped")
 
 
@@ -179,21 +192,21 @@ class VehicleLogic:
 
     def __init__(
         self,
-        connection: MAVConnection,
         plan: Plan,
         gra_origin: GRA,
-        vehicle_state: VehicleStateP,
+        mav_manager: MAVLinkManager,
     ):
         # Vehicle Creation
-        self.conn = connection
-        self.sysid = connection.target_system
+        self.conn = mav_manager.conn
+        self.sysid = mav_manager.conn.target_system
         self.name = f"Logic 🧠 {self.sysid}"
         self.gra_origin = gra_origin
-        self.vehicle_state = vehicle_state
+        self.vehicle_state = mav_manager.state
 
         # Plan
         self.plan = plan
-        self.plan.bind(self.conn, self.gra_origin, self.vehicle_state)
+        # TODO: Pass the plan alread binded
+        self.plan.bind(self.gra_origin, mav_manager)
 
         # Communication properties (positions are local)
         self.rid: RIDData | None = None
