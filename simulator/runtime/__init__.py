@@ -1,8 +1,8 @@
 """Runtime modules for UAV behavior and communication."""
 
 from .grid import Grid
-from .rid import RIDManager
 from .vehicle.adsb_conversion import rid_to_adsb_beacon, sysid_to_icao
+from .vehicle.rid import RIDManager
 from .vehicle.router import MAVLinkRouter
 from .vehicle.state import VehicleState
 

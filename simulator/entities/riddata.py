@@ -1,8 +1,24 @@
 """RIDData class definition."""
 
 from dataclasses import dataclass
+from typing import TypedDict
 
 from simulator.helpers.coordinates import ENU, GRA
+
+
+class RIDDict(TypedDict):
+    """Serializable representation of RIDData for storage and transmission."""
+
+    sysid: int
+    gra_pos: dict[str, float]
+    enu_pos: dict[str, float]
+    enu_vel: dict[str, float]
+    speed: float
+    cog: float
+    ele: float
+    rel_alt: float
+    hdg: float
+    last_update: float
 
 
 @dataclass
@@ -19,3 +35,30 @@ class RIDData:
     rel_alt: float  # meters relative to takeoff
     hdg: float  # degrees - like cog but for uav heading
     last_update: float  # optional, handy for freshness checks
+
+    def to_dict(self) -> RIDDict:
+        """Convert RIDData into a serializable dictionary."""
+        return {
+            "sysid": self.sysid,
+            "gra_pos": {
+                "lat": self.gra_pos.lat,
+                "lon": self.gra_pos.lon,
+                "alt": self.gra_pos.alt,
+            },
+            "enu_pos": {
+                "x": self.enu_pos.x,
+                "y": self.enu_pos.y,
+                "z": self.enu_pos.z,
+            },
+            "enu_vel": {
+                "x": self.enu_vel.x,
+                "y": self.enu_vel.y,
+                "z": self.enu_vel.z,
+            },
+            "speed": self.speed,
+            "cog": self.cog,
+            "ele": self.ele,
+            "rel_alt": self.rel_alt,
+            "hdg": self.hdg,
+            "last_update": self.last_update,
+        }

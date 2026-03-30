@@ -23,7 +23,6 @@ class Grid:
         self._key: dict[int, CellKey] = {}
         self._lock = threading.RLock()  # single structure lock
         self._pending_rid: defaultdict[int, bool] = defaultdict(lambda: False)
-        # track if RID has been retransmitted
 
     # === Core methods ===
     def _idx(self, coor: float) -> int:
@@ -32,16 +31,11 @@ class Grid:
     def _pos2key(self, pos: ENU) -> CellKey:
         return (self._idx(pos.x), self._idx(pos.y), self._idx(pos.z))
 
-    def rid(self, sysid: int) -> RIDData:
-        """Return RID object only if it exists and has pending data."""
-        with self._lock:
-            return self._rid[sysid]
-
     def pop_rid(self, sysid: int) -> RIDData | None:
         """Pop RID object if it has pending data, else return None."""
         with self._lock:
             if self._pending_rid.get(sysid):
-                rid = self.rid(sysid)
+                rid = self._rid[sysid]
                 self._pending_rid[sysid] = False
                 return rid
             return None

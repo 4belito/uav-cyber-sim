@@ -6,7 +6,6 @@ visualization.
 import json
 import logging
 import socket
-from pathlib import Path
 from typing import Generic
 
 from simulator.config import (
@@ -32,6 +31,8 @@ class Simulator(Generic[VehT]):
     """
 
     oracle_name: str = "Oracle ⚪"
+    logic_folder = DATA_PATH / "logic"
+    gcs_folder = DATA_PATH / "gcs"
 
     def __init__(
         self,
@@ -54,7 +55,6 @@ class Simulator(Generic[VehT]):
         self.verbose = verbose
         self.instance = 0
         self.transmission_range = transmission_range  # meters
-
         setup_logging(self.oracle_name, verbose=verbose, console_output=True)
 
     def launch(self) -> Oracle:
@@ -65,8 +65,8 @@ class Simulator(Generic[VehT]):
             self.vehs[sysid].port_offset = offset
         for gcs_name, offset in zip(sorted(self.gcs), gcs_port_offsets):
             self.gcs[gcs_name].port_offset = offset
-        self._save_logic_configs(DATA_PATH)
-        self._save_gcs_configs(DATA_PATH)
+        self._save_logic_configs()
+        self._save_gcs_configs()
         self.visualizer.launch(uav_port_offsets)
         self._launch_gcses()
         return Oracle(
@@ -104,7 +104,7 @@ class Simulator(Generic[VehT]):
     def _launch_gcses(self):
         """Launch each GCS process and create an Oracle instance."""
         for gcs_name in self.gcs:
-            gcs_config_path = DATA_PATH / f"gcs_config_{gcs_name}.json"
+            gcs_config_path = self.gcs_folder / f"gcs_config_{gcs_name}.json"
             gcs_cmd = (
                 f'python3 -m simulator.gcs --config-path "{gcs_config_path}"'
                 f" --verbose {self.verbose}"
@@ -119,8 +119,9 @@ class Simulator(Generic[VehT]):
             )  # "exit"
             logging.info(f"🚀 GCS {gcs_name} launched (PID {p.pid})")
 
-    def _save_logic_configs(self, folder_name: Path):
+    def _save_logic_configs(self):
         """Save the logic configurations for each UAV."""
+        self.logic_folder.mkdir(parents=True, exist_ok=True)
         for sysid, veh in self.vehs.items():
             logic_config = {
                 "sysid": sysid,
@@ -132,11 +133,12 @@ class Simulator(Generic[VehT]):
                 "port_offset": veh.port_offset,
                 "plan_spec": veh.plan.get_spec().to_dict(),
             }
-            config_path = folder_name / f"logic_config_{sysid}.json"
+            config_path = self.logic_folder / f"logic_config_{sysid}.json"
             with config_path.open("w") as f:
                 json.dump(logic_config, f, indent=2)
 
-    def _save_gcs_configs(self, folder_name: Path):
+    def _save_gcs_configs(self):
+        self.gcs_folder.mkdir(parents=True, exist_ok=True)
         for gcs_name, gcs in self.gcs.items():
             gcs_config = {
                 "name": gcs_name,
@@ -146,7 +148,7 @@ class Simulator(Generic[VehT]):
                 "suppress": list(self.suppress),
             }
 
-            config_path = folder_name / f"gcs_config_{gcs_name}.json"
+            config_path = self.gcs_folder / f"gcs_config_{gcs_name}.json"
             with config_path.open("w") as f:
                 json.dump(gcs_config, f, indent=2)
 
@@ -202,7 +204,7 @@ class Simulator(Generic[VehT]):
             f"{self.visualizer.add_sitl_args()}"
         )
 
-        logic_config_path = str(DATA_PATH / f"logic_config_{sysid}.json")
+        logic_config_path = str(self.logic_folder / f"logic_config_{sysid}.json")
 
         uav_config: UAVGCSConfig = {
             "sysid": sysid,

@@ -6,7 +6,6 @@ from typing import Any, Self
 
 from pymavlink.dialects.v20.ardupilotmega import MAVLink_mission_item_message as ItemMsg
 
-from simulator.config import DATA_PATH
 from simulator.helpers.connections.mavlink.customtypes.mission import MissionLoader
 from simulator.helpers.connections.mavlink.enums import Cmd, CmdNav, Frame
 from simulator.helpers.coordinates import ENUPose, ENUs, GRAPose, GRAs
@@ -63,6 +62,7 @@ class AutoPlan(Plan):
         ylen: float,
         alt: float,
         gra_origin: GRAPose,
+        mission_path: str,
         relative_home: ENUPose = ENUPose(0, 0, 0),
         name: str = "auto_rectangle_plan",
         sysid: int = 1,
@@ -83,6 +83,7 @@ class AutoPlan(Plan):
             gra_origin=gra_origin,
             relative_home=relative_home,
             relative_path=relative_path,
+            mission_path=mission_path,
             navigation_speed=navigation_speed,
             land=land,
         )
@@ -93,6 +94,7 @@ class AutoPlan(Plan):
         side_len: float,
         alt: float,
         gra_origin: GRAPose,
+        mission_path: str,
         relative_home: ENUPose = ENUPose(0, 0, 0),
         name: str = "auto_square_plan",
         sysid: int = 1,
@@ -106,6 +108,7 @@ class AutoPlan(Plan):
             ylen=side_len,
             alt=alt,
             gra_origin=gra_origin,
+            mission_path=mission_path,
             relative_home=relative_home,
             name=name,
             sysid=sysid,
@@ -120,11 +123,11 @@ class AutoPlan(Plan):
         name: str,
         sysid: int,
         gra_wps: GRAs,
+        mission_path: str,
         navigation_speed: float = 5.0,
         land: bool = True,
     ) -> Self:
         """Create and save a basic mission to file."""
-        mission_path = DATA_PATH / f"mission_{sysid}.waypoints"
         plan = cls(
             name=name,
             mission_path=str(mission_path),
@@ -141,11 +144,11 @@ class AutoPlan(Plan):
         gra_origin: GRAPose,
         relative_home: ENUPose,
         relative_path: ENUs,
+        mission_path: str,
         navigation_speed: float = 5.0,
         land: bool = True,
     ) -> Self:
         """Create and save a basic mission from relative waypoints to file."""
-        mission_path = DATA_PATH / f"mission_{sysid}.waypoints"
         plan = cls(
             name=name,
             mission_path=str(mission_path),

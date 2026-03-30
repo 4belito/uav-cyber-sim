@@ -46,6 +46,14 @@ class MAVConnection(Protocol):
     @overload
     def recv_match(
         self,
+        type: Literal["LOCAL_POSITION_NED"],
+        timeout: float | None = ...,
+        blocking: bool | None = ...,
+    ) -> mavlink.MAVLink_local_position_ned_message | None: ...
+
+    @overload
+    def recv_match(
+        self,
         type: Literal["COMMAND_ACK"],
         timeout: float | None = ...,
         blocking: bool | None = ...,

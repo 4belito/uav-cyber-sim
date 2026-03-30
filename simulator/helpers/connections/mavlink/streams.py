@@ -1,12 +1,21 @@
 """Helpers for MAVLink message streams."""
 
 import logging
+from collections.abc import Mapping, Sequence
+from typing import Mapping, Union, cast
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 
 from simulator.helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from simulator.helpers.connections.mavlink.enums import CmdSet, DataStream, MsgID
 from simulator.helpers.coordinates import ENU, GRA
+
+JSONScalar = Union[str, int, float, bool, None]
+JSONType = Union[
+    JSONScalar,
+    dict[str, "JSONType"],
+    list["JSONType"],
+]
 
 
 def ask_msg(
@@ -97,3 +106,27 @@ def decode_unknown_message(msg: mavlink.MAVLink_message) -> mavlink.MAVLink_mess
     except Exception:
         pass
     return msg
+
+
+def make_json_safe(obj: object) -> JSONType:
+    """
+    Recursively convert an object to a JSON-serializable structure, decoding bytes
+    and converting unknown types to strings.
+    """
+    if isinstance(obj, (bytes, bytearray)):
+        return obj.decode("utf-8", errors="ignore").strip("\x00")
+
+    elif isinstance(obj, Mapping):
+        obj_map = cast(Mapping[object, object], obj)
+        return {str(k): make_json_safe(v) for k, v in obj_map.items()}
+
+    elif isinstance(obj, Sequence) and not isinstance(obj, (str, bytes, bytearray)):
+        obj_seq = cast(Sequence[object], obj)
+        return [make_json_safe(v) for v in obj_seq]
+
+    elif isinstance(obj, (str, int, float, bool)) or obj is None:
+        return obj
+
+    else:
+        # fallback for unknown objects (e.g. enums, custom classes)
+        return str(obj)

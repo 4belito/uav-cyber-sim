@@ -36,7 +36,7 @@ from simulator.params.simulation import (
     REMOTE_ID_FREQUENCY,
 )
 from simulator.planner import Action, Plan, PlanSpec, State, Step
-from simulator.runtime.rid import RIDManager
+from simulator.runtime.vehicle.rid import RIDManager
 from simulator.runtime.vehicle.router import MAVLinkRouter
 from simulator.runtime.vehicle.state import VehicleState, VehicleStateP
 
@@ -102,14 +102,16 @@ def start_logic(config: LogicConfig):
 
     # Shared telemetry state
     vehicle_state = VehicleState.create()
-
+    rid_mnng = RIDManager(sysid, port_offset, gra_orign)
     # Router stop signal
     router_stop = threading.Event()
     router = MAVLinkRouter(
         conn=ap_conn,
         state=vehicle_state,
         stop_event=router_stop,
+        data_writer=rid_mnng.write_data,
     )
+
     ap_conn.wait_heartbeat()
     logging.debug("MAVLink connection established")
 
@@ -130,7 +132,7 @@ def start_logic(config: LogicConfig):
         hb.get_srcSystem(),
         hb.get_srcComponent(),
     )
-    rid_mnng = RIDManager(sysid, port_offset, gra_orign)
+
     rid_mnng.start()
 
     plan = Plan.build(plan_spec)
