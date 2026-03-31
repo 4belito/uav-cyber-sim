@@ -18,7 +18,7 @@ import time
 
 import zmq
 
-from simulator.config import BasePort
+from simulator.config import LOGS_PATH, BasePort
 from simulator.entities.adsb import ADSBBeacon
 from simulator.helpers.connections import create_zmq_socket
 from simulator.helpers.connections.mavlink.conn import connect, send_heartbeat
@@ -173,7 +173,9 @@ def main() -> None:
     args = parser.parse_args()
 
     setup_logging(
-        f"adsb_injector_{args.sysid}", verbose=args.verbose, console_output=True
+        LOGS_PATH / "adsb_injectors" / f"adsb_injector_{args.sysid}.logs",
+        verbose=args.verbose,
+        console_output=True,
     )
 
     injector = ADSBInjector(

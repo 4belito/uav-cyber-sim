@@ -1,23 +1,13 @@
 """Helper module for setting up logging configuration for UAV Cyber Sim."""
 
 import logging
-import os
-
-from simulator.config import LOGS_PATH
+from pathlib import Path
 
 
-def setup_logging(filename: str, verbose: int = 1, console_output: bool = True):
-    """
-    Set up logging configuration with flexible output options.
-
-    Args:
-        filename: Name for the log file (without .log extension)
-        verbose: Verbosity level (0=silent, 1=info, 2=debug, 3=trace/all)
-        console_output: Whether to output to console in addition to file
-
-    """
+def setup_logging(filepath: Path, verbose: int = 1, console_output: bool = True):
+    """Set up logging configuration with flexible output options."""
     # Use process ID to create unique log files for each process
-    os.makedirs(LOGS_PATH, exist_ok=True)
+    filepath.parent.mkdir(parents=True, exist_ok=True)
 
     # Remove existing handlers to avoid conflicts
     for handler in logging.root.handlers[:]:
@@ -31,7 +21,7 @@ def setup_logging(filename: str, verbose: int = 1, console_output: bool = True):
     )
 
     # File handler (always log everything to file)
-    file_handler = logging.FileHandler(f"{LOGS_PATH}/{filename}.log", mode="w")
+    file_handler = logging.FileHandler(filepath, mode="w")
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(file_formatter)
 
@@ -54,7 +44,7 @@ def setup_logging(filename: str, verbose: int = 1, console_output: bool = True):
             )  # Trace - everything (same as debug for now)
 
         console_formatter = logging.Formatter(
-            f"%(asctime)s - {filename} - %(levelname)s - %(message)s",
+            f"%(asctime)s - {filepath.stem} - %(levelname)s - %(message)s",
             datefmt="%H:%M:%S",
         )
         console_handler.setFormatter(console_formatter)

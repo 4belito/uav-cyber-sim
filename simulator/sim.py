@@ -13,12 +13,14 @@ from simulator.config import (
     ARDUPILOT_VEHICLE_PATH,
     DATA_PATH,
     ENV_CMD_PYT,
+    LOGS_PATH,
     VEH_PARAMS_PATH,
     BasePort,
 )
 from simulator.configs.gcs import UAVGCSConfig
 from simulator.entities import SimGCS, SimVehicle, VehT
 from simulator.helpers.logging.setup_log import setup_logging
+from simulator.helpers.math import connection_id
 from simulator.helpers.processes import SimProcess, create_process
 from simulator.oracle import Oracle
 from simulator.visualizer import Visualizer
@@ -55,7 +57,9 @@ class Simulator(Generic[VehT]):
         self.verbose = verbose
         self.instance = 0
         self.transmission_range = transmission_range  # meters
-        setup_logging(self.oracle_name, verbose=verbose, console_output=True)
+        setup_logging(
+            LOGS_PATH / f"{self.oracle_name}.log", verbose=verbose, console_output=True
+        )
 
     def launch(self) -> Oracle:
         """Launch vehicle instances and visualizer."""
@@ -211,7 +215,7 @@ class Simulator(Generic[VehT]):
             "port_offset": port_offset,
             "ardupilot_cmd": (
                 f"python3 {ARDUPILOT_VEHICLE_PATH}"
-                f" -v ArduCopter -I{inst} --sysid {sysid % 255 + 1} --no-rebuild"
+                f" -v ArduCopter -I{inst} --sysid {connection_id(sysid)} --no-rebuild"
                 f' -A "{sitl_args}"'
                 f" --use-dir={param_file}"
                 f" --add-param-file {VEH_PARAMS_PATH}"

@@ -10,7 +10,7 @@ import time
 from pymavlink import mavutil
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
-from simulator.config import DATA_PATH, BasePort
+from simulator.config import DATA_PATH, LOGS_PATH, BasePort
 from simulator.configs import LogicConfig
 from simulator.entities.riddata import RIDData
 from simulator.helpers.connections import (
@@ -19,8 +19,6 @@ from simulator.helpers.connections import (
     create_udp_conn,
     send_heartbeat,
 )
-
-# from simulator.entities.adsb import rid_to_adsb_beacon
 from simulator.helpers.connections.mavlink.customenums.customcmd import CustomCmd
 from simulator.helpers.connections.mavlink.enums import DataStream, MsgID
 from simulator.helpers.connections.mavlink.streams import (
@@ -30,6 +28,7 @@ from simulator.helpers.connections.mavlink.streams import (
 from simulator.helpers.coordinates import ENU, GRA
 from simulator.helpers.logging.data_logger import DataLogger
 from simulator.helpers.logging.setup_log import setup_logging
+from simulator.helpers.math import connection_id
 from simulator.params.simulation import (
     DATA_STREAM_FREQUENCY,
     HEARTBEAT_FREQUENCY,
@@ -45,8 +44,6 @@ DATA_STREAM_IDS = [
     DataStream.EXTENDED_STATUS,
     DataStream.POSITION,
     DataStream.EXTRA1,  # Required to receive some ArduPilot custom telemetry
-    # (e.g. ESC_TELEMETRY_*).If disabled, these messages are not streamed and the
-    # UNKNOWN message decoding logic is never exercised.
     DataStream.EXTRA2,
 ]
 RID_INTERVAL = int(1_000_000 / REMOTE_ID_FREQUENCY)
@@ -71,7 +68,11 @@ def main():
     """Entry point for the Multi-UAV MAVLink Logic."""
     config_path, verbose = parse_arguments()
     config = VehicleLogic.load_config(config_path)
-    setup_logging(f"logic_{config['sysid']}", verbose=verbose or 1, console_output=True)
+    setup_logging(
+        LOGS_PATH / "logics" / f"logic_{config['sysid']}.log",
+        verbose=verbose or 1,
+        console_output=True,
+    )
     start_logic(config)
 
 
@@ -87,7 +88,7 @@ def start_logic(config: LogicConfig):
         base_port=BasePort.ARP,
         offset=port_offset,
         role="client",
-        src_sysid=sysid % 255 + 1,
+        src_sysid=connection_id(sysid),
         src_compid=140,
     )
     logging.debug(f"Vehicle {sysid}: Logic connection established")

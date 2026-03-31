@@ -1,19 +1,9 @@
 TODO:
-- check collision avoidance to make it work with GuidedPlan
-- worng sysid shown in the terminals (ex. Action done veh 0)
-- QGC need some time to "reset" even after clean()
-- QGC with guide mode shows an mission loaded comun to all the drones(the drones behavior is correct)
-- Take generated and examples data out
-- differentiate remote ID(system  id) from mavlink connection sysid
 - organize data collection
 - Launch vehicles at any time
 - Add support to use different UAV models other than Iris.
 - Fix: [Errno 111] Connection refused — sleeping.
 - Completely remove the sim_vehicle.py script from the simulator; move necessary code to custom scripts (proxy.py, sim.py, oracle.py).
 - Add a parameter for waypoint reach distance, similar to Guided mode.
-
-- Add dynamic planning capabilities (from old code) 
-- Improve collision avoidance — ideally, use ArduPilot’s built-in algorithm or implement a state-of-the-art alternative.
-
 - Add more cyber attacks and modulireze the current rid spooing attack
 

@@ -16,7 +16,7 @@ import pymavlink.dialects.v20.ardupilotmega as mavlink
 import zmq
 from pymavlink import mavutil
 
-from simulator.config import DATA_PATH, ENV_CMD_ARP, ENV_CMD_PYT, BasePort
+from simulator.config import DATA_PATH, ENV_CMD_ARP, ENV_CMD_PYT, LOGS_PATH, BasePort
 from simulator.configs import GCSConfig, UAVGCSConfig
 from simulator.helpers.connections import create_udp_conn, create_zmq_socket
 from simulator.helpers.connections.mavlink.customenums.customcmd import CustomCmd
@@ -38,7 +38,11 @@ def main():
     config_path, verbose = parse_arguments()
     with open(config_path) as f:
         config = json.load(f)
-    setup_logging(f"GCS_{config['name']}", verbose=verbose, console_output=True)
+    setup_logging(
+        LOGS_PATH / "GCSs" / f"GCS_{config['name']}.log",
+        verbose=verbose,
+        console_output=True,
+    )
     gcs = GCS(**config)
     gcs.run()
 
