@@ -259,10 +259,6 @@ class VehicleLogic:
         """Return the current estimated position of the UAV."""
         return self.plan.curr_pos
 
-    def is_onair(self) -> bool | None:
-        """Return whether the UAV is currently airborne."""
-        return self.plan.onair
-
     @property
     def target_pos(self) -> ENU | None:
         """Return the current step's target position, if any."""

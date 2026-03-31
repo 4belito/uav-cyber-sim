@@ -11,9 +11,6 @@ from enum import StrEnum
 from typing import Self
 
 from simulator.helpers.connections import MAVConnection
-from simulator.helpers.connections.mavlink.customtypes.vehicle_state import (
-    VehicleStateP,
-)
 from simulator.helpers.coordinates import ENU, GRA
 from simulator.runtime.vehicle.mav_manager import MAVLinkManager
 
@@ -57,7 +54,6 @@ class MissionElement(ABC):
         ## live property(after building)
         self.origin: GRA
         self.mav_manager: MAVLinkManager
-        self.onair: bool | None = None  # Default onair status
         self.target_pos: ENU | None = None  # Default target (global) position
         self.curr_pos: ENU | None = None  # Default current (global) position
 
@@ -95,14 +91,6 @@ class MissionElement(ABC):
             "Mission must be bound to access connection"
         )
         return self.mav_manager.conn
-
-    @property
-    def vehicle_state(self) -> VehicleStateP:
-        """Convenience property to access the shared vehicle state."""
-        assert self.mav_manager is not None, (
-            "Mission must be bound to access vehicle state"
-        )
-        return self.mav_manager.state
 
     @property
     def sysid(self) -> int:
@@ -173,7 +161,7 @@ class Step(MissionElement, ABC):
 
     def get_enu_position(self) -> ENU | None:
         """Get the current ENU position of the UAV."""
-        msg = self.vehicle_state.get("GLOBAL_POSITION_INT")
+        msg = self.mav_manager.state.get("GLOBAL_POSITION_INT")
         if msg:
             gra_pos = GRA.from_global_int(msg.lat, msg.lon, msg.alt)
             pos = self.origin.to_rel(gra_pos)
@@ -184,5 +172,4 @@ class Step(MissionElement, ABC):
         """Reset the step state and clear current position."""
         super().reset()
         self.curr_pos = None
-        self.onair = None
         self.target_pos = None

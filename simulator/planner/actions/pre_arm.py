@@ -36,7 +36,7 @@ class CheckDisarmed(Step):
 
     def check_fn(self) -> bool:
         """Fail if the UAV is currently armed."""
-        msg = self.vehicle_state.get("HEARTBEAT")
+        msg = self.mav_manager.state.get("HEARTBEAT")
         if not msg:
             return False
         if msg.base_mode & ModeFlag.SAFETY_ARMED:
@@ -67,7 +67,7 @@ class EKFStatus(Step):
 
     def check_fn(self) -> bool:
         """Check whether all required EKF flags are set."""
-        msg = self.vehicle_state.get("EKF_STATUS_REPORT")
+        msg = self.mav_manager.state.get("EKF_STATUS_REPORT")
         if not msg:
             return False
         missing = [
@@ -94,7 +94,7 @@ class GPSStatus(Step):
 
     def check_fn(self) -> bool:
         """Fail if GPS fix is not 3D (fix_type < 3)."""
-        msg = self.vehicle_state.get("GPS_RAW_INT")
+        msg = self.mav_manager.state.get("GPS_RAW_INT")
         if not msg:
             return False
         if msg.fix_type < 3:
@@ -132,7 +132,7 @@ class CheckSystem(Step):
 
     def check_fn(self) -> bool:
         """Fail if battery is low or any required sensors are unhealthy."""
-        msg = self.vehicle_state.get("SYS_STATUS")
+        msg = self.mav_manager.state.get("SYS_STATUS")
         if not msg:
             return False
         if msg.battery_remaining < 20:

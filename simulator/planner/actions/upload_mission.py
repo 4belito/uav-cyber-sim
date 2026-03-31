@@ -27,7 +27,7 @@ class ClearMission(Step):
 
     def check_fn(self) -> bool:
         """Verify that cleared mission was successful."""
-        msg = self.vehicle_state.wait_for("STATUSTEXT")
+        msg = self.mav_manager.state.wait_for("STATUSTEXT")
         if msg and msg.text == "ArduPilot Ready":
             logging.info(
                 f"🧹 Vehicle {self.conn.target_system}: Cleared previous mission"
@@ -62,7 +62,7 @@ class UploadMission(Step):
         )
         self.mav_manager.send(msg)
         for i in range(mission.count()):
-            msg = self.vehicle_state.wait_for("MISSION_REQUEST")
+            msg = self.mav_manager.state.wait_for("MISSION_REQUEST")
             if not msg or msg.seq != i:
                 raise RuntimeError(
                     f"Vehicle {self.sysid}: ❌ Unexpected mission request: {msg}"
@@ -72,7 +72,7 @@ class UploadMission(Step):
 
     def check_fn(self) -> bool:
         """Verify that the mission upload was successful."""
-        ack = self.vehicle_state.wait_for("MISSION_ACK")
+        ack = self.mav_manager.state.wait_for("MISSION_ACK")
         if ack and MissionResult(ack.type) == MissionResult.ACCEPTED:
             logging.info(f"✅ Vehicle {self.sysid}: Mission upload successful!")
             return True

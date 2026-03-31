@@ -84,7 +84,6 @@ class Action(MissionElement, Generic[T]):
         self.steps.append(step)
         if not self.current:
             self.current = step
-            self.onair = step.onair
         self.target_pos = step.target_pos
         if self.state == State.DONE:
             self.state = State.IN_PROGRESS
@@ -152,8 +151,6 @@ class Action(MissionElement, Generic[T]):
         """Update current position and onair status based on a Step."""
         if step.target_pos is not None:
             self.target_pos = step.target_pos
-        if step.onair is not None:
-            self.onair = step.onair
         if step.curr_pos is not None:
             self.curr_pos = step.curr_pos
 

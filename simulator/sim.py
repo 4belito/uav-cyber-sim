@@ -18,8 +18,8 @@ from simulator.config import (
 )
 from simulator.configs.gcs import UAVGCSConfig
 from simulator.entities import SimGCS, SimVehicle, VehT
-from simulator.helpers.processes import SimProcess, create_process
 from simulator.helpers.logging.setup_log import setup_logging
+from simulator.helpers.processes import SimProcess, create_process
 from simulator.oracle import Oracle
 from simulator.visualizer import Visualizer
 
