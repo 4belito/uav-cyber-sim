@@ -55,10 +55,7 @@ class MissionElement(ABC):
         self.next: Self | None = None
 
         ## live property(after building)
-        self.conn: MAVConnection
         self.origin: GRA
-        self.sysid: int
-        self.vehicle_state: VehicleStateP
         self.mav_manager: MAVLinkManager
         self.onair: bool | None = None  # Default onair status
         self.target_pos: ENU | None = None  # Default target (global) position
@@ -85,15 +82,33 @@ class MissionElement(ABC):
         Binds the mission element to a MAVLink connection, origin, and vehicle
         state.
         """
-        self.conn = mav_manager.conn
         self.origin = origin
-        self.vehicle_state = mav_manager.state
         self.mav_manager = mav_manager
-        ## TODO: Check this
-        self.sysid = mav_manager.conn.target_system
         logging.debug(
             f"🔗 Vehicle {self.sysid}: {self.class_name} '{self.name}' is now connected"
         )
+
+    @property
+    def conn(self) -> MAVConnection:
+        """Convenience property to access the MAVLink connection."""
+        assert self.mav_manager is not None, (
+            "Mission must be bound to access connection"
+        )
+        return self.mav_manager.conn
+
+    @property
+    def vehicle_state(self) -> VehicleStateP:
+        """Convenience property to access the shared vehicle state."""
+        assert self.mav_manager is not None, (
+            "Mission must be bound to access vehicle state"
+        )
+        return self.mav_manager.state
+
+    @property
+    def sysid(self) -> int:
+        """Convenience property to access the vehicle sysid."""
+        assert self.mav_manager is not None, "Mission must be bound to access sysid"
+        return self.mav_manager.data_logger.sysid
 
 
 class Step(MissionElement, ABC):

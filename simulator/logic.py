@@ -5,7 +5,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import threading
 import time
 
 from pymavlink import mavutil
@@ -39,7 +38,7 @@ from simulator.params.simulation import (
 from simulator.planner import Action, Plan, PlanSpec, State, Step
 from simulator.runtime.vehicle.mav_manager import MAVLinkManager
 from simulator.runtime.vehicle.rid_manager import RIDManager
-from simulator.runtime.vehicle.state import VehicleState, VehicleStateP
+from simulator.runtime.vehicle.state import VehicleStateP
 
 DATA_STREAM_IDS = [
     DataStream.RAW_SENSORS,
@@ -102,16 +101,11 @@ def start_logic(config: LogicConfig):
     logging.debug(f"Vehicle {sysid}: GCS connection established")
 
     # Shared telemetry state
-    vehicle_state = VehicleState.create()
     data_logger = DataLogger(path=DATA_PATH / "msgs", sysid=sysid)
     rid_mnng = RIDManager(sysid, port_offset, gra_orign, data_logger=data_logger)
     # Router stop signal
-    mav_stop = threading.Event()
-
     mav_mnng = MAVLinkManager(
         conn=ap_conn,
-        state=vehicle_state,
-        stop_event=mav_stop,
         data_logger=data_logger,
     )
 
@@ -131,7 +125,7 @@ def start_logic(config: LogicConfig):
 
     mav_mnng.start()
     logging.debug(f"Vehicle {sysid}: MAVLink router started")
-    hb = wait_for_vehicle_link(vehicle_state, timeout=10.0)
+    hb = wait_for_vehicle_link(mav_mnng.state, timeout=10.0)
     logging.debug(
         "Vehicle %s: first heartbeat received from system=%s component=%s",
         sysid,
@@ -154,7 +148,7 @@ def start_logic(config: LogicConfig):
                 send_heartbeat(ap_conn)
                 send_heartbeat(cs_conn)
             if rid_event.trigger():
-                pos = vehicle_state.get("GLOBAL_POSITION_INT")
+                pos = mav_mnng.state.get("GLOBAL_POSITION_INT")
                 if pos:
                     rid_mnng.update(pos.to_dict())
                 if rid_mnng.pending:
@@ -172,13 +166,10 @@ def start_logic(config: LogicConfig):
             time.sleep(0.01)
     finally:
         # 1. stop producers
-        mav_stop.set()
-        mav_mnng.join()
-
+        mav_mnng.stop()
         rid_mnng.stop()
 
         # 2. close connections
-        ap_conn.close()
         cs_conn.close()
 
         # 3. close logger
