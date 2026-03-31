@@ -1,13 +1,12 @@
 """Helpers for MAVLink message streams."""
 
-import logging
 from collections.abc import Mapping, Sequence
 from typing import TypeAlias, cast
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 
 from simulator.helpers.connections.mavlink.customtypes.mavconn import MAVConnection
-from simulator.helpers.connections.mavlink.enums import CmdSet, DataStream, MsgID
+from simulator.helpers.connections.mavlink.enums import CmdSet, DataStream
 
 # from simulator.helpers.coordinates import ENU, GRA
 
@@ -34,10 +33,6 @@ def ask_msg(
         0,
         0,
         0,
-    )
-    logging.debug(
-        f"Vehicle {conn.target_system}: 📡 Requested message "
-        f"{MsgID(msg_id).name} at {1e6 / interval:.2f} Hz"
     )
     return msg
 
@@ -76,24 +71,6 @@ def request_sensor_streams(
             start_stop=1,
         )
     return msgs
-
-
-# def get_ENU_position(conn: MAVConnection) -> ENU | None:
-#     """Request and return the UAV's current local NED position."""
-#     ## Check this to make blocking optional parameter
-#     msg = conn.recv_match(type="LOCAL_POSITION_NED", blocking=True, timeout=0.001)
-#     if msg:
-#         return ENU.from_ned(msg.x, msg.y, msg.z)
-#     return None
-
-
-# def get_GRA_position(conn: MAVConnection) -> GRA | None:
-#     """Request and return the UAV's current global position."""
-#     msg = conn.recv_match(type="GLOBAL_POSITION_INT", blocking=True, timeout=0.001)
-#     if msg:
-#         return GRA.from_global_int(msg.lat, msg.lon, msg.relative_alt)  # type: ignore
-#     return None
-
 
 # Secondary MAVLink decoder (used to decode UNKNOWN_* messages)
 secondary_decoder = mavlink.MAVLink(None)

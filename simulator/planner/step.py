@@ -148,7 +148,7 @@ class Step(MissionElement, ABC):
             except Exception as exc:
                 logging.error(
                     "❌ Vehicle %s: %s %s check failed: %s",
-                    self.conn.target_system,
+                    self.sysid,
                     self.class_name,
                     self.name,
                     exc,

@@ -29,9 +29,7 @@ class ClearMission(Step):
         """Verify that cleared mission was successful."""
         msg = self.mav_manager.state.wait_for("STATUSTEXT")
         if msg and msg.text == "ArduPilot Ready":
-            logging.info(
-                f"🧹 Vehicle {self.conn.target_system}: Cleared previous mission"
-            )
+            logging.info(f"🧹 Vehicle {self.sysid}: Cleared previous mission")
             return True
         return False
 

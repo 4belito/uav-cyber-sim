@@ -33,9 +33,7 @@ class StartMission(Step):
         if msg:
             text = msg.text.strip().lower()
             if text.startswith("mission"):
-                logging.info(
-                    f"🚀 Vehicle {self.conn.target_system}: Mission has started"
-                )
+                logging.info(f"🚀 Vehicle {self.sysid}: Mission has started")
                 return True
         return False
 

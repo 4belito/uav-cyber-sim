@@ -57,9 +57,7 @@ class Land(Step):
         current_pos = self.get_enu_position()
         if current_pos is not None:
             self.current_pos = current_pos
-            logging.debug(
-                f"Vehicle {self.conn.target_system}: Altitude: {current_pos[2]:.2f} m"
-            )
+            logging.debug(f"Vehicle {self.sysid}: Altitude: {current_pos[2]:.2f} m")
         on_ground = bool(msg and msg.landed_state == LandState.ON_GROUND)
         if on_ground:
             msg = stop_msg(self.conn, MsgID.EXTENDED_SYS_STATE)
@@ -67,7 +65,7 @@ class Land(Step):
             if self.stop_asking_pos:
                 msg = stop_msg(self.conn, MsgID.LOCAL_POSITION_NED)
                 self.mav_manager.send(msg)
-            logging.info(f"Vehicle {self.conn.target_system}: 🛬 Landed successfully.")
+            logging.info(f"Vehicle {self.sysid}: 🛬 Landed successfully.")
         return on_ground
 
 

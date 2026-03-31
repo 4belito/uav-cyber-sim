@@ -71,9 +71,7 @@ class GoTo(Step):
         if pos is not None:
             self.current_pos = pos
             dist = ENU.distance(pos, self.wp)
-            logging.info(
-                f"📍 Vehicle {self.conn.target_system}: Distance to target: {dist:.2f}m"
-            )
+            logging.info(f"📍 Vehicle {self.sysid}: Distance to target: {dist:.2f}m")
             reached = dist < self.wp_margin
         else:
             reached = False

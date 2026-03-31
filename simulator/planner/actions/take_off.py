@@ -60,7 +60,7 @@ class TakeOff(Step):
         if pos is not None:
             self.current_pos = pos
             logging.info(
-                f"Vehicle {self.conn.target_system}: 📍 Position: {pos.short()}"
+                f"Vehicle {self.sysid}: 📍 Position: {pos.short()}"
             )
         if take_off:
             msg = stop_msg(self.conn, MsgID.EXTENDED_SYS_STATE)

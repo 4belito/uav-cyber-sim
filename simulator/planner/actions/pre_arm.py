@@ -75,7 +75,7 @@ class EKFStatus(Step):
         ]
         if missing:
             logging.debug(
-                f"🛰️ Vehicle {self.conn.target_system}: Waiting for EKF to be ready... "
+                f"🛰️ Vehicle {self.sysid}: Waiting for EKF to be ready... "
                 f"Pending: {', '.join(missing)}"
             )
             return False
@@ -99,7 +99,7 @@ class GPSStatus(Step):
             return False
         if msg.fix_type < 3:
             logging.warning(
-                f"📡 Vehicle {self.conn.target_system}: GPS fix too weak — "
+                f"📡 Vehicle {self.sysid}: GPS fix too weak — "
                 f"fix_type = {msg.fix_type} (need at least 3 for 3D fix)"
             )
             return False
@@ -137,10 +137,7 @@ class CheckSystem(Step):
             return False
         if msg.battery_remaining < 20:
             raise Exception(
-                (
-                    f"🔋 Vehicle {self.conn.target_system}: Battery too low"
-                    f" ({msg.battery_remaining}%)"
-                )
+                (f"🔋 Vehicle {self.sysid}: Battery too low ({msg.battery_remaining}%)")
             )
         healthy = msg.onboard_control_sensors_health
         enabled = msg.onboard_control_sensors_enabled
@@ -152,7 +149,7 @@ class CheckSystem(Step):
 
         if missing:
             raise Exception(
-                f"⚠️ Vehicle {self.conn.target_system}: Missing or unhealthy sensors: "
+                f"⚠️ Vehicle {self.sysid}: Missing or unhealthy sensors: "
                 f"{', '.join(missing)}"
             )
         msg = stop_msg(self.conn, msg_id=MsgID.SYS_STATUS)
