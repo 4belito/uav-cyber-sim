@@ -21,12 +21,12 @@ from simulator.configs import GCSConfig, UAVGCSConfig
 from simulator.helpers.connections import create_udp_conn, create_zmq_socket
 from simulator.helpers.connections.mavlink.customenums.customcmd import CustomCmd
 from simulator.helpers.coordinates import GRA, GRAs
+from simulator.helpers.logging.setup_log import setup_logging
 from simulator.helpers.processes import (
     SimProcess,
     create_process,
     terminate_process_group,
 )
-from simulator.helpers.logging.setup_log import setup_logging
 from simulator.params.simulation import HEARTBEAT_FREQUENCY
 from simulator.runtime.gcs_runtime import VehicleRuntime
 
@@ -90,8 +90,6 @@ class GCS:
         finally:
             self.orc_sock.close(linger=0)
             self.zmq_ctx.term()
-            for sysid in self.sysids:
-                self._terminate_uav_processes(sysid)
 
     def _launch_vehicles(self) -> list[VehicleRuntime]:
         """Launch ArduPilot and logic processes for each UAV."""
