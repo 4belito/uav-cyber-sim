@@ -87,7 +87,7 @@ def start_logic(config: LogicConfig):
         base_port=BasePort.ARP,
         offset=port_offset,
         role="client",
-        src_sysid=sysid,
+        src_sysid=sysid % 255 + 1,
         src_compid=140,
     )
     logging.debug(f"Vehicle {sysid}: Logic connection established")
@@ -95,16 +95,16 @@ def start_logic(config: LogicConfig):
         base_port=BasePort.GCS,
         offset=port_offset,
         mode="sender",
-        src_sysid=sysid,
+        src_sysid=1,
         src_compid=140,
     )
     logging.debug(f"Vehicle {sysid}: GCS connection established")
 
     # Shared telemetry state
     data_logger = DataLogger(path=DATA_PATH / "msgs", sysid=sysid)
-    rid_mnng = RIDManager(sysid, port_offset, gra_orign, data_logger=data_logger)
+    rid_mng = RIDManager(sysid, port_offset, gra_orign, data_logger=data_logger)
     # Router stop signal
-    mav_mnng = MAVLinkManager(
+    mav_mng = MAVLinkManager(
         conn=ap_conn,
         data_logger=data_logger,
     )
@@ -113,7 +113,7 @@ def start_logic(config: LogicConfig):
     logging.debug("MAVLink connection established")
 
     msg = ask_msg(ap_conn, MsgID.GLOBAL_POSITION_INT, interval=RID_INTERVAL)
-    mav_mnng.send(msg)
+    mav_mng.send(msg)
 
     stream_msgs = request_sensor_streams(
         ap_conn,
@@ -121,11 +121,11 @@ def start_logic(config: LogicConfig):
         rate_hz=DATA_STREAM_FREQUENCY,
     )
     for msg in stream_msgs.values():
-        mav_mnng.send(msg)
+        mav_mng.send(msg)
 
-    mav_mnng.start()
+    mav_mng.start()
     logging.debug(f"Vehicle {sysid}: MAVLink router started")
-    hb = wait_for_vehicle_link(mav_mnng.state, timeout=10.0)
+    hb = wait_for_vehicle_link(mav_mng.state, timeout=10.0)
     logging.debug(
         "Vehicle %s: first heartbeat received from system=%s component=%s",
         sysid,
@@ -133,13 +133,13 @@ def start_logic(config: LogicConfig):
         hb.get_srcComponent(),
     )
 
-    rid_mnng.start()
+    rid_mng.start()
 
     plan = Plan.build(plan_spec)
     logic = VehicleLogic(
         plan=plan,
         gra_origin=gra_orign,
-        mav_manager=mav_mnng,
+        mav_manager=mav_mng,
     )
 
     try:
@@ -148,13 +148,13 @@ def start_logic(config: LogicConfig):
                 send_heartbeat(ap_conn)
                 send_heartbeat(cs_conn)
             if rid_event.trigger():
-                pos = mav_mnng.state.get("GLOBAL_POSITION_INT")
+                pos = mav_mng.state.get("GLOBAL_POSITION_INT")
                 if pos:
-                    rid_mnng.update(pos.to_dict())
-                if rid_mnng.pending:
+                    rid_mng.update(pos.to_dict())
+                if rid_mng.pending:
                     try:
-                        logic.rid = rid_mnng.data
-                        rid_mnng.publish()
+                        logic.rid = rid_mng.data
+                        rid_mng.publish()
                     except Exception as e:
                         logging.error(f"Error sending RID data: {e}")
                         pass
@@ -166,8 +166,8 @@ def start_logic(config: LogicConfig):
             time.sleep(0.01)
     finally:
         # 1. stop producers
-        mav_mnng.stop()
-        rid_mnng.stop()
+        mav_mng.stop()
+        rid_mng.stop()
 
         # 2. close connections
         cs_conn.close()
@@ -189,7 +189,7 @@ class VehicleLogic:
     ):
         # Vehicle Creation
         self.conn = mav_manager.conn
-        self.sysid = mav_manager.conn.target_system
+        self.sysid = mav_manager.data_logger.sysid
         self.name = f"Logic 🧠 {self.sysid}"
         self.gra_origin = gra_origin
         self.vehicle_state = mav_manager.state

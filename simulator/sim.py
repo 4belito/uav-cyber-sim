@@ -211,7 +211,7 @@ class Simulator(Generic[VehT]):
             "port_offset": port_offset,
             "ardupilot_cmd": (
                 f"python3 {ARDUPILOT_VEHICLE_PATH}"
-                f" -v ArduCopter -I{inst} --sysid {sysid} --no-rebuild"
+                f" -v ArduCopter -I{inst} --sysid {sysid % 255 + 1} --no-rebuild"
                 f' -A "{sitl_args}"'
                 f" --use-dir={param_file}"
                 f" --add-param-file {VEH_PARAMS_PATH}"
