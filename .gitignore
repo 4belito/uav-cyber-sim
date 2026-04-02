@@ -15,7 +15,3 @@ eeprom*.bin
 
 # experimental code
 test.*
-
-# devcontainer stuff
-.devcontainer/
-.claude
