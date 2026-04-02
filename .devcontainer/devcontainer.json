@@ -13,13 +13,15 @@
     "--network",
     "host"
   ],
+  "initializeCommand": "mkdir -p .claude",
   "containerEnv": {
     "DISPLAY": "${env:DISPLAY}",
     "XAUTHORITY": "/tmp/.Xauthority"
   },
   "mounts": [
     "type=bind,source=/tmp/.X11-unix,target=/tmp/.X11-unix",
-    "type=bind,source=${env:HOME}/.Xauthority,target=/tmp/.Xauthority"
+    "type=bind,source=${env:HOME}/.Xauthority,target=/tmp/.Xauthority",
+    "source=${localWorkspaceFolder}/.claude,target=/root/.claude,type=bind,consistency=cached"
   ],
   "postAttachCommand": "sudo chown -R ubuntu /workspaces",
   // "customizations": {
@@ -33,6 +35,7 @@
   "customizations": {
     "vscode": {
       "extensions": [
+        "anthropic.claude-code",
         "ms-python.python",
         "ms-toolsai.jupyter"
       ]

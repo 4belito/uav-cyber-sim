@@ -55,6 +55,8 @@ class Simulator(Generic[VehT]):
         self.vehicles: dict[int, SimVehicle] = {}
         self.gcs: dict[str, SimGCS] = {}
         self.verbose = verbose
+
+        self.parms: dict[int, str] = {}
         # TODO: This is actually cell size and is more an oracle property(check design)
         self.transmission_range = transmission_range  # meters
         setup_logging(
@@ -80,13 +82,16 @@ class Simulator(Generic[VehT]):
             transmission_range=self.transmission_range,
         )
 
-    def add_vehicle(self, vehicle: SimVehicle):
+    def add_vehicle(self, vehicle: SimVehicle, parm:str=str(VEH_PARAMS_PATH)):
         """Add a vehicle to the simulation."""
         self.vehicles[vehicle.sysid] = vehicle
         if vehicle.gcs_name not in self.gcs:
             self.gcs[vehicle.gcs_name] = SimGCS(name=vehicle.gcs_name)
         self.gcs[vehicle.gcs_name].sysids.append(vehicle.sysid)
         self.visualizer.add_vehicle(vehicle)
+
+        # DEBUG
+        self.parms[vehicle.sysid] = parm
 
     def remove_vehicle(self, sysid: int) -> bool:
         """Remove a vehicle by system ID."""
@@ -215,7 +220,7 @@ class Simulator(Generic[VehT]):
                 f" -v ArduCopter -I{inst} --sysid {connection_id(sysid)} --no-rebuild"
                 f' -A "{sitl_args}"'
                 f" --use-dir={param_file}"
-                f" --add-param-file {VEH_PARAMS_PATH}"
+                f" --add-param-file {self.parms[sysid]}"
                 f" --no-mavproxy"
                 f" --port-offset={port_offset}"
                 + (" --terminal" if SimProcess.ARDUPILOT in self.terminals else "")
