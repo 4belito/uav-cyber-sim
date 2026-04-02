@@ -1,5 +1,5 @@
 """
-Defines the Plan class for sequencing UAV actions into structured missions.
+Defines the Plan class for sequencing vehicle actions into structured missions.
 Supports static and dynamic waypoint modes and includes predefined plans.
 """
 
@@ -38,7 +38,7 @@ class PlanSpec:
 
 
 class Plan(ActionSequence, ABC):
-    """A high-level mission plan composed of sequential UAV actions."""
+    """A high-level mission plan composed of sequential vehicle actions."""
 
     _REGISTRY: ClassVar[dict[str, type[Plan]]] = {}
 

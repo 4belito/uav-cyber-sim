@@ -1,4 +1,4 @@
-"""Module defining the START_MISSION action for UAV mission planning."""
+"""Module defining the START_MISSION action for vehicle mission planning."""
 
 import logging
 
@@ -8,7 +8,7 @@ from simulator.planner.step import Step
 
 
 class StartMission(Step):
-    """Step to start the UAV mission."""
+    """Step to start the vehicle mission."""
 
     def exec_fn(self) -> None:
         """Send MISSION_START command to begin executing the mission."""

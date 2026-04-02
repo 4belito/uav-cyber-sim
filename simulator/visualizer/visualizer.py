@@ -8,7 +8,7 @@ from simulator.helpers.coordinates import GRAPose
 
 
 class Visualizer(ABC, Generic[VehT]):
-    """Abstract base class for UAV simulation visualizers."""
+    """Abstract base class for simulation visualizers."""
 
     def __init__(self, gra_origin: GRAPose) -> None:
         self.gra_origin = gra_origin

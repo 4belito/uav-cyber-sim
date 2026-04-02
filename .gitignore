@@ -1,9 +1,8 @@
 __pycache__/
 **/__pycache__/
-ardupilot_logs/
-data/
-vehicle_logic.py
-logs/
+simulator/data/
+simulator/logs/
+simulator/ardupilot_logs/
 
 # ArduPilot/SITL state
 eeprom.bin
@@ -15,5 +14,4 @@ eeprom*.bin
 
 
 # experimental code
-1-auto_mode2.ipynb
 test.*

@@ -2,7 +2,7 @@
 Defines logic for navigating to local NED waypoints using MAVLink.
 
 Includes:
-- Functions to command and check UAV movement in local coordinates.
+- Functions to command and check vehicle movement in local coordinates.
 - Construction of Step and Action objects to integrate into mission plans.
 """
 
@@ -19,7 +19,7 @@ from simulator.planner.step import Step
 
 
 class GoTo(Step):
-    """Step to move the UAV to a global waypoint."""
+    """Step to move the vehicle to a global waypoint."""
 
     def __init__(
         self,
@@ -37,7 +37,7 @@ class GoTo(Step):
         self.type_mask = int(0b110111111000)
 
     def exec_fn(self) -> None:
-        """Send a MAVLink command to move the UAV to a global waypoint."""
+        """Send a MAVLink command to move the vehicle to a global waypoint."""
         gra_wp = self.origin.to_abs(self.wp)
         go_msg = self.conn.mav.set_position_target_global_int_encode(
             10,
@@ -63,7 +63,7 @@ class GoTo(Step):
 
     def check_fn(self) -> bool:
         """
-        Check if the UAV has reached the target altitude within an acceptable
+        Check if the vehicle has reached the target altitude within an acceptable
         margin.
         """
         # pos = self.origin.get_enu_position(self.conn)

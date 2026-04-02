@@ -1,6 +1,6 @@
 """
 Defines logic for creating and verifying a mission step that changes
-the UAV's WPNAV_SPEED parameter via MAVLink SET_PARAM commands.
+the vehicle's WPNAV_SPEED parameter via MAVLink SET_PARAM commands.
 
 Includes:
 - `make_change_nav_speed()`: returns an Action to set speed.
@@ -15,7 +15,7 @@ from simulator.planner.step import Step
 
 
 class SetSpeed(Step):
-    """Step to set the UAV's WPNAV_SPEED parameter."""
+    """Step to set the vehicle's WPNAV_SPEED parameter."""
 
     def __init__(self, name: str, speed: float) -> None:
         super().__init__(name)
@@ -47,7 +47,7 @@ class SetSpeed(Step):
 
 
 def make_change_nav_speed(speed: float) -> Action[Step]:
-    """Return an Action that changes the UAV's WPNAV_SPEED."""
+    """Return an Action that changes the vehicle's WPNAV_SPEED."""
     name = Action.Names.CHANGE_NAVSPEED
     action = Action[Step](name=name, emoji=name.emoji)
     step = SetSpeed(name=f"Set speed to {speed:.2f} m/s", speed=speed)

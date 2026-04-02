@@ -10,7 +10,7 @@ from simulator.planner.step import Step
 
 
 class Land(Step):
-    """Step to land the UAV."""
+    """Step to land the vehicle."""
 
     def __init__(
         self,
@@ -52,7 +52,7 @@ class Land(Step):
         self.mav_manager.send(msg)
 
     def check_fn(self) -> bool:
-        """Check if the UAV has landed using EXTENDED_SYS_STATE."""
+        """Check if the vehicle has landed using EXTENDED_SYS_STATE."""
         msg = self.mav_manager.state.get("EXTENDED_SYS_STATE")
         current_pos = self.get_enu_position()
         if current_pos is not None:
@@ -79,7 +79,7 @@ def make_land(
     name = Action.Names.LAND
     land = Action[Step](name=name, emoji=name.emoji)
     land_step = Land(
-        name="Land UAV",
+        name="Land vehicle",
         final_wp=final_wp,
         msg_land_interval=msg_land_interval,
         msg_pos_interval=msg_pos_interval,

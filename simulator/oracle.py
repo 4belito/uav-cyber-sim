@@ -1,7 +1,7 @@
 """
-Define the Oracle class to simulate UAV-to-UAV communication.
+Define the Oracle class to simulate Vehicle-to-Vehicle communication.
 Currently provides basic global position tracking and mission completion detection.
-Define the Oracle class to simulate UAV-to-UAV communication.
+Define the Oracle class to simulate Vehicle-to-Vehicle communication.
 Currently provides basic global position tracking and mission completion detection.
 """
 
@@ -31,11 +31,11 @@ TX_LOOP_SLEEP = 0.01
 RX_LOOP_SLEEP = 0.10
 
 
-class Oracle:  # UAVMonitor
+class Oracle:
     """
     Oracle class for vehicle-to-vehicle communication and simulation coordination.
 
-    Establishes and maintains MAVLink connections to UAV logic processes, retrieves
+    Establishes and maintains MAVLink connections to Vehicle logic processes, retrieves
     positions, and listens for plan-completion signals.
     """
 
@@ -53,7 +53,7 @@ class Oracle:  # UAVMonitor
         self.sysids = list(vehs.keys())
         self.grid = Grid(cell_size=transmission_range * 1.01)
         self._seen_in_grid: set[int] = set()
-        uav_port_offsets = {
+        veh_port_offsets = {
             sysid: veh.port_offset_required for sysid, veh in vehs.items()
         }
         gcs_port_offsets = {
@@ -63,10 +63,10 @@ class Oracle:  # UAVMonitor
         # Sockets
         zmq_ctx = zmq.Context()
         self.rid_in_socks = create_zmq_sockets(
-            zmq_ctx, BasePort.RID_UP, zmq.SUB, uav_port_offsets
+            zmq_ctx, BasePort.RID_UP, zmq.SUB, veh_port_offsets
         )
         self.rid_out_socks = create_zmq_sockets(
-            zmq_ctx, BasePort.RID_DOWN, zmq.PUB, uav_port_offsets
+            zmq_ctx, BasePort.RID_DOWN, zmq.PUB, veh_port_offsets
         )
         self.gcs_socks = create_zmq_sockets(
             zmq_ctx, BasePort.GCS_ZMQ, zmq.SUB, gcs_port_offsets
@@ -90,7 +90,7 @@ class Oracle:  # UAVMonitor
         self.rid_locks = {sysid: threading.Lock() for sysid in self.sysids}
 
     def run(self):
-        """Run the Oracle to manage UAV connections and communication."""
+        """Run the Oracle to manage Vehicle connections and communication."""
         logging.info(
             f"🏁 Starting Oracle with {len(self.sysids)} vehicles and "
             f"{len(self.gcs_socks)} GCSs"
@@ -110,7 +110,7 @@ class Oracle:  # UAVMonitor
         logging.info("🎉 Oracle shutdown complete!")
 
     def wait_gcs_done(self, gcs_name: str):
-        """Wait for a DONE message from one GCS, then stop all UAV threads."""
+        """Wait for a DONE message from one GCS, then stop all Vehicle threads."""
         while True:
             try:
                 msg = self.gcs_socks[gcs_name].recv_string(flags=zmq.NOBLOCK)
@@ -129,14 +129,14 @@ class Oracle:  # UAVMonitor
             time.sleep(0.01)
 
     def update_rid(self, sysid: int):
-        """Receive Remote ID messages from one UAV and update the store."""
+        """Receive Remote ID messages from one Vehicle and update the store."""
         while True:
             try:
                 msg: RIDData | Literal["DONE"] = self.rid_in_socks[sysid].recv_pyobj()
                 if msg == "DONE":
                     if sysid in self._seen_in_grid:
                         self.grid.remove_sysid(sysid)
-                    logging.info(f"UAV {sysid} completed mission and exited")
+                    logging.info(f"Vehicle {sysid} completed mission and exited")
                     break
                 rid: RIDData = msg
                 if sysid in self._seen_in_grid:
@@ -151,7 +151,7 @@ class Oracle:  # UAVMonitor
             time.sleep(RX_LOOP_SLEEP)
 
     def retransmit_rid(self, sysid: int):
-        """Retransmit Remote IDs to neighbor UAVs (one-shot per update)."""
+        """Retransmit Remote IDs to neighbor Vehicles (one-shot per update)."""
         while self.rid_in_threads[sysid].is_alive():
             if sysid not in self._seen_in_grid:
                 time.sleep(TX_LOOP_SLEEP)
@@ -255,7 +255,7 @@ class Oracle:  # UAVMonitor
 
     @staticmethod
     def plot_trajectories(gra_origin: GRAPose):
-        """Plot trajectories of UAVs for each GCS color."""
+        """Plot trajectories of Vehicles for each GCS color."""
         traj_files = list(Path(DATA_PATH).glob("trajectories_*.pkl"))
         for file in traj_files:
             with open(file, "rb") as f:
@@ -287,7 +287,7 @@ class Oracle:  # UAVMonitor
                     c=[gcs_color.value],  # Use the actual color value
                     s=12,  # type: ignore
                     alpha=0.8,
-                    label=f"UAV {sysid}",
+                    label=f"Vehicle {sysid}",
                     depthshade=True,
                 )
             ax.set_aspect(aspect="equalxy")  # type: ignore

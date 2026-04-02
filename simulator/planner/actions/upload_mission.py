@@ -2,7 +2,7 @@
 Upload mission action module.
 
 Defines the action to upload a mission from a file located in the `missions/` folder
-to an ArduPilot-based UAV using MAVLink. The mission file should be in `.waypoints`
+to an ArduPilot-based vehicle using MAVLink. The mission file should be in `.waypoints`
 format.
 
 """
@@ -16,7 +16,7 @@ from simulator.planner.step import Step
 
 
 class ClearMission(Step):
-    """Step to clear previous mission from the UAV."""
+    """Step to clear previous mission from the vehicle."""
 
     def exec_fn(self) -> None:
         """Execute the clear mission."""
@@ -35,14 +35,14 @@ class ClearMission(Step):
 
 
 class UploadMission(Step):
-    """Step to upload a mission to the UAV."""
+    """Step to upload a mission to the vehicle."""
 
     def __init__(self, name: str, mission_path: str):
         super().__init__(name=name)
         self.mission_path = mission_path
 
     def exec_fn(self) -> None:
-        """Execute the upload of a mission to the UAV."""
+        """Execute the upload of a mission to the vehicle."""
         target_sys, target_comp = self.conn.target_system, self.conn.target_component
         mission = MissionLoader(target_sys, target_comp)
         count = mission.load(self.mission_path)

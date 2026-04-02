@@ -5,7 +5,7 @@ from typing import TypedDict
 from simulator.helpers.processes import SimProcess
 
 
-class UAVGCSConfig(TypedDict):
+class VehicleConfig(TypedDict):
     """TypedDict for UAV configuration in the GCS."""
 
     sysid: int
@@ -21,6 +21,6 @@ class GCSConfig(TypedDict):
 
     name: str
     port_offset: int
-    uavs: list[UAVGCSConfig]
+    uavs: list[VehicleConfig]
     terminals: list[SimProcess]
     suppress: list[SimProcess]

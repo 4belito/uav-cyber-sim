@@ -1,4 +1,4 @@
-"""Multi-UAV MAVLink Logic."""
+"""Multi-Vehicle MAVLink Logic."""
 
 from __future__ import annotations
 
@@ -65,7 +65,7 @@ def wait_for_vehicle_link(
 
 
 def main():
-    """Entry point for the Multi-UAV MAVLink Logic."""
+    """Entry point for the Multi-Vehicle MAVLink Logic."""
     config_path, verbose = parse_arguments()
     config = VehicleLogic.load_config(config_path)
     setup_logging(
@@ -78,7 +78,7 @@ def main():
 
 # TODO: Remove monitored items from config
 def start_logic(config: LogicConfig):
-    """Start bidirectional proxy for a given UAV system_id."""
+    """Start bidirectional proxy for a given Vehicle system_id."""
     sysid = config["sysid"]
     port_offset = config["port_offset"]
     gra_orign = GRA(**config["gra_origin_dict"])
@@ -180,7 +180,7 @@ def start_logic(config: LogicConfig):
 
 
 class VehicleLogic:
-    """Handles the logic for executing a UAV's mission plan."""
+    """Handles the logic for executing a Vehicle's mission plan."""
 
     def __init__(
         self,
@@ -225,11 +225,11 @@ class VehicleLogic:
     ):
         """
         Send 'DONE' via STATUSTEXT repeatedly until receiving a COMMAND_ACK.
-        Assumes `conn` is a dedicated MAVLink connection for one UAV.
+        Assumes `conn` is a dedicated MAVLink connection for one Vehicle.
         """
         i = 0
         while i < max_tries:
-            logging.debug(f"GCS ← UAV {self.sysid}: Sending DONE (attempt {i + 1})")
+            logging.debug(f"GCS ← Vehicle {self.sysid}: Sending DONE (attempt {i + 1})")
             conn.mav.send(msg)
             start = time.time()
             while time.time() - start < 0.05:
@@ -257,7 +257,7 @@ class VehicleLogic:
 
     @property
     def pos(self) -> ENU | None:
-        """Return the current estimated position of the UAV."""
+        """Return the current estimated position of the Vehicle."""
         return self.plan.curr_pos
 
     @property
@@ -278,7 +278,7 @@ class VehicleLogic:
 
 def parse_arguments() -> tuple[str, int | None]:
     """Parse a single system ID."""
-    parser = argparse.ArgumentParser(description="Single UAV MAVLink Logic")
+    parser = argparse.ArgumentParser(description="Single Vehicle MAVLink Logic")
     parser.add_argument(
         "--config-path",
         type=str,

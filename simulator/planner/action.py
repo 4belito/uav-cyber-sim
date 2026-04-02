@@ -1,6 +1,6 @@
 """
 Mission execution module defining core classes for steps and actions used
-in UAV plans.
+in vehicle plans.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ class Action(MissionElement, Generic[T]):
     """
 
     class Names(StrEnum):
-        """Enumerates standard UAV action types used in mission plans."""
+        """Enumerates standard vehicle action types used in mission plans."""
 
         PREARM = "PREARM"
         ARM = "ARM"

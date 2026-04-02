@@ -2,8 +2,8 @@
 Defines a TAKEOFF action using MAVLink commands.
 
 Includes:
-- exec_takeoff: sends a takeoff command to the UAV.
-- check_takeoff: verifies if the UAV is currently taking off.
+- exec_takeoff: sends a takeoff command to the vehicle.
+- check_takeoff: verifies if the vehicle is currently taking off.
 - make_takeoff: creates a takeoff Action with one execution step.
 """
 
@@ -16,7 +16,7 @@ from simulator.planner.step import Step
 
 
 class TakeOff(Step):
-    """Step to command the UAV to take off to a specified altitude."""
+    """Step to command the vehicle to take off to a specified altitude."""
 
     def __init__(
         self,
@@ -53,7 +53,7 @@ class TakeOff(Step):
             self.mav_manager.send(msg)
 
     def check_fn(self) -> bool:
-        """Check if UAV is in TAKEOFF state."""
+        """Check if vehicle is in TAKEOFF state."""
         msg = self.mav_manager.state.get("EXTENDED_SYS_STATE")
         take_off = bool(msg and msg.landed_state == LandState.IN_AIR)
         pos = self.get_enu_position()

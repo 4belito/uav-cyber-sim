@@ -2,7 +2,7 @@
 Upload mission action module.
 
 Defines the action to upload a mission from a file located in the `missions/` folder
-to an ArduPilot-based UAV using MAVLink. The mission file should be in `.waypoints`
+to an ArduPilot-based vehicle using MAVLink. The mission file should be in `.waypoints`
 format.
 
 """
@@ -17,7 +17,7 @@ from simulator.planner.step import Step
 
 
 class CheckItems(Step):
-    """Request and check all waypoints from the UAV."""
+    """Request and check all waypoints from the vehicle."""
 
     def __init__(self, name: str):
         super().__init__(name)
@@ -25,7 +25,7 @@ class CheckItems(Step):
         self._mission_count: int | None = None
 
     def exec_fn(self) -> None:
-        """Request the next waypoint from the UAV."""
+        """Request the next waypoint from the vehicle."""
         msg = ask_msg(self.conn, msg_id=MsgID.MISSION_CURRENT, interval=100_000)
         self.mav_manager.send(msg)
         msg = self.conn.mav.mission_request_list_encode(
@@ -34,7 +34,7 @@ class CheckItems(Step):
         self.mav_manager.send(msg)
 
     def check_fn(self) -> bool:
-        """Check the next waypoint from the UAV."""
+        """Check the next waypoint from the vehicle."""
         if self._mission_count is None:
             msg = self.mav_manager.state.get("MISSION_COUNT")
             if msg:

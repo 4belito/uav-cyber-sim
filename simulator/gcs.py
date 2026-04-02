@@ -1,5 +1,5 @@
 """
-Define the GCS class to monitor UAVs through MAVLink messages and run GCS
+Define the GCS class to monitor Vehicles through MAVLink messages and run GCS
 instances.
 """
 
@@ -17,7 +17,7 @@ import zmq
 from pymavlink import mavutil
 
 from simulator.config import DATA_PATH, ENV_CMD_ARP, ENV_CMD_PYT, LOGS_PATH, BasePort
-from simulator.configs import GCSConfig, UAVGCSConfig
+from simulator.configs import GCSConfig, VehicleConfig
 from simulator.helpers.connections import create_udp_conn, create_zmq_socket
 from simulator.helpers.connections.mavlink.customenums.customcmd import CustomCmd
 from simulator.helpers.coordinates import GRA, GRAs
@@ -34,7 +34,7 @@ heartbeat_event = mavutil.periodic_event(HEARTBEAT_FREQUENCY)
 
 
 def main():
-    """Run a GCS instance to monitor UAVs."""
+    """Run a GCS instance to monitor Vehicles."""
     config_path, verbose = parse_arguments()
     with open(config_path) as f:
         config = json.load(f)
@@ -52,7 +52,7 @@ class GCS:
 
     def __init__(
         self,
-        uavs: list[UAVGCSConfig],
+        vehicles: list[VehicleConfig],
         name: str,
         port_offset: int,
         terminals: list[SimProcess],
@@ -60,9 +60,9 @@ class GCS:
     ) -> None:
         # Configure logging for this GCS process
         self.name = name
-        self.uavs = uavs
-        self.sysids = [uavconfig["sysid"] for uavconfig in uavs]
-        self.n_uavs = len(self.sysids)
+        self.vehicles = vehicles
+        self.sysids = [vehconfig["sysid"] for vehconfig in vehicles]
+        self.n_vehicles = len(self.sysids)
         self.terminals = set(terminals)
         self.suppress = set(suppress)
         self.vehruntimes = {vehrun.sysid: vehrun for vehrun in self._launch_vehicles()}
@@ -75,16 +75,16 @@ class GCS:
         # Data structures for trajectory logging
         self.paths: dict[int, GRAs] = {sysid: [] for sysid in self.sysids}
         self.pos: dict[int, GRA] = {sysid: GRA.nan() for sysid in self.sysids}
-        logging.info(f" GCS {self.name} started with {self.n_uavs} UAVs")
+        logging.info(f" GCS {self.name} started with {self.n_vehicles} Vehicles")
 
     ###
     def run(self):
-        """Run the GCS monitoring loop until all UAVs complete their missions."""
+        """Run the GCS monitoring loop until all Vehicles complete their missions."""
         try:
             with futures.ThreadPoolExecutor() as executor:
-                list(executor.map(self._monitor_uav, self.sysids))
+                list(executor.map(self._monitor_vehicle, self.sysids))
 
-            logging.info("All UAVs assigned have completed their missions")
+            logging.info("All Vehicles assigned have completed their missions")
             self.orc_sock.send_string("DONE")  # type: ignore
             logging.info("DONE message sent to Oracle")
             trajectory_file = DATA_PATH / f"trajectories_{self.name}.pkl"
@@ -96,21 +96,21 @@ class GCS:
             self.zmq_ctx.term()
 
     def _launch_vehicles(self) -> list[VehicleRuntime]:
-        """Launch ArduPilot and logic processes for each UAV."""
+        """Launch ArduPilot and logic processes for each Vehicle."""
         with futures.ThreadPoolExecutor() as executor:
-            vehruns = list(executor.map(self._launch_vehicle, range(self.n_uavs)))
+            vehruns = list(executor.map(self._launch_vehicle, range(self.n_vehicles)))
         return vehruns
 
     def _launch_vehicle(self, i: int) -> VehicleRuntime:
-        uav_config = self.uavs[i]
-        sysid = uav_config["sysid"]
+        veh_config = self.vehicles[i]
+        sysid = veh_config["sysid"]
 
         procs: dict[SimProcess, Popen[bytes]] = {}
         # -----------------------
         # 1. ADS-B virtual cable
         # -----------------------
         p_socat = create_process(
-            uav_config["socat_cmd"],
+            veh_config["socat_cmd"],
             after="exec bash",
             visible=SimProcess.ADSB_SOCAT in self.terminals,
             suppress_output=SimProcess.ADSB_SOCAT in self.suppress,
@@ -126,7 +126,7 @@ class GCS:
         # -----------------------
 
         p_adsb = create_process(
-            uav_config["adsb_cmd"],
+            veh_config["adsb_cmd"],
             after="exec bash",
             visible=SimProcess.ADSB_INJECTOR in self.terminals,
             suppress_output=SimProcess.ADSB_INJECTOR in self.suppress,
@@ -140,22 +140,22 @@ class GCS:
         # 3. Logic
         # -----------
         p_logic = create_process(
-            uav_config["logic_cmd"],
+            veh_config["logic_cmd"],
             after="exec bash",
             visible=SimProcess.LOGIC in self.terminals,
             suppress_output=SimProcess.LOGIC in self.suppress,
-            title=f"UAV logic: Vehicle {sysid}",
+            title=f"Vehicle logic: Vehicle {sysid}",
             env_cmd=ENV_CMD_PYT,
             new_process_group=True,
         )  # "exit"
-        logging.debug(f"UAV logic for vehicle {sysid} launched (PID {p_logic.pid})")
+        logging.debug(f"Vehicle logic for vehicle {sysid} launched (PID {p_logic.pid})")
         procs[SimProcess.LOGIC] = p_logic
 
         # ----------------
         # 3. ArduPilot
         # ----------------
         p_ard = create_process(
-            uav_config["ardupilot_cmd"],
+            veh_config["ardupilot_cmd"],
             after="exec bash",
             visible=SimProcess.ARDUPILOT in self.terminals,
             suppress_output=SimProcess.ARDUPILOT in self.suppress,
@@ -166,41 +166,41 @@ class GCS:
         logging.debug(f"ArduPilot SITL vehicle {sysid} launched (PID {p_ard.pid})")
         procs[SimProcess.ARDUPILOT] = p_ard
 
-        ## create MAVLink connection to the SITL instance for this UAV
+        ## create MAVLink connection to the SITL instance for this Vehicle
         conn = create_udp_conn(
             base_port=BasePort.GCS,
-            offset=uav_config["port_offset"],
+            offset=veh_config["port_offset"],
             mode="receiver",
             src_sysid=255,  # estándar GCS sysid
             src_compid=190,  # estándar GCS commponent ID
         )
-        logging.info(f"UAV {sysid} connected")
+        logging.info(f"Vehicle {sysid} connected")
         return VehicleRuntime(sysid=sysid, conn=conn, processes=procs)
 
-    def _monitor_uav(self, sysid: int):
-        logging.info(f"Monitoring UAV {sysid}")
+    def _monitor_vehicle(self, sysid: int):
+        logging.info(f"Monitoring Vehicle {sysid}")
         try:
             while not self._is_vehicle_plan_done(sysid):
                 self._get_global_pos(sysid)
                 self._save_pos()
         finally:
-            self._remove_uav(sysid)
-            logging.debug(f"Monitor thread finished for UAV {sysid}")
+            self._remove_vehicle(sysid)
+            logging.debug(f"Monitor thread finished for Vehicle {sysid}")
 
     def _save_pos(self):
-        """Save the current global position of each UAV to their trajectory path."""
+        """Save the current global position of each Vehicle to their trajectory path."""
         for sysid, pos in self.pos.items():
             self.paths[sysid].append(pos)
 
-    def _remove_uav(self, sysid: int):
+    def _remove_vehicle(self, sysid: int):
         """Remove vehicles from the environment."""
         self.conns[sysid].close()
         del self.conns[sysid]
         del self.vehruntimes[sysid]
         del self.sysids[self.sysids.index(sysid)]
-        self._terminate_uav_processes(sysid)
-        self.n_uavs -= 1
-        logging.info(f"UAV {sysid} removed from GCS {self.name}")
+        self._terminate_veh_processes(sysid)
+        self.n_vehicles -= 1
+        logging.info(f"Vehicle {sysid} removed from GCS {self.name}")
 
     @staticmethod
     def load_config(config_path: str) -> GCSConfig:
@@ -237,14 +237,14 @@ class GCS:
 
         return False
 
-    def _terminate_uav_processes(self, sysid: int) -> None:
+    def _terminate_veh_processes(self, sysid: int) -> None:
         runtime = self.vehruntimes.get(sysid)
         if runtime is None:
-            logging.debug(f"No runtime found for UAV {sysid}")
+            logging.debug(f"No runtime found for Vehicle {sysid}")
             return
 
         for name, proc in runtime.processes.items():
-            terminate_process_group(proc, f"{name} for UAV {sysid}")
+            terminate_process_group(proc, f"{name} for Vehicle {sysid}")
 
     def _get_global_pos(self, sysid: int):
         """Get the current global position of the specified vehicle."""

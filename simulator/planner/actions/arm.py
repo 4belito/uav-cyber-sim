@@ -1,5 +1,5 @@
 """
-Module defining the ARM action for UAV mission planning.
+Module defining the ARM action for vehicle mission planning.
 
 Includes logic to send the ARM command via MAVLink, verify arm status using
 HEARTBEAT messages, and construct a corresponding Action object for integration
@@ -12,10 +12,10 @@ from simulator.planner.step import Step
 
 
 class Arm(Step):
-    """Step to arm the UAV."""
+    """Step to arm the vehicle."""
 
     def exec_fn(self) -> None:
-        """Send ARM command to the UAV."""
+        """Send ARM command to the vehicle."""
         msg = self.conn.mav.command_long_encode(
             self.conn.target_system,
             self.conn.target_component,
@@ -32,7 +32,7 @@ class Arm(Step):
         self.mav_manager.send(msg)
 
     def check_fn(self) -> bool:
-        """Check if the UAV is armed by inspecting HEARTBEAT messages."""
+        """Check if the vehicle is armed by inspecting HEARTBEAT messages."""
         msg = self.mav_manager.state.get("HEARTBEAT")
         if msg:
             if msg.base_mode & ModeFlag.SAFETY_ARMED:
@@ -41,7 +41,7 @@ class Arm(Step):
 
 
 def make_arm() -> Action[Step]:
-    """Build an Action to arm the UAV, including exec and check logic."""
+    """Build an Action to arm the vehicle, including exec and check logic."""
     name = Action.Names.ARM
     arm = Action[Step](name=name, emoji=name.emoji)
     arm.add(Arm("arm"))

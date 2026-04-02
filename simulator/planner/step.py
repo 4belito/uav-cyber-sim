@@ -1,6 +1,6 @@
 """
 Mission execution module defining core classes for steps and actions used
-in UAV plans.
+in vehicle plans.
 """
 
 from __future__ import annotations
@@ -160,7 +160,7 @@ class Step(MissionElement, ABC):
             logging.warning("⚠️ Already failed! Cannot perform this step again!")
 
     def get_enu_position(self) -> ENU | None:
-        """Get the current ENU position of the UAV."""
+        """Get the current ENU position of the vehicle."""
         msg = self.mav_manager.state.get("GLOBAL_POSITION_INT")
         if msg:
             gra_pos = GRA.from_global_int(msg.lat, msg.lon, msg.alt)

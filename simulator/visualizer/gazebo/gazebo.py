@@ -2,13 +2,13 @@
 Gazebo Simulator Module.
 
 This module defines a Gazebo-based simulator that extends the base Simulator class.
-It dynamically generates UAV model files, launches ArduPilot and logic processes,
+It dynamically generates Vehicle model files, launches ArduPilot and logic processes,
 and modifies Gazebo world files to include drones and waypoint markers.
 
 Main Features:
-- Supports custom models and color-coded UAVs
-- Dynamically generates `model.sdf` files for each UAV
-- Updates existing Gazebo world files to include UAVs and waypoint markers
+- Supports custom models and color-coded Vehicles
+- Dynamically generates `model.sdf` files for each Vehicle
+- Updates existing Gazebo world files to include Vehicles and waypoint markers
 - Launches Gazebo with the customized world file
 
 """
@@ -54,12 +54,9 @@ class GazVehicle(Vehicle):
     mtraj: GazMarkers
 
 
-GazVehicles = list[GazVehicle]
-
-
 class Gazebo(Visualizer[GazVehicle]):
     """
-    Gazebo-specific simulator that launches UAVs in a Gazebo world.
+    Gazebo-specific simulator that launches Vehicles in a Gazebo world.
     It configures drone models, world markers, and coordinates with ArduPilot logic.
     """
 
@@ -82,7 +79,7 @@ class Gazebo(Visualizer[GazVehicle]):
         return f" -f gazebo-iris --custom-location={self.gra_origin.to_str()}"
 
     def launch(self, port_offsets: list[int]):
-        """Launch the Gazebo simulator with the specified UAV and waypoints."""
+        """Launch the Gazebo simulator with the specified Vehicle and waypoints."""
         base_models = [f"{veh.model}_{veh.color}" for veh in self.vehicles.values()]
         self._generate_drone_models_from_bases(
             base_models, base_port_in=9002, port_offsets=port_offsets

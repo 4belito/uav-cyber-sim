@@ -1,5 +1,5 @@
 """
-Launches multi-UAV simulation with ArduPilot SITL, logic, and optional
+Launches multi-Vehicle simulation with ArduPilot SITL, logic, and optional
 visualization.
 """
 
@@ -17,7 +17,7 @@ from simulator.config import (
     VEH_PARAMS_PATH,
     BasePort,
 )
-from simulator.configs.gcs import UAVGCSConfig
+from simulator.configs.gcs import VehicleConfig
 from simulator.entities import SimGCS, SimVehicle, VehT
 from simulator.helpers.logging.setup_log import setup_logging
 from simulator.helpers.math import connection_id
@@ -28,13 +28,14 @@ from simulator.visualizer import Visualizer
 
 class Simulator(Generic[VehT]):
     """
-    Manages a full multi-UAV simulation, including SITL, logic, proxy, GCS,
+    Manages a full multi-Vehicle simulation, including SITL, logic, proxy, GCS,
     and visualization.
     """
 
     oracle_name: str = "Oracle ⚪"
     logic_folder = DATA_PATH / "logic"
     gcs_folder = DATA_PATH / "gcs"
+    port_step = 10
 
     def __init__(
         self,
@@ -45,17 +46,16 @@ class Simulator(Generic[VehT]):
             SimProcess.ADSB_SOCAT,
         ],
         verbose: int = 1,
-        # oracle
-        transmission_range: int = 100,  # meters for inter-UAV communication
+        transmission_range: int = 100,  # meters for inter-Vehicle communication
     ):
         self.visualizer = visualizer
         self.gra_origin = self.visualizer.gra_origin
         self.terminals = set(terminals)
         self.suppress = set(suppress_output)
-        self.vehs: dict[int, SimVehicle] = {}
+        self.vehicles: dict[int, SimVehicle] = {}
         self.gcs: dict[str, SimGCS] = {}
         self.verbose = verbose
-        self.instance = 0
+        # TODO: This is actually cell size and is more an oracle property(check design)
         self.transmission_range = transmission_range  # meters
         setup_logging(
             LOGS_PATH / f"{self.oracle_name}.log", verbose=verbose, console_output=True
@@ -63,28 +63,26 @@ class Simulator(Generic[VehT]):
 
     def launch(self) -> Oracle:
         """Launch vehicle instances and visualizer."""
-        uav_port_offsets = self._find_uav_port_offsets()
+        veh_port_offsets = self._find_veh_port_offsets()
         gcs_port_offsets = self._find_gcs_port_offsets()
-        for sysid, offset in zip(sorted(self.vehs), uav_port_offsets):
-            self.vehs[sysid].port_offset = offset
-        for gcs_name, offset in zip(sorted(self.gcs), gcs_port_offsets):
+        for sysid, offset in zip(self.vehicles, veh_port_offsets):
+            self.vehicles[sysid].port_offset = offset
+        for gcs_name, offset in zip(self.gcs, gcs_port_offsets):
             self.gcs[gcs_name].port_offset = offset
         self._save_logic_configs()
         self._save_gcs_configs()
-        self.visualizer.launch(uav_port_offsets)
+        self.visualizer.launch(veh_port_offsets)
         self._launch_gcses()
         return Oracle(
             self.gra_origin,
-            self.vehs,
+            self.vehicles,
             self.gcs,
             transmission_range=self.transmission_range,
         )
 
     def add_vehicle(self, vehicle: SimVehicle):
         """Add a vehicle to the simulation."""
-        vehicle.instance = self.instance
-        self.instance += 1
-        self.vehs[vehicle.sysid] = vehicle
+        self.vehicles[vehicle.sysid] = vehicle
         if vehicle.gcs_name not in self.gcs:
             self.gcs[vehicle.gcs_name] = SimGCS(name=vehicle.gcs_name)
         self.gcs[vehicle.gcs_name].sysids.append(vehicle.sysid)
@@ -92,8 +90,8 @@ class Simulator(Generic[VehT]):
 
     def remove_vehicle(self, sysid: int) -> bool:
         """Remove a vehicle by system ID."""
-        if sysid in self.vehs:
-            del self.vehs[sysid]
+        if sysid in self.vehicles:
+            del self.vehicles[sysid]
             self.visualizer.remove_vehicle(sysid)
             return True
         return False
@@ -124,9 +122,9 @@ class Simulator(Generic[VehT]):
             logging.info(f"🚀 GCS {gcs_name} launched (PID {p.pid})")
 
     def _save_logic_configs(self):
-        """Save the logic configurations for each UAV."""
+        """Save the logic configurations for each Vehicle."""
         self.logic_folder.mkdir(parents=True, exist_ok=True)
-        for sysid, veh in self.vehs.items():
+        for sysid, veh in self.vehicles.items():
             logic_config = {
                 "sysid": sysid,
                 "gra_origin_dict": {
@@ -147,7 +145,7 @@ class Simulator(Generic[VehT]):
             gcs_config = {
                 "name": gcs_name,
                 "port_offset": gcs.port_offset,
-                "uavs": [self._build_uav_config(sysid) for sysid in gcs.sysids],
+                "vehicles": [self._build_veh_config(sysid) for sysid in gcs.sysids],
                 "terminals": list(self.terminals),
                 "suppress": list(self.suppress),
             }
@@ -156,7 +154,7 @@ class Simulator(Generic[VehT]):
             with config_path.open("w") as f:
                 json.dump(gcs_config, f, indent=2)
 
-    def _find_uav_port_offsets(self):
+    def _find_veh_port_offsets(self):
         base_ports = [
             BasePort.ARP,
             BasePort.ARP2,
@@ -164,7 +162,7 @@ class Simulator(Generic[VehT]):
             BasePort.RID_UP,
             BasePort.RID_DOWN,
         ]
-        return self._find_port_offsets(base_ports, len(self.vehs))
+        return self._find_port_offsets(base_ports, len(self.vehicles))
 
     def _find_gcs_port_offsets(self) -> list[int]:
         base_ports = [BasePort.GCS_ZMQ, BasePort.GCS]
@@ -174,9 +172,8 @@ class Simulator(Generic[VehT]):
         self,
         base_ports: list[BasePort],
         n_ports: int,
-        unit_offset: int = 10,
     ) -> list[int]:
-        """Find available port offsets for each UAV to avoid conflicts."""
+        """Find available port offsets for each Vehicle to avoid conflicts."""
         offsets: list[int] = []
 
         cur_offset = 0
@@ -191,16 +188,16 @@ class Simulator(Generic[VehT]):
                         break
             else:
                 offsets.append(cur_offset)
-            cur_offset += unit_offset
+            cur_offset += self.port_step
         return offsets
 
-    def _build_uav_config(self, sysid: int) -> UAVGCSConfig:
-        veh = self.vehs[sysid]
+    def _build_veh_config(self, sysid: int) -> VehicleConfig:
+        veh = self.vehicles[sysid]
 
         port_offset = veh.port_offset_required
-        inst = int(port_offset / 10)
+        inst = port_offset // self.port_step
 
-        param_file = ARDU_LOGS_PATH / f"uav_{sysid}"
+        param_file = ARDU_LOGS_PATH / f"veh_{sysid}"
         param_file.mkdir(parents=True, exist_ok=True)
 
         sitl_args = (
@@ -210,7 +207,7 @@ class Simulator(Generic[VehT]):
 
         logic_config_path = str(self.logic_folder / f"logic_config_{sysid}.json")
 
-        uav_config: UAVGCSConfig = {
+        veh_config: VehicleConfig = {
             "sysid": sysid,
             "port_offset": port_offset,
             "ardupilot_cmd": (
@@ -221,7 +218,7 @@ class Simulator(Generic[VehT]):
                 f" --add-param-file {VEH_PARAMS_PATH}"
                 f" --no-mavproxy"
                 f" --port-offset={port_offset}"
-                + (" --terminal" if "veh" in self.terminals else "")
+                + (" --terminal" if SimProcess.ARDUPILOT in self.terminals else "")
                 + self.visualizer.add_vehicle_cmd(veh)
             ),
             "logic_cmd": (
@@ -241,4 +238,4 @@ class Simulator(Generic[VehT]):
                 f" --verbose {self.verbose}"
             ),
         }
-        return uav_config
+        return veh_config

@@ -15,9 +15,6 @@ class NovisVehicle(Vehicle):
     home: ENUPose
 
 
-NovisVehicles = list[NovisVehicle]
-
-
 class NoVisualizer(Visualizer[NovisVehicle]):
     """No-op visualizer for headless simulation."""
 

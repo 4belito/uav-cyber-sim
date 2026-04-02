@@ -1,21 +1,13 @@
-"""Vehicle definitions."""
+"""Simulator Vehicle definitions."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TypeVar
 
 from simulator.config import Color
+from simulator.entities.vehicle import Vehicle
 from simulator.helpers.coordinates import ENUPose, ENUs
 from simulator.planner.plan import Plan
-
-
-@dataclass
-class Vehicle:
-    """Base vehicle class."""
-
-
-VehT = TypeVar("VehT", bound=Vehicle)
 
 
 @dataclass
@@ -30,7 +22,6 @@ class SimVehicle(Vehicle):
     waypoints: ENUs
     model: str = "iris"
     port_offset: int | None = None
-    instance: int | None = None
 
     def set_port_offset(self, offset: int):
         """Set the port offset for the vehicle."""

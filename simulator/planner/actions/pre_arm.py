@@ -1,10 +1,10 @@
 """
-Pre-arm safety checks for UAV operation.
+Pre-arm safety checks for vehicle operation.
 
 This module defines individual checks and a combined pre-arm `Action` to ensure
-the UAV is in a safe and ready state before arming. It verifies the following:
+the vehicle is in a safe and ready state before arming. It verifies the following:
 
-- The UAV is disarmed
+- The vehicle is disarmed
 - EKF system is properly initialized
 - GPS fix is sufficient (3D or better)
 - Battery level is acceptable
@@ -28,14 +28,14 @@ from simulator.planner.step import Step
 
 
 class CheckDisarmed(Step):
-    """Step to verify that the UAV is disarmed before arming."""
+    """Step to verify that the vehicle is disarmed before arming."""
 
     def exec_fn(self) -> None:
         """No execution needed; just checking."""
         pass
 
     def check_fn(self) -> bool:
-        """Fail if the UAV is currently armed."""
+        """Fail if the vehicle is currently armed."""
         msg = self.mav_manager.state.get("HEARTBEAT")
         if not msg:
             return False
