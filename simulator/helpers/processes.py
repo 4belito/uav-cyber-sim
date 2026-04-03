@@ -12,7 +12,7 @@ from subprocess import DEVNULL, Popen
 class SimProcess(StrEnum):
     """Enum for different types of simulation processes."""
 
-    ARDUPILOT = "ardupilot"
+    ARDUPILOT = "ardupilot"  # includes SITL and sim_vehicle
     LOGIC = "logic"
     GCS = "gcs"
     ADSB_SOCAT = "adsb_socat"
