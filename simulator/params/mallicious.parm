@@ -1,0 +1,44 @@
+# ===============================
+# ArduCopter 4.7 – ADS-B Avoidance
+# ===============================
+
+LOG_BACKEND_TYPE 0
+
+# ===============================
+# Serial Port Configuration
+# (for ADS-B input via virtual serial)
+# ===============================
+SERIAL5_PROTOCOL 2
+SERIAL5_BAUD 57
+
+# ===============================
+# ADS-B Receiver Configuration
+# ===============================
+# ADS-B type: 1 = MAVLink protocol
+ADSB_TYPE 1
+
+# Maximum number of ADS-B vehicles to track
+ADSB_LIST_MAX 25
+
+# ===============================
+# ADS-B Avoidance Configuration
+# ===============================
+# Enable ADS-B avoidance system
+AVD_ENABLE 0
+
+# Fail-safe action when collision predicted
+# 0 = None, 1 = Report, 2 = Climb/Descend, 3 = Move Horizontally
+# 4 = Move Perpendicular 3D, 5 = RTL, 6 = Hover
+AVD_F_ACTION 0
+
+# Fail-safe horizontal distance threshold (meters)
+AVD_F_DIST_XY 5
+
+# Fail-safe vertical distance threshold (meters)
+AVD_F_DIST_Z 5
+
+# Fail-safe time lookahead (seconds)
+AVD_F_TIME 2
+
+# Sets how the vehicle behaves after the vehicle has cleanned the nera area
+AVD_F_RCVRY 1
