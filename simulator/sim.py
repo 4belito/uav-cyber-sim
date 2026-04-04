@@ -222,11 +222,6 @@ class Simulator(Generic[VehT]):
             "--sim-address=127.0.0.1",
             "--home",
             self.visualizer.home_str(veh),
-            # "--serial0",
-            # f"tcp:0.0.0.0:{BasePort.ARP + port_offset}",
-            # f"--serial5=uart:/tmp/adsb_{sysid}_ardupilot:57600",
-            # "--serial0",
-            # f"tcp:0.0.0.1:{BasePort.ARP + port_offset}",
             f"--serial5=uart:/tmp/adsb_{sysid}_ardupilot:57600",
             "--defaults",
             ",".join(

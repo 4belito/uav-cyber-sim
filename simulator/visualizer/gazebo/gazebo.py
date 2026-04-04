@@ -127,17 +127,16 @@ class Gazebo(Visualizer[GazVehicle]):
         """Convert a Vehicle to a GazVehicle with markers for its trajectory."""
         markertraj: GazMarkers = []
         for i, pos in enumerate(vehicle.waypoints):
-            markertraj.append(
-                GazMarker(
-                    name=str(i),
-                    group=f"traj_{vehicle.sysid}",
-                    pos=pos,
-                    color=vehicle.color,
-                    radius=radius,
-                    alpha=alpha,
-                )
+            gaz_marker = GazMarker(
+                name=str(i),
+                group=f"traj_{vehicle.sysid}",
+                pos=pos,
+                color=vehicle.color,
+                radius=radius,
+                alpha=alpha,
             )
-            self.markers.extend(markertraj)
+            markertraj.append(gaz_marker)
+            self.markers.append(gaz_marker)
         return GazVehicle(
             model=vehicle.model,
             color=vehicle.color,
