@@ -16,7 +16,14 @@ import pymavlink.dialects.v20.ardupilotmega as mavlink
 import zmq
 from pymavlink import mavutil
 
-from simulator.config import DATA_PATH, ENV_CMD_ARP, ENV_CMD_PYT, LOGS_PATH, BasePort
+from simulator.config import (
+    ARDU_LOGS_PATH,
+    DATA_PATH,
+    ENV_CMD_ARP,
+    ENV_CMD_PYT,
+    LOGS_PATH,
+    BasePort,
+)
 from simulator.configs import GCSConfig, VehicleConfig
 from simulator.helpers.connections import create_udp_conn, create_zmq_socket
 from simulator.helpers.connections.mavlink.customenums.customcmd import CustomCmd
@@ -154,6 +161,8 @@ class GCS:
         # ----------------
         # 3. ArduPilot
         # ----------------
+        ardu_log_folder = ARDU_LOGS_PATH / f"veh_{sysid}"
+        ardu_log_folder.mkdir(parents=True, exist_ok=True)
         p_ard = create_process(
             veh_config["ardupilot_cmd"],
             after="exec bash",
@@ -162,6 +171,7 @@ class GCS:
             title=f"ArduPilot SITL Launcher: Vehicle {sysid}",
             env_cmd=ENV_CMD_ARP,
             new_process_group=True,
+            cwd=str(ardu_log_folder),
         )  # "exit"
         logging.debug(f"ArduPilot SITL vehicle {sysid} launched (PID {p_ard.pid})")
         procs[SimProcess.ARDUPILOT] = p_ard

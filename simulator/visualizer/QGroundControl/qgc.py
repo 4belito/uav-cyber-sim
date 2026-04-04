@@ -65,15 +65,14 @@ class QGC(Visualizer[QGCVehicle]):
         """Name of the visualizer."""
         return "QGroundControl"
 
-    def add_vehicle_cmd(self, vehicle: SimVehicle) -> str:
+    def add_sitl_args(self, vehicle: SimVehicle) -> list[str]:
+        """Add QGroundControl telematry serial port."""
+        return ["--serial6", f"udpclient:127.0.0.1:{BasePort.QGC}"]
+
+    def home_str(self, vehicle: SimVehicle) -> str:
         """Add GRA location to the vehicle command."""
         visveh = self.vehicles[vehicle.sysid]
-        homes_str = visveh.home.to_str()
-        return f" --custom-location={homes_str}"
-
-    def add_sitl_args(self) -> str:
-        """Add QGroundControl telematry serial port."""
-        return f" --serial6=udpclient:127.0.0.1:{BasePort.QGC}"
+        return visveh.home.to_str()
 
     def launch(self, port_offsets: list[int]):
         """Launch the Gazebo."""
@@ -115,7 +114,7 @@ class QGC(Visualizer[QGCVehicle]):
                 )
             )
         self.markers.extend(mtraj)
-        return QGCVehicle(home=home, marker_traj=mtraj)
+        return QGCVehicle(home=home, marker_traj=mtraj, model=vehicle.model)
 
     def _delete_all_links(self):
         with open(QGC_INI_PATH, "r", encoding="utf-8") as f:

@@ -10,7 +10,7 @@ from simulator.helpers.coordinates import ENUPose, ENUs
 from simulator.planner.plan import Plan
 
 
-@dataclass
+@dataclass(kw_only=True)
 class SimVehicle(Vehicle):
     """Simulator vehicle class."""
 
@@ -20,8 +20,9 @@ class SimVehicle(Vehicle):
     color: Color
     plan: Plan
     waypoints: ENUs
-    model: str = "iris"
     port_offset: int | None = None
+    instance: int | None = None
+    model: str = "+"
 
     def set_port_offset(self, offset: int):
         """Set the port offset for the vehicle."""
@@ -37,7 +38,7 @@ class SimVehicle(Vehicle):
         enu_origin: ENUPose,
         relative_home: ENUPose,  # relative to enu_origin
         relative_path: ENUs,  # relative waypoints
-        model: str = "iris",
+        model: str = "+",  # ("frame defines the model internally")
     ) -> SimVehicle:
         """Create a SimVehicle from poses given relative to an ENU origin."""
         enu_home = enu_origin.to_abs(relative_home)

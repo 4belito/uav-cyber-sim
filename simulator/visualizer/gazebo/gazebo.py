@@ -21,7 +21,7 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
-from simulator.config import ARDUPILOT_GAZEBO_MODELS, ENV_CMD_GAZ, Color
+from simulator.config import ARDUPILOT_GAZEBO_MODELS, Color
 from simulator.entities.simvehicle import SimVehicle, Vehicle
 from simulator.helpers.coordinates import XYZRPY, ENUPose, GRAPose
 from simulator.helpers.math import heading_to_yaw
@@ -74,22 +74,36 @@ class Gazebo(Visualizer[GazVehicle]):
         """Name of the visualizer."""
         return "Gazebo"
 
-    def add_vehicle_cmd(self, vehicle: SimVehicle) -> str:
-        """Add gazebo model (only iris TODO: add others)."""
-        return f" -f gazebo-iris --custom-location={self.gra_origin.to_str()}"
+    def home_str(self, vehicle: SimVehicle) -> str:
+        """Return the home position of the vehicle as a string for Gazebo commands."""
+        return self.gra_origin.to_str()
+
+    # def add_vehicle_cmd(self, vehicle: SimVehicle) -> str:
+    #     """Add gazebo model (only iris TODO: add others)."""
+    #     return f" -f gazebo-iris --custom-location={self.gra_origin.to_str()}"
 
     def launch(self, port_offsets: list[int]):
         """Launch the Gazebo simulator with the specified Vehicle and waypoints."""
-        base_models = [f"{veh.model}_{veh.color}" for veh in self.vehicles.values()]
+        base_models = [
+            f"iris_{veh.color.name.lower()}" for veh in self.vehicles.values()
+        ]
         self._generate_drone_models_from_bases(
             base_models, base_port_in=9002, port_offsets=port_offsets
         )
         updated_world = self._update_world(self.world_path)
+        env = os.environ.copy()
+
+        env["GAZEBO_MODEL_PATH"] = (
+            f"{ARDUPILOT_GAZEBO_MODELS}:/usr/share/gazebo-11/models"
+        )
+        env["GAZEBO_PLUGIN_PATH"] = os.environ.get("GAZEBO_PLUGIN_PATH", "")
+        env["LD_LIBRARY_PATH"] = os.environ.get("LD_LIBRARY_PATH", "")
+
         create_process(
             f"gazebo {updated_world}",
             visible=False,
-            env_cmd=ENV_CMD_GAZ,
-            suppress_output=True,
+            suppress_output=False,
+            env=env,
         )
         logging.info(
             "🖥️  Gazebo launched for realistic simulation and 3D visualization."

@@ -18,6 +18,7 @@ from simulator.helpers.connections import (
     create_tcp_conn,
     create_udp_conn,
     send_heartbeat,
+    # wait_for_port,
 )
 from simulator.helpers.connections.mavlink.customenums.customcmd import CustomCmd
 from simulator.helpers.connections.mavlink.enums import DataStream, MsgID
@@ -84,6 +85,7 @@ def start_logic(config: LogicConfig):
     gra_orign = GRA(**config["gra_origin_dict"])
     plan_spec = PlanSpec(**config["plan_spec"])
 
+    # wait_for_port(BasePort.ARP + port_offset, verbose=True)
     ap_conn = create_tcp_conn(
         base_port=BasePort.ARP,
         offset=port_offset,
