@@ -99,6 +99,9 @@ class Gazebo(Visualizer[GazVehicle]):
         env["GAZEBO_PLUGIN_PATH"] = os.environ.get("GAZEBO_PLUGIN_PATH", "")
         env["LD_LIBRARY_PATH"] = os.environ.get("LD_LIBRARY_PATH", "")
 
+        # 🔥 audio fix (this is the important one)
+        env["ALSOFT_DRIVERS"] = "null"
+
         create_process(
             f"gazebo {updated_world}",
             visible=False,
