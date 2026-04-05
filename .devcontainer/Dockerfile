@@ -21,42 +21,42 @@ RUN ln -sf /usr/share/zoneinfo/EST /etc/localtime && \
     locale-gen
 
 # install QGroundControl dependencies
-RUN apt-get update && apt-get install --yes --no-install-recommends \
-    apt-utils \
-    binutils \
-    ccache \
-    checkinstall \
-    cmake \
-    curl \
-    espeak \
-    fuse \
-    g++ \
-    gcc \
-    git \
-    gosu \
-    kmod \
-    libespeak-dev \
-    libfontconfig1 \
-    libfuse2 \
-    libgstreamer-plugins-base1.0-dev \
-    libgstreamer1.0-0 \
-    libgstreamer1.0-dev \
-    libsdl2-dev \
-    libssl-dev \
-    libudev-dev \
-    locales \
-    make \
-    ninja-build \
-    openssh-client \
-    openssl \
-    patchelf \
-    pkg-config \
-    rsync \
-    speech-dispatcher \
-    wget \
-    xvfb \
-    zlib1g-dev \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+# RUN apt-get update && apt-get install --yes --no-install-recommends \
+#     apt-utils \
+#     binutils \
+#     ccache \
+#     checkinstall \
+#     cmake \
+#     curl \
+#     espeak \
+#     fuse \
+#     g++ \
+#     gcc \
+#     git \
+#     gosu \
+#     kmod \
+#     libespeak-dev \
+#     libfontconfig1 \
+#     libfuse2 \
+#     libgstreamer-plugins-base1.0-dev \
+#     libgstreamer1.0-0 \
+#     libgstreamer1.0-dev \
+#     libsdl2-dev \
+#     libssl-dev \
+#     libudev-dev \
+#     locales \
+#     make \
+#     ninja-build \
+#     openssh-client \
+#     openssl \
+#     patchelf \
+#     pkg-config \
+#     rsync \
+#     speech-dispatcher \
+#     wget \
+#     xvfb \
+#     zlib1g-dev \
+#     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # install Ardupilot Gazebo plugin dependencies
 RUN apt-get update && apt-get install --yes --no-install-recommends \
@@ -81,53 +81,59 @@ ENV LANG=en_US.UTF-8 \
 WORKDIR /home/ubuntu
 
 # INSTALL ARDUPILOT
-WORKDIR /home/ubuntu
-RUN git clone https://github.com/4belito/ardupilot.git --recurse-submodules
-RUN ./ardupilot/Tools/environment_install/install-prereqs-ubuntu.sh -y
-# add local python modules to path
-RUN echo 'export PATH=~/.local/bin:$PATH' >> ~/.profile
-# test run
-RUN cd ardupilot/Tools/autotest && ./sim_vehicle.py -w -v ArduCopter
-RUN sudo apt-get clean && sudo rm -rf /var/lib/apt/lists/*
+# WORKDIR /home/ubuntu
+# RUN git clone https://github.com/4belito/ardupilot.git --recurse-submodules
+# RUN ./ardupilot/Tools/environment_install/install-prereqs-ubuntu.sh -y
+# # add local python modules to path
+# RUN echo 'export PATH=~/.local/bin:$PATH' >> ~/.profile
+# # test run
+# RUN cd ardupilot/Tools/autotest && ./sim_vehicle.py -w -v ArduCopter
+# RUN sudo apt-get clean && sudo rm -rf /var/lib/apt/lists/*
 
 # INSTALL QGROUNDCONTROL
-ENV QT_VERSION=5.15.2 \
-    DISPLAY=:99 \
-    QMAKESPEC=linux-g++-64 \
-    QT_PATH=/opt/Qt \
-    QT_DESKTOP=$QT_PATH/${QT_VERSION}/gcc_64
-RUN echo 'export PATH=/usr/lib/ccache:/opt/Qt/5.15.2/gcc_64/bin:$PATH' >> ~/.profile
-RUN git clone https://github.com/4belito/qgroundcontrol.git --recurse-submodules && \
-    cd qgroundcontrol && \
-    git checkout v4.4.0 && \
-    git submodule update --init --recursive
-ARG PIP_BREAK_SYSTEM_PACKAGES=1
-RUN cd qgroundcontrol && \
-    sudo ./deploy/docker/install-qt-linux.sh && \
-    mkdir build && \
-    cd build && \
-    qmake .. && \
-    make -j$(nproc) && \
-    cd .. && \
-    ./deploy/create_linux_appimage.sh . ./build/staging && \
-    mv QGroundControl.AppImage ~ && \
-    cd && \
-    rm -rf qgroundcontrol && \
-    chmod a+x QGroundControl.AppImage && \
-    cd /home/ubuntu/.config && \
-    mkdir QGroundControl.org && \
-    touch "QGroundControl.org/QGroundControl Daily.ini"
+# ENV QT_VERSION=5.15.2 \
+#     DISPLAY=:99 \
+#     QMAKESPEC=linux-g++-64 \
+#     QT_PATH=/opt/Qt \
+#     QT_DESKTOP=$QT_PATH/${QT_VERSION}/gcc_64
+# RUN echo 'export PATH=/usr/lib/ccache:/opt/Qt/5.15.2/gcc_64/bin:$PATH' >> ~/.profile
+# RUN git clone https://github.com/4belito/qgroundcontrol.git --recurse-submodules && \
+#     cd qgroundcontrol && \
+#     git checkout v4.4.0 && \
+#     git submodule update --init --recursive
+# ARG PIP_BREAK_SYSTEM_PACKAGES=1
+# RUN cd qgroundcontrol && \
+#     sudo ./deploy/docker/install-qt-linux.sh && \
+#     mkdir build && \
+#     cd build && \
+#     qmake .. && \
+#     make -j$(nproc) && \
+#     cd .. && \
+#     ./deploy/create_linux_appimage.sh . ./build/staging && \
+#     mv QGroundControl.AppImage ~ && \
+#     cd && \
+#     rm -rf qgroundcontrol && \
+#     chmod a+x QGroundControl.AppImage && \
+#     cd /home/ubuntu/.config && \
+#     mkdir QGroundControl.org && \
+#     touch "QGroundControl.org/QGroundControl Daily.ini"
+RUN mkdir -p QGroundControl && \
+    wget https://github.com/mavlink/qgroundcontrol/releases/download/v4.4.0/QGroundControl.AppImage \
+    -O QGroundControl/QGroundControl.AppImage && \
+    chmod +x QGroundControl/QGroundControl.AppImage
 
 # INSTALL GAZEBO
-RUN git clone https://github.com/4belito/ardupilot_gazebo.git && \
-    cd ardupilot_gazebo && \
-    mkdir build && \
-    cd build && \
-    cmake .. && \
-    make -j$(nproc) && \
-    sudo make install
-RUN echo 'source /usr/share/gazebo/setup.sh' >> ~/.profile
-RUN echo 'export GAZEBO_MODEL_PATH=~/ardupilot_gazebo/models' >> ~/.profile
+# RUN git clone https://github.com/4belito/ardupilot_gazebo.git && \
+#     cd ardupilot_gazebo && \
+#     mkdir build && \
+#     cd build && \
+#     cmake .. && \
+#     make -j$(nproc) && \
+#     sudo make install
+# RUN echo 'source /usr/share/gazebo/setup.sh' >> ~/.profile
+# RUN echo 'export GAZEBO_MODEL_PATH=~/ardupilot_gazebo/models' >> ~/.profile
+# Gazebo environment is configured at runtime by the simulator
+
 
 # INSTALL MINICONDA
 RUN mkdir ~/miniconda3 && \
@@ -157,8 +163,21 @@ RUN source ~/miniconda3/bin/activate && \
 
 # CLONE THE REPO
 RUN git clone https://github.com/4belito/uav-cyber-sim.git
+WORKDIR /home/ubuntu/uav-cyber-sim
 
+# NEW: init submodules
+RUN git submodule update --init --recursive
 
+RUN ./ardupilot/Tools/environment_install/install-prereqs-ubuntu.sh -y
+#RUN echo 'export PATH=~/.local/bin:$PATH' >> ~/.profile
+ENV PATH="/home/ubuntu/.local/bin:${PATH}"
+
+RUN cd ardupilot_gazebo && \
+    mkdir build && \
+    cd build && \
+    cmake .. && \
+    make -j$(nproc) && \
+    sudo make install
 
 # INSTALL ULI NET SIM
 FROM uli-net-sim:latest AS netsim

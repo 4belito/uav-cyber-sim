@@ -147,15 +147,19 @@ class Gazebo(Visualizer[GazVehicle]):
         )
 
     def _build_gazebo_env(self) -> dict[str, str]:
-        return {
+        env = {
             "GAZEBO_MODEL_PATH": str(ARDUPILOT_GAZEBO_MODELS),
             "GAZEBO_PLUGIN_PATH": "/usr/lib/x86_64-linux-gnu/gazebo-11/plugins",
             "GAZEBO_RESOURCE_PATH": "/usr/share/gazebo-11",
             "LD_LIBRARY_PATH": "/usr/lib/x86_64-linux-gnu/gazebo-11/plugins",
-            # optional but sometimes needed:
             "HOME": os.environ.get("HOME", ""),
-            "DISPLAY": os.environ.get("DISPLAY", ":0"),
         }
+
+        display = os.environ.get("DISPLAY")
+        if display:
+            env["DISPLAY"] = display
+
+        return env
 
     def _generate_drone_models_from_bases(
         self,
