@@ -3,6 +3,7 @@ __pycache__/
 simulator/data/
 simulator/logs/
 simulator/ardupilot_logs/
+simulator/visualizer/gazebo/runtime_*/
 
 # ArduPilot/SITL state
 eeprom.bin

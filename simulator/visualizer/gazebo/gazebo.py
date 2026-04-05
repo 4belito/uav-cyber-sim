@@ -21,7 +21,12 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
-from simulator.config import ARDUPILOT_GAZEBO_MODELS, Color
+from simulator.config import (
+    ARDUPILOT_GAZEBO_MODELS,
+    RUNTIME_GAZEBO_MODELS,
+    RUNTIME_GAZEBO_WORLDS,
+    Color,
+)
 from simulator.entities.simvehicle import SimVehicle, Vehicle
 from simulator.helpers.coordinates import XYZRPY, ENUPose, GRAPose
 from simulator.helpers.math import heading_to_yaw
@@ -66,7 +71,7 @@ class Gazebo(Visualizer[GazVehicle]):
         world_path: str,
     ):
         super().__init__(gra_origin)
-        self.world_path = world_path
+        self.world_path = Path(world_path)
         self.markers: GazMarkers = []
 
     @property
@@ -147,17 +152,19 @@ class Gazebo(Visualizer[GazVehicle]):
         )
 
     def _build_gazebo_env(self) -> dict[str, str]:
+        runtime = str(RUNTIME_GAZEBO_MODELS)
+        base = str(ARDUPILOT_GAZEBO_MODELS)
+
         env = {
-            "GAZEBO_MODEL_PATH": str(ARDUPILOT_GAZEBO_MODELS),
+            "GAZEBO_MODEL_PATH": f"{runtime}:{base}",
             "GAZEBO_PLUGIN_PATH": "/usr/lib/x86_64-linux-gnu/gazebo-11/plugins",
             "GAZEBO_RESOURCE_PATH": "/usr/share/gazebo-11",
             "LD_LIBRARY_PATH": "/usr/lib/x86_64-linux-gnu/gazebo-11/plugins",
             "HOME": os.environ.get("HOME", ""),
         }
 
-        display = os.environ.get("DISPLAY")
-        if display:
-            env["DISPLAY"] = display
+        if "DISPLAY" in os.environ:
+            env["DISPLAY"] = os.environ["DISPLAY"]
 
         return env
 
@@ -167,8 +174,8 @@ class Gazebo(Visualizer[GazVehicle]):
         port_offsets: list[int],
         base_port_in: int = 9002,
     ) -> None:
-        template_path = Path(ARDUPILOT_GAZEBO_MODELS) / "drone"
-        output_dir = Path(ARDUPILOT_GAZEBO_MODELS)
+        template_path = ARDUPILOT_GAZEBO_MODELS / "drone"
+        output_dir = RUNTIME_GAZEBO_MODELS
         output_dir.mkdir(parents=True, exist_ok=True)
 
         for i in range(self.num_vehicles):
@@ -205,8 +212,8 @@ class Gazebo(Visualizer[GazVehicle]):
             with open(sdf_path, "w", encoding="utf-8") as f:
                 f.write(sdf)
 
-    def _update_world(self, world_path: str) -> str:
-        updated_world_path = os.path.expanduser(world_path[:-6] + "_updated.world")
+    def _update_world(self, world_path: Path) -> Path:
+        out_path = RUNTIME_GAZEBO_WORLDS / world_path.name
         tree = ET.parse(world_path)
         root = tree.getroot()
         world_elem = root.find("world")
@@ -218,8 +225,8 @@ class Gazebo(Visualizer[GazVehicle]):
         self._add_markers_elements(world_elem)
         self._add_drone_elements(world_elem)
 
-        tree.write(updated_world_path)
-        return updated_world_path
+        tree.write(out_path)
+        return out_path
 
     def _remove_old_models(self, world_elem: ET.Element) -> None:
         for model in world_elem.findall("model"):

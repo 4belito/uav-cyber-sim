@@ -22,7 +22,8 @@ LOGS_PATH = (ROOT / "logs").resolve()
 VEH_PARAMS_PATH = (ROOT / "params" / "vehicle.parm").resolve()
 SIM_PARAMS_PATH = (ROOT / "params" / "simulation.py").resolve()
 DATA_PATH = (ROOT / "data").resolve()
-
+RUNTIME_GAZEBO_MODELS = ROOT / "visualizer" / "gazebo" / "runtime_models"
+RUNTIME_GAZEBO_WORLDS = ROOT / "visualizer" / "gazebo" / "runtime_worlds"
 # Ensure logs directory exists (can be cleaned later)
 ARDU_LOGS_PATH.mkdir(parents=True, exist_ok=True)
 
