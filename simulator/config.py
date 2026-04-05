@@ -18,10 +18,10 @@ ARDUPILOT_PATH = PROJECT_ROOT / "ardupilot"
 
 
 # TODO: Remove INI and Vehicle
-ARDUCOPTER_BIN = HOME / "ardupilot" / "build" / "sitl" / "bin" / "arducopter"
-ARDUPILOT_PARAMS = PROJECT_ROOT / "ardupilot" / "Tools" / "autotest" / "default_params"
-QUADCOPTER_PARAMS = ARDUPILOT_PARAMS / "copter.parm"
-GAZEBO_IRIS_PARAMS = ARDUPILOT_PARAMS / "gazebo-iris.parm"
+# ARDUCOPTER_BIN = HOME / "ardupilot" / "build" / "sitl" / "bin" / "arducopter"
+# ARDUPILOT_PARAMS = PROJECT_ROOT / "ardupilot" / "Tools" / "autotest" / "default_params"
+# QUADCOPTER_PARAMS = ARDUPILOT_PARAMS / "copter.parm"
+# GAZEBO_IRIS_PARAMS = ARDUPILOT_PARAMS / "gazebo-iris.parm"
 
 
 # QGC_INI_PATH = HOME / ".config" / "QGroundControl.org" / "QGroundControl Daily.ini"

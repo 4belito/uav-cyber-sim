@@ -92,20 +92,20 @@ class Gazebo(Visualizer[GazVehicle]):
         )
         updated_world = self._update_world(self.world_path)
 
-        # TODO: actor this out
-        env = os.environ.copy()
-        env["GAZEBO_MODEL_PATH"] = (
-            f"{ARDUPILOT_GAZEBO_MODELS}:/usr/share/gazebo-11/models"
-        )
-        env["GAZEBO_PLUGIN_PATH"] = os.environ.get("GAZEBO_PLUGIN_PATH", "")
-        env["LD_LIBRARY_PATH"] = os.environ.get("LD_LIBRARY_PATH", "")
-        env["ALSOFT_DRIVERS"] = "null"
+        # # TODO: actor this out
+        # env = os.environ.copy()
+        # env["GAZEBO_MODEL_PATH"] = (
+        #     f"{ARDUPILOT_GAZEBO_MODELS}:/usr/share/gazebo-11/models"
+        # )
+        # env["GAZEBO_PLUGIN_PATH"] = os.environ.get("GAZEBO_PLUGIN_PATH", "")
+        # env["LD_LIBRARY_PATH"] = os.environ.get("LD_LIBRARY_PATH", "")
+        # # env["ALSOFT_DRIVERS"] = "null"
 
         create_process(
             f"gazebo {updated_world}",
             visible=False,
             suppress_output=True,
-            env=env,
+            env=self._build_gazebo_env(),
         )
         logging.info(
             "🖥️  Gazebo launched for realistic simulation and 3D visualization."
@@ -145,6 +145,17 @@ class Gazebo(Visualizer[GazVehicle]):
             home=vehicle.home,
             mtraj=markertraj,
         )
+
+    def _build_gazebo_env(self) -> dict[str, str]:
+        return {
+            "GAZEBO_MODEL_PATH": str(ARDUPILOT_GAZEBO_MODELS),
+            "GAZEBO_PLUGIN_PATH": "/usr/lib/x86_64-linux-gnu/gazebo-11/plugins",
+            "GAZEBO_RESOURCE_PATH": "/usr/share/gazebo-11",
+            "LD_LIBRARY_PATH": "/usr/lib/x86_64-linux-gnu/gazebo-11/plugins",
+            # optional but sometimes needed:
+            "HOME": os.environ.get("HOME", ""),
+            "DISPLAY": os.environ.get("DISPLAY", ":0"),
+        }
 
     def _generate_drone_models_from_bases(
         self,
