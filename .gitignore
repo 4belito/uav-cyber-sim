@@ -9,6 +9,9 @@ eeprom.bin
 **/eeprom.bin
 eeprom*.bin
 
+# QGroundControl AppImage
+QGroundControl/QGroundControl.AppImage
+
 # Jupyter notebook autosaves
 .ipynb_checkpoints/
 

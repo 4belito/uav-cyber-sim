@@ -8,32 +8,19 @@ from enum import IntEnum, StrEnum
 from pathlib import Path
 
 # --- System Paths ---
-SIMULATOR_ROOT = Path(__file__).parent
-PROJECT_ROOT = SIMULATOR_ROOT.parent
+ROOT = Path(__file__).parent
+PROJECT_ROOT = ROOT.parent
 
-HOME = Path.home()
-QGC_PATH = HOME / "QGroundControl.AppImage"
+QGC_PATH = PROJECT_ROOT / "QGroundControl" / "QGroundControl.AppImage"
 ARDUPILOT_GAZEBO_MODELS = PROJECT_ROOT / "ardupilot_gazebo" / "models"
 ARDUPILOT_PATH = PROJECT_ROOT / "ardupilot"
 
 
-# TODO: Remove INI and Vehicle
-# ARDUCOPTER_BIN = HOME / "ardupilot" / "build" / "sitl" / "bin" / "arducopter"
-# ARDUPILOT_PARAMS = PROJECT_ROOT / "ardupilot" / "Tools" / "autotest" / "default_params"
-# QUADCOPTER_PARAMS = ARDUPILOT_PARAMS / "copter.parm"
-# GAZEBO_IRIS_PARAMS = ARDUPILOT_PARAMS / "gazebo-iris.parm"
-
-
-# QGC_INI_PATH = HOME / ".config" / "QGroundControl.org" / "QGroundControl Daily.ini"
-# ARDUPILOT_VEHICLE_PATH = HOME / "ardupilot" / "Tools" / "autotest" / "sim_vehicle.py"
-
-
 # --- Local Paths ---
-ROOT = Path(__file__).parent
 ARDU_LOGS_PATH = (ROOT / "ardupilot_logs").resolve()
 LOGS_PATH = (ROOT / "logs").resolve()
-VEH_PARAMS_PATH = (ROOT / "params/vehicle.parm").resolve()
-SIM_PARAMS_PATH = (ROOT / "params/simulation.py").resolve()
+VEH_PARAMS_PATH = (ROOT / "params" / "vehicle.parm").resolve()
+SIM_PARAMS_PATH = (ROOT / "params" / "simulation.py").resolve()
 DATA_PATH = (ROOT / "data").resolve()
 
 # Ensure logs directory exists (can be cleaned later)
@@ -108,6 +95,8 @@ class Color(StrEnum):
 
 
 Colors = list[Color]
+
+
 # --- Environment Setup Commands ---
 ENV_CMD_PYT = None
 ENV_CMD_ARP = "source ~/.profile"
