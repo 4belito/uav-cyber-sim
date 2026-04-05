@@ -9,23 +9,24 @@ import socket
 from typing import Generic
 
 from simulator.config import (
-    ARDUCOPTER_BIN,
     DATA_PATH,
     ENV_CMD_PYT,
-    GAZEBO_IRIS_PARAMS,
+    # GAZEBO_IRIS_PARAMS,
     LOGS_PATH,
-    QUADCOPTER_PARAMS,
     VEH_PARAMS_PATH,
     BasePort,
 )
 from simulator.configs.gcs import VehicleConfig
 from simulator.entities import SimGCS, SimVehicle, VehT
+from simulator.external.sitl import ensure_sitl_built, get_default_params
 from simulator.helpers.logging.setup_log import setup_logging
 from simulator.helpers.math import connection_id
 from simulator.helpers.processes import SimProcess, create_process
 from simulator.oracle import Oracle
 from simulator.params.simulation import SIM_SPEEDUP
 from simulator.visualizer import Visualizer
+
+# TODO: remove hard-coded ArduCopter and add it to SimVehicle as firmware
 
 
 class Simulator(Generic[VehT]):
@@ -205,10 +206,13 @@ class Simulator(Generic[VehT]):
 
         port_offset = veh.port_offset_required
         inst = port_offset // self.port_step
+        binary = ensure_sitl_built(
+            frame=veh.model,  # e.g. "gazebo-iris"
+            firmware="ArduCopter",  # or "ArduPlane", etc.
+        )
 
-        logic_config_path = str(self.logic_folder / f"logic_config_{sysid}.json")
         vehicle_cmd = [
-            str(ARDUCOPTER_BIN),
+            str(binary),
             "--model",
             veh.model,
             "-I" + str(inst),
@@ -225,30 +229,15 @@ class Simulator(Generic[VehT]):
             f"--serial5=uart:/tmp/adsb_{sysid}_ardupilot:57600",
             "--defaults",
             ",".join(
-                [
-                    str(QUADCOPTER_PARAMS),
-                    str(GAZEBO_IRIS_PARAMS),
-                    str(VEH_PARAMS_PATH),
-                ]
+                get_default_params(veh.model, "ArduCopter") + [str(VEH_PARAMS_PATH)]
             ),
         ]
 
         vehicle_cmd.extend(self.visualizer.add_sitl_args(veh))
-
+        logic_config_path = str(self.logic_folder / f"logic_config_{sysid}.json")
         veh_config: VehicleConfig = {
             "sysid": sysid,
             "port_offset": port_offset,
-            # "ardupilot_cmd": (
-            #     f"python3 {ARDUPILOT_VEHICLE_PATH}"
-            #     f" -v ArduCopter -I{inst} --sysid {connection_id(sysid)} --no-rebuild"
-            #     f' -A "{sitl_args}"'
-            #     f" --use-dir={param_file}"
-            #     f" --add-param-file {self.parms[sysid]}"
-            #     f" --no-mavproxy"
-            #     f" --port-offset={port_offset}"
-            #     + (" --terminal" if SimProcess.ARDUPILOT in self.terminals else "")
-            #     + self.visualizer.add_vehicle_cmd(veh)
-            # ),
             "ardupilot_cmd": " ".join(vehicle_cmd),
             "logic_cmd": (
                 f"python3 -m simulator.logic"

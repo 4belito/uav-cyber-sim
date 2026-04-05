@@ -91,21 +91,20 @@ class Gazebo(Visualizer[GazVehicle]):
             base_models, base_port_in=9002, port_offsets=port_offsets
         )
         updated_world = self._update_world(self.world_path)
-        env = os.environ.copy()
 
+        # TODO: actor this out
+        env = os.environ.copy()
         env["GAZEBO_MODEL_PATH"] = (
             f"{ARDUPILOT_GAZEBO_MODELS}:/usr/share/gazebo-11/models"
         )
         env["GAZEBO_PLUGIN_PATH"] = os.environ.get("GAZEBO_PLUGIN_PATH", "")
         env["LD_LIBRARY_PATH"] = os.environ.get("LD_LIBRARY_PATH", "")
-
-        # 🔥 audio fix (this is the important one)
         env["ALSOFT_DRIVERS"] = "null"
 
         create_process(
             f"gazebo {updated_world}",
             visible=False,
-            suppress_output=False,
+            suppress_output=True,
             env=env,
         )
         logging.info(

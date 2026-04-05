@@ -13,7 +13,7 @@ from dataclasses import dataclass
 import folium
 from IPython.display import display  # type: ignore
 
-from simulator.config import QGC_INI_PATH, QGC_PATH, BasePort, Color
+from simulator.config import QGC_PATH, BasePort, Color
 from simulator.entities import SimVehicle, Vehicle
 from simulator.helpers.coordinates import (
     GRA,
@@ -76,8 +76,8 @@ class QGC(Visualizer[QGCVehicle]):
 
     def launch(self, port_offsets: list[int]):
         """Launch the Gazebo."""
-        self._delete_all_links()
-        self._enable_autoconnect_udp()
+        # self._delete_all_links()
+        # self._enable_autoconnect_udp()
         create_process(
             cmd=" ".join([os.path.expanduser(QGC_PATH), "--appimage-extract-and-run"]),
             visible=False,
@@ -116,69 +116,69 @@ class QGC(Visualizer[QGCVehicle]):
         self.markers.extend(mtraj)
         return QGCVehicle(home=home, marker_traj=mtraj, model=vehicle.model)
 
-    def _delete_all_links(self):
-        with open(QGC_INI_PATH, "r", encoding="utf-8") as f:
-            lines = f.readlines()
+    # def _delete_all_links(self):
+    #     with open(QGC_INI_PATH, "r", encoding="utf-8") as f:
+    #         lines = f.readlines()
 
-        inside_links = False
-        new_lines: list[str] = []
+    #     inside_links = False
+    #     new_lines: list[str] = []
 
-        for line in lines:
-            if line.strip() == "[LinkConfigurations]":
-                inside_links = True
-                new_lines.append(line)
-                new_lines.append("count=0\n")  # reset count
-                continue
+    #     for line in lines:
+    #         if line.strip() == "[LinkConfigurations]":
+    #             inside_links = True
+    #             new_lines.append(line)
+    #             new_lines.append("count=0\n")  # reset count
+    #             continue
 
-            if inside_links:
-                if line.startswith("Link") or line.startswith("count="):
-                    continue  # skip all LinkX and count lines
-                elif line.startswith("["):  # next section begins
-                    inside_links = False
+    #         if inside_links:
+    #             if line.startswith("Link") or line.startswith("count="):
+    #                 continue  # skip all LinkX and count lines
+    #             elif line.startswith("["):  # next section begins
+    #                 inside_links = False
 
-            new_lines.append(line)
-        self._write_ini(new_lines)
+    #         new_lines.append(line)
+    #     self._write_ini(new_lines)
 
-    def _write_ini(self, lines: list[str]):
-        with open(QGC_INI_PATH, "w", encoding="utf-8") as f:
-            f.writelines(lines)
-            f.flush()
-            os.fsync(f.fileno())
+    # def _write_ini(self, lines: list[str]):
+    #     with open(QGC_INI_PATH, "w", encoding="utf-8") as f:
+    #         f.writelines(lines)
+    #         f.flush()
+    #         os.fsync(f.fileno())
 
-    def _enable_autoconnect_udp(self):
-        with open(QGC_INI_PATH, "r", encoding="utf-8") as f:
-            lines = f.readlines()
+    # def _enable_autoconnect_udp(self):
+    #     with open(QGC_INI_PATH, "r", encoding="utf-8") as f:
+    #         lines = f.readlines()
 
-        new_lines: list[str] = []
-        in_autoconnect = False
-        autoconnect_found = False
-        udp_written = False
+    #     new_lines: list[str] = []
+    #     in_autoconnect = False
+    #     autoconnect_found = False
+    #     udp_written = False
 
-        for line in lines:
-            stripped = line.strip()
+    #     for line in lines:
+    #         stripped = line.strip()
 
-            if stripped == "[AutoConnect]":
-                in_autoconnect = True
-                autoconnect_found = True
-                new_lines.append(line)
-                continue
+    #         if stripped == "[AutoConnect]":
+    #             in_autoconnect = True
+    #             autoconnect_found = True
+    #             new_lines.append(line)
+    #             continue
 
-            if in_autoconnect:
-                if stripped.startswith("UDPLink="):
-                    new_lines.append("UDPLink=true\n")
-                    udp_written = True
-                    continue
-                elif stripped.startswith("[") and stripped != "[AutoConnect]":
-                    in_autoconnect = False
+    #         if in_autoconnect:
+    #             if stripped.startswith("UDPLink="):
+    #                 new_lines.append("UDPLink=true\n")
+    #                 udp_written = True
+    #                 continue
+    #             elif stripped.startswith("[") and stripped != "[AutoConnect]":
+    #                 in_autoconnect = False
 
-            new_lines.append(line)
+    #         new_lines.append(line)
 
-        if autoconnect_found and not udp_written:
-            idx = next(
-                i for i, line in enumerate(new_lines) if line.strip() == "[AutoConnect]"
-            )
-            new_lines.insert(idx + 1, "UDPLink=true\n")
-        elif not autoconnect_found:
-            new_lines.append("\n[AutoConnect]\nUDPLink=true\n")
+    #     if autoconnect_found and not udp_written:
+    #         idx = next(
+    #             i for i, line in enumerate(new_lines) if line.strip() == "[AutoConnect]"
+    #         )
+    #         new_lines.insert(idx + 1, "UDPLink=true\n")
+    #     elif not autoconnect_found:
+    #         new_lines.append("\n[AutoConnect]\nUDPLink=true\n")
 
-        self._write_ini(new_lines)
+    #     self._write_ini(new_lines)
