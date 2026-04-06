@@ -1,9 +1,9 @@
 TODO:
 - organize data collection
+- us UV instead of conda
+- look at gazebo headless and check scalability
 - Launch vehicles at any time
 - Add support to use different UAV models other than Iris.
-- Fix: [Errno 111] Connection refused — sleeping.
-- Completely remove the sim_vehicle.py script from the simulator; move necessary code to custom scripts (proxy.py, sim.py, oracle.py).
 - Add a parameter for waypoint reach distance, similar to Guided mode.
 - Add more cyber attacks and modulireze the current rid spooing attack
 
