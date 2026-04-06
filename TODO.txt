@@ -1,4 +1,6 @@
 TODO:
+- Oracle close sincronization (logic,GCS Dones sincroniation issue with many drones)
+- GCS - Logic Comunicatioin (save traj)
 - organize data collection
 - us UV instead of conda
 - look at gazebo headless and check scalability
