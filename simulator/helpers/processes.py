@@ -12,7 +12,7 @@ from subprocess import DEVNULL, Popen
 class SimProcess(StrEnum):
     """Enum for different types of simulation processes."""
 
-    ARDUPILOT = "ardupilot"
+    ARDUPILOT = "ardupilot"  # includes SITL and sim_vehicle
     LOGIC = "logic"
     GCS = "gcs"
     ADSB_SOCAT = "adsb_socat"
@@ -28,22 +28,30 @@ def create_process(
     suppress_output: bool = False,
     terminal_geometry: str = "80x10",
     new_process_group: bool = False,
+    cwd: str | None = None,
+    env: dict[str, str] | None = None,  # 👈 ADD THIS
 ) -> Popen[bytes]:
     """Launch a subprocess, optionally in a visible terminal."""
     redirect = " > /dev/null 2>&1" if suppress_output else ""
+
     full_cmd = (
         (f"{env_cmd}; " if env_cmd else "")
         + f"{cmd}{redirect}"
         + (f"; {after}" if visible else "")
     )
+
     bash_cmd = ["bash", "-c", full_cmd]
 
+    env = env if env is not None else os.environ.copy()
+
+    # =========================
+    # Visible terminal (Linux)
+    # =========================
     if visible and platform.system() == "Linux":
-        display_env = os.environ.get("DISPLAY")
+        display_env = env.get("DISPLAY")
         if not display_env:
             raise RuntimeError("DISPLAY not set. X11 forwarding may not be active.")
 
-        env = os.environ.copy()
         env["DISPLAY"] = display_env
 
         if "SSH_CONNECTION" in env or "REMOTE_CONTAINERS" in env:
@@ -64,35 +72,26 @@ def create_process(
                 "--",
             ] + bash_cmd
 
-        if new_process_group:
-            return Popen(
-                terminal_cmd,
-                env=env,
-                start_new_session=True,
-            )
-
         return Popen(
             terminal_cmd,
             env=env,
+            cwd=cwd,
+            start_new_session=new_process_group,
         )
 
+    # =========================
+    # Headless execution
+    # =========================
     if visible:
         raise OSError("Unsupported OS for visible terminal mode.")
-
-    if new_process_group:
-        return Popen(
-            bash_cmd,
-            stdout=DEVNULL if suppress_output else None,
-            stderr=DEVNULL if suppress_output else None,
-            env=os.environ.copy(),
-            start_new_session=True,
-        )
 
     return Popen(
         bash_cmd,
         stdout=DEVNULL if suppress_output else None,
         stderr=DEVNULL if suppress_output else None,
-        env=os.environ.copy(),
+        env=env,
+        cwd=cwd,
+        start_new_session=new_process_group,
     )
 
 

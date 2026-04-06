@@ -8,5 +8,7 @@ from typing import TypeVar
 class Vehicle:
     """Base vehicle class."""
 
+    model: str
+
 
 VehT = TypeVar("VehT", bound=Vehicle)

@@ -10,9 +10,17 @@ from pathlib import Path
 # --- System Paths ---
 HOME = Path.home()
 QGC_PATH = HOME / "QGroundControl.AppImage"
+ARDUPILOT_GAZEBO_MODELS = HOME / "ardupilot_gazebo" / "models"
+ARDUCOPTER_BIN = HOME / "ardupilot" / "build" / "sitl" / "bin" / "arducopter"
+ARDUPILOT_PARAMS = HOME / "ardupilot" / "Tools" / "autotest" / "default_params"
+
+QUADCOPTER_PARAMS = ARDUPILOT_PARAMS / "copter.parm"
+GAZEBO_IRIS_PARAMS = ARDUPILOT_PARAMS / "gazebo-iris.parm"
+
+# TODO: Remove INI and Vehicle
 QGC_INI_PATH = HOME / ".config" / "QGroundControl.org" / "QGroundControl Daily.ini"
 ARDUPILOT_VEHICLE_PATH = HOME / "ardupilot" / "Tools" / "autotest" / "sim_vehicle.py"
-ARDUPILOT_GAZEBO_MODELS = HOME / "ardupilot_gazebo" / "models"
+
 
 # --- Local Paths ---
 ROOT = Path(__file__).parent
@@ -97,4 +105,4 @@ Colors = list[Color]
 # --- Environment Setup Commands ---
 ENV_CMD_PYT = None
 ENV_CMD_ARP = "source ~/.profile"
-ENV_CMD_GAZ = "source ~/.profile"
+ENV_CMD_GAZ = "source ~/.profile"  # None

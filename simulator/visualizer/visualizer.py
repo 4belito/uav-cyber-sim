@@ -30,6 +30,11 @@ class Visualizer(ABC, Generic[VehT]):
         pass
 
     @abstractmethod
+    def home_str(self, vehicle: SimVehicle) -> str:
+        """Provide home position of the vehicle in the visualizer corredinates."""
+        pass
+
+    @abstractmethod
     def get_visvehicle(self, vehicle: SimVehicle) -> VehT:
         """Convert a Vehicle to the visualizer-specific vehicle type."""
         pass
@@ -43,13 +48,9 @@ class Visualizer(ABC, Generic[VehT]):
     # Optional (subclasses may override)
     # ===================================
 
-    def add_vehicle_cmd(self, vehicle: SimVehicle) -> str:
-        """Add optional command-line for the ith vehicle."""
-        return ""
-
-    def add_sitl_args(self) -> str:
+    def add_sitl_args(self, vehicle: SimVehicle) -> list[str]:
         """Add optional SITL arguments for a vehicle."""
-        return ""
+        return []
 
     # ==================
     # Base functionality

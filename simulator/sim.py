@@ -9,11 +9,12 @@ import socket
 from typing import Generic
 
 from simulator.config import (
-    ARDU_LOGS_PATH,
-    ARDUPILOT_VEHICLE_PATH,
+    ARDUCOPTER_BIN,
     DATA_PATH,
     ENV_CMD_PYT,
+    GAZEBO_IRIS_PARAMS,
     LOGS_PATH,
+    QUADCOPTER_PARAMS,
     VEH_PARAMS_PATH,
     BasePort,
 )
@@ -23,6 +24,7 @@ from simulator.helpers.logging.setup_log import setup_logging
 from simulator.helpers.math import connection_id
 from simulator.helpers.processes import SimProcess, create_process
 from simulator.oracle import Oracle
+from simulator.params.simulation import SIM_SPEEDUP
 from simulator.visualizer import Visualizer
 
 
@@ -55,7 +57,7 @@ class Simulator(Generic[VehT]):
         self.vehicles: dict[int, SimVehicle] = {}
         self.gcs: dict[str, SimGCS] = {}
         self.verbose = verbose
-
+        self.n_instances = 0
         self.parms: dict[int, str] = {}
         # TODO: This is actually cell size and is more an oracle property(check design)
         self.transmission_range = transmission_range  # meters
@@ -67,9 +69,9 @@ class Simulator(Generic[VehT]):
         """Launch vehicle instances and visualizer."""
         veh_port_offsets = self._find_veh_port_offsets()
         gcs_port_offsets = self._find_gcs_port_offsets()
-        for sysid, offset in zip(self.vehicles, veh_port_offsets):
+        for sysid, offset in zip(sorted(self.vehicles), veh_port_offsets):
             self.vehicles[sysid].port_offset = offset
-        for gcs_name, offset in zip(self.gcs, gcs_port_offsets):
+        for gcs_name, offset in zip(sorted(self.gcs), gcs_port_offsets):
             self.gcs[gcs_name].port_offset = offset
         self._save_logic_configs()
         self._save_gcs_configs()
@@ -82,11 +84,13 @@ class Simulator(Generic[VehT]):
             transmission_range=self.transmission_range,
         )
 
-    def add_vehicle(self, vehicle: SimVehicle, parm:str=str(VEH_PARAMS_PATH)):
+    def add_vehicle(self, vehicle: SimVehicle, parm: str = str(VEH_PARAMS_PATH)):
         """Add a vehicle to the simulation."""
         self.vehicles[vehicle.sysid] = vehicle
         if vehicle.gcs_name not in self.gcs:
             self.gcs[vehicle.gcs_name] = SimGCS(name=vehicle.gcs_name)
+        self.vehicles[vehicle.sysid].instance = self.n_instances
+        self.n_instances += 1
         self.gcs[vehicle.gcs_name].sysids.append(vehicle.sysid)
         self.visualizer.add_vehicle(vehicle)
 
@@ -202,30 +206,50 @@ class Simulator(Generic[VehT]):
         port_offset = veh.port_offset_required
         inst = port_offset // self.port_step
 
-        param_file = ARDU_LOGS_PATH / f"veh_{sysid}"
-        param_file.mkdir(parents=True, exist_ok=True)
-
-        sitl_args = (
-            f"--serial5=uart:/tmp/adsb_{sysid}_ardupilot:57600"
-            f"{self.visualizer.add_sitl_args()}"
-        )
-
         logic_config_path = str(self.logic_folder / f"logic_config_{sysid}.json")
+        vehicle_cmd = [
+            str(ARDUCOPTER_BIN),
+            "--model",
+            veh.model,
+            "-I" + str(inst),
+            "--speedup",
+            str(SIM_SPEEDUP),
+            "--sysid",
+            str(connection_id(sysid)),
+            "--base-port",
+            str(BasePort.ARP + port_offset),
+            "--slave 0",
+            "--sim-address=127.0.0.1",
+            "--home",
+            self.visualizer.home_str(veh),
+            f"--serial5=uart:/tmp/adsb_{sysid}_ardupilot:57600",
+            "--defaults",
+            ",".join(
+                [
+                    str(QUADCOPTER_PARAMS),
+                    str(GAZEBO_IRIS_PARAMS),
+                    str(VEH_PARAMS_PATH),
+                ]
+            ),
+        ]
+
+        vehicle_cmd.extend(self.visualizer.add_sitl_args(veh))
 
         veh_config: VehicleConfig = {
             "sysid": sysid,
             "port_offset": port_offset,
-            "ardupilot_cmd": (
-                f"python3 {ARDUPILOT_VEHICLE_PATH}"
-                f" -v ArduCopter -I{inst} --sysid {connection_id(sysid)} --no-rebuild"
-                f' -A "{sitl_args}"'
-                f" --use-dir={param_file}"
-                f" --add-param-file {self.parms[sysid]}"
-                f" --no-mavproxy"
-                f" --port-offset={port_offset}"
-                + (" --terminal" if SimProcess.ARDUPILOT in self.terminals else "")
-                + self.visualizer.add_vehicle_cmd(veh)
-            ),
+            # "ardupilot_cmd": (
+            #     f"python3 {ARDUPILOT_VEHICLE_PATH}"
+            #     f" -v ArduCopter -I{inst} --sysid {connection_id(sysid)} --no-rebuild"
+            #     f' -A "{sitl_args}"'
+            #     f" --use-dir={param_file}"
+            #     f" --add-param-file {self.parms[sysid]}"
+            #     f" --no-mavproxy"
+            #     f" --port-offset={port_offset}"
+            #     + (" --terminal" if SimProcess.ARDUPILOT in self.terminals else "")
+            #     + self.visualizer.add_vehicle_cmd(veh)
+            # ),
+            "ardupilot_cmd": " ".join(vehicle_cmd),
             "logic_cmd": (
                 f"python3 -m simulator.logic"
                 f' --config-path "{logic_config_path}"'
