@@ -11,7 +11,6 @@ from typing import Generic
 from simulator.config import (
     DATA_PATH,
     ENV_CMD_PYT,
-    # GAZEBO_IRIS_PARAMS,
     LOGS_PATH,
     VEH_PARAMS_PATH,
     BasePort,
@@ -211,7 +210,7 @@ class Simulator(Generic[VehT]):
             firmware="ArduCopter",  # or "ArduPlane", etc.
         )
 
-        vehicle_cmd = [
+        arp_cmd = [
             str(binary),
             "--model",
             veh.model,
@@ -233,12 +232,12 @@ class Simulator(Generic[VehT]):
             ),
         ]
 
-        vehicle_cmd.extend(self.visualizer.add_sitl_args(veh))
+        arp_cmd.extend(self.visualizer.add_sitl_args(veh))
         logic_config_path = str(self.logic_folder / f"logic_config_{sysid}.json")
         veh_config: VehicleConfig = {
             "sysid": sysid,
             "port_offset": port_offset,
-            "ardupilot_cmd": " ".join(vehicle_cmd),
+            "ardupilot_cmd": " ".join(arp_cmd),
             "logic_cmd": (
                 f"python3 -m simulator.logic"
                 f' --config-path "{logic_config_path}"'

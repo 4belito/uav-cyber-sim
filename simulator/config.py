@@ -17,15 +17,14 @@ ARDUPILOT_PATH = PROJECT_ROOT / "ardupilot"
 
 
 # --- Local Paths ---
-ARDU_LOGS_PATH = (ROOT / "ardupilot_logs").resolve()
-LOGS_PATH = (ROOT / "logs").resolve()
-VEH_PARAMS_PATH = (ROOT / "params" / "vehicle.parm").resolve()
-SIM_PARAMS_PATH = (ROOT / "params" / "simulation.py").resolve()
-DATA_PATH = (ROOT / "data").resolve()
+ARDU_LOGS_PATH = ROOT / "ardupilot_logs"
+LOGS_PATH = ROOT / "logs"
+VEH_PARAMS_PATH = ROOT / "params" / "vehicle.parm"
+SIM_PARAMS_PATH = ROOT / "params" / "simulation.py"
+DATA_PATH = ROOT / "data"
 RUNTIME_GAZEBO_MODELS = ROOT / "visualizer" / "gazebo" / "runtime_models"
 RUNTIME_GAZEBO_WORLDS = ROOT / "visualizer" / "gazebo" / "runtime_worlds"
 # Ensure logs directory exists (can be cleaned later)
-
 
 
 class BasePort(IntEnum):
@@ -101,4 +100,3 @@ Colors = list[Color]
 # --- Environment Setup Commands ---
 ENV_CMD_PYT = None
 ENV_CMD_ARP = "source ~/.profile"
-ENV_CMD_GAZ = "source ~/.profile"  # None
