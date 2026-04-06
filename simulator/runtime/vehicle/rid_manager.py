@@ -45,6 +45,7 @@ class RIDManager:
         self.sysid = sysid
         self.data: RIDData | None = None
         self.received_rid: Queue[RIDData] = Queue()
+        self._latest: dict[int, RIDData] = {}
         self._lock = threading.Lock()  # protects self.data and self.pending
         self._stop = threading.Event()
         self.pending = False  # whether there is new data to publish
@@ -130,11 +131,16 @@ class RIDManager:
             )
 
     # --- background loops ------------------------------------------------------
+    def get_latest(self, sysid: int) -> RIDData | None:
+        """Return the most recently received RID for a given sysid."""
+        return self._latest.get(sysid)
+
     def _receive(self, sock: zmq.Socket[bytes]) -> None:
         """Continuously receive RID data from nearby UAVs."""
         while not self._stop.is_set():
             try:
                 rid: RIDData = sock.recv_pyobj()  # type: ignore
+                self._latest[rid.sysid] = rid
                 self.received_rid.put(rid)
                 logging.debug(f"Uav {self.sysid} received RID: {rid.sysid}")
                 # Convert to ADS-B and forward

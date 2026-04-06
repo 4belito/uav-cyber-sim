@@ -137,6 +137,9 @@ def start_logic(config: LogicConfig):
     rid_mng.start()
 
     plan = Plan.build(plan_spec)
+    bind_rid_getter = getattr(plan, "bind_rid_getter", None)
+    if bind_rid_getter is not None:
+        bind_rid_getter(rid_mng.get_latest)
     logic = VehicleLogic(
         plan=plan,
         gra_origin=gra_orign,
