@@ -52,14 +52,16 @@ class BasePort(IntEnum):
     ARP = 5760  # ArduPilot master port (TCP: PROXY->ARP)
     ARP2 = 5762  # ArduPilot SERIAL1 (TCP: auto-opened by SITL)
     ARP3 = 5763  # ArduPilot SERIAL2 (TCP: auto-opened by SITL)
-    QGC = 14550  # QGroundControl UDP telemetry (SITL -> QGC)
     GCS = 14555  # Ground Control Station(UDP: LOGIC->GCS)
     RID_UP = 14556  # Remote ID (LOGIC->ORC)
     RID_DOWN = 14557  # Remote ID (ORC->LOGIC)
     ADSB_DOWN = 14558  # ORC -> ADSB injector (per UAV)
 
     # ONE-PER-GCS PORTS
-    GCS_ZMQ = 30000  # GCS ZMQ (GCS->ORC)
+    GCS_ORC = 30000  # GCS ZMQ (GCS->ORC)
+
+    # FIXED PORT for QGC (UDP: SITL->QGC)
+    QGC = 14550  # QGroundControl UDP telemetry (SITL -> QGC)
 
 
 # --- UAV Visualization Colors ---

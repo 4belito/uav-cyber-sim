@@ -69,7 +69,7 @@ class Oracle:
             zmq_ctx, BasePort.RID_DOWN, zmq.PUB, veh_port_offsets
         )
         self.gcs_socks = create_zmq_sockets(
-            zmq_ctx, BasePort.GCS_ZMQ, zmq.SUB, gcs_port_offsets
+            zmq_ctx, BasePort.GCS_ORC, zmq.SUB, gcs_port_offsets
         )
 
         # Threads

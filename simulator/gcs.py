@@ -76,7 +76,7 @@ class GCS:
         self.conns = {sysid: vehrun.conn for sysid, vehrun in self.vehruntimes.items()}
         self.zmq_ctx = zmq.Context()
         self.orc_sock = create_zmq_socket(
-            self.zmq_ctx, zmq.PUB, BasePort.GCS_ZMQ, port_offset
+            self.zmq_ctx, zmq.PUB, BasePort.GCS_ORC, port_offset
         )
 
         # Data structures for trajectory logging

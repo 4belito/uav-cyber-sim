@@ -174,7 +174,7 @@ class Simulator(Generic[VehT]):
         return self._find_port_offsets(base_ports, len(self.vehicles))
 
     def _find_gcs_port_offsets(self) -> list[int]:
-        base_ports = [BasePort.GCS_ZMQ, BasePort.GCS]
+        base_ports = [BasePort.GCS_ORC, BasePort.GCS]
         return self._find_port_offsets(base_ports, len(self.gcs))
 
     def _find_port_offsets(
