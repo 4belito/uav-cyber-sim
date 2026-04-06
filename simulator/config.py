@@ -25,7 +25,7 @@ DATA_PATH = (ROOT / "data").resolve()
 RUNTIME_GAZEBO_MODELS = ROOT / "visualizer" / "gazebo" / "runtime_models"
 RUNTIME_GAZEBO_WORLDS = ROOT / "visualizer" / "gazebo" / "runtime_worlds"
 # Ensure logs directory exists (can be cleaned later)
-ARDU_LOGS_PATH.mkdir(parents=True, exist_ok=True)
+
 
 
 class BasePort(IntEnum):

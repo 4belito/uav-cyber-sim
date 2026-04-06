@@ -83,10 +83,6 @@ class Gazebo(Visualizer[GazVehicle]):
         """Return the home position of the vehicle as a string for Gazebo commands."""
         return self.gra_origin.to_str()
 
-    # def add_vehicle_cmd(self, vehicle: SimVehicle) -> str:
-    #     """Add gazebo model (only iris TODO: add others)."""
-    #     return f" -f gazebo-iris --custom-location={self.gra_origin.to_str()}"
-
     def launch(self, port_offsets: list[int]):
         """Launch the Gazebo simulator with the specified Vehicle and waypoints."""
         base_models = [
@@ -96,15 +92,6 @@ class Gazebo(Visualizer[GazVehicle]):
             base_models, base_port_in=9002, port_offsets=port_offsets
         )
         updated_world = self._update_world(self.world_path)
-
-        # # TODO: actor this out
-        # env = os.environ.copy()
-        # env["GAZEBO_MODEL_PATH"] = (
-        #     f"{ARDUPILOT_GAZEBO_MODELS}:/usr/share/gazebo-11/models"
-        # )
-        # env["GAZEBO_PLUGIN_PATH"] = os.environ.get("GAZEBO_PLUGIN_PATH", "")
-        # env["LD_LIBRARY_PATH"] = os.environ.get("LD_LIBRARY_PATH", "")
-        # # env["ALSOFT_DRIVERS"] = "null"
 
         create_process(
             f"gazebo {updated_world}",
@@ -175,12 +162,11 @@ class Gazebo(Visualizer[GazVehicle]):
         base_port_in: int = 9002,
     ) -> None:
         template_path = ARDUPILOT_GAZEBO_MODELS / "drone"
-        output_dir = RUNTIME_GAZEBO_MODELS
-        output_dir.mkdir(parents=True, exist_ok=True)
+        RUNTIME_GAZEBO_MODELS.mkdir(parents=True, exist_ok=True)
 
         for i in range(self.num_vehicles):
             name = f"drone{i + 1}"
-            new_model_path = output_dir / name
+            new_model_path = RUNTIME_GAZEBO_MODELS / name
             if new_model_path.exists():
                 shutil.rmtree(new_model_path)
             shutil.copytree(template_path, new_model_path)
@@ -213,6 +199,7 @@ class Gazebo(Visualizer[GazVehicle]):
                 f.write(sdf)
 
     def _update_world(self, world_path: Path) -> Path:
+        RUNTIME_GAZEBO_WORLDS.mkdir(parents=True, exist_ok=True)
         out_path = RUNTIME_GAZEBO_WORLDS / world_path.name
         tree = ET.parse(world_path)
         root = tree.getroot()
