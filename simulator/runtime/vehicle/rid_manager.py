@@ -161,6 +161,7 @@ class RIDManager:
         while not self._stop.is_set():
             try:
                 rid: RIDData = sock.recv_pyobj()  # type: ignore
+                # This is just accumulating rid as an example of processing RID.
                 self.received_rid.put(rid)
                 logging.debug(f"Uav {self.sysid} received RID: {rid.sysid}")
                 # Convert to ADS-B and forward
