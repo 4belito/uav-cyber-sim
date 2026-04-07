@@ -58,7 +58,7 @@ class BasePort(IntEnum):
     ADSB_DOWN = 14558  # ORC -> ADSB injector (per UAV)
 
     # ONE-PER-GCS PORTS
-    GCS_ORC = 30000  # GCS ZMQ (GCS->ORC)
+    ORC_DONE = 30000  # ZMQ ROUTER/DEALER (->ORC)
 
     # FIXED PORT for QGC (UDP: SITL->QGC)
     QGC = 14550  # QGroundControl UDP telemetry (SITL -> QGC)

@@ -73,6 +73,15 @@ class RIDManager:
             port_offset,
         )
 
+        self._done_sock = create_zmq_socket(
+            self._ctx,
+            zmq.DEALER,
+            BasePort.ORC_DONE,
+            offset=0,
+            timeout=-1,
+            identity=f"log-{self.sysid}".encode(),
+        )
+
         # Background threads
         self._threads: list[threading.Thread] = []
 
@@ -82,7 +91,7 @@ class RIDManager:
     def start(self) -> None:
         """Start background threads for receiving RID data."""
         self._threads = [
-            threading.Thread(target=self._receive, args=(self._in_sock,), daemon=True),
+            threading.Thread(target=self._receive, args=(self._in_sock,)),
         ]
         for t in self._threads:
             t.start()
@@ -90,13 +99,30 @@ class RIDManager:
     def stop(self) -> None:
         """Stop background threads and close all resources."""
         self._stop.set()
+
         for t in self._threads:
             t.join()
+
+        self._done_sock.send_string("DONE")  # type: ignore
+        self._wait_until_ack()
         self._in_sock.close(linger=0)
-        self._out_sock.send_pyobj("DONE")  # type: ignore
         self._out_sock.close(linger=0)
         self._adsb_out_sock.close(linger=0)
+        self._done_sock.close(linger=0)
         self._ctx.term()
+
+    def _wait_until_ack(self):
+        """Wait until Oracle acknowledges DONE message."""
+        while True:
+            try:
+                msg = self._done_sock.recv_string()
+            except zmq.Again:
+                continue
+
+            if msg == "ACK":
+                return
+            else:
+                logging.warning(f"RID {self.sysid} ignoring unexpected message: {msg}")
 
     # --- state update / publish -----------------------------------------------
     def update(self, payload: dict[str, str | float | int]) -> None:

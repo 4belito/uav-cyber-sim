@@ -1,45 +1,28 @@
 {
     "python.defaultInterpreterPath": "/home/abeldg/.conda/envs/uav-cyber-sim11/bin/python",
     "jupyter.jupyterServerType": "local",
-    "notebook.lineNumbers": "on",
-    //"python.defaultInterpreterPath": "/home/ubuntu/miniconda3/envs/uav-cyber-sim11/bin/python",
-    // ----------------------------
-    // Formatter and Code Actions
-    // ----------------------------
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
         "source.fixAll": "explicit",
         "source.fixAll.ruff": "explicit",
         "source.organizeImports": "explicit"
     },
-    // ----------------------------
-    // Ruff (only standalone)
-    // ----------------------------
     "ruff.enable": true,
     "ruff.lint.enable": true,
-    "ruff.format.enable": true, // set to true if you want Ruff to replace Black
+    "ruff.format.enable": true,
     "[python]": {
-        "editor.defaultFormatter": "charliermarsh.ruff", // Ruff formatter
+        "editor.defaultFormatter": "charliermarsh.ruff",
         "editor.formatOnSave": true
     },
     "ruff.organizeImports": true,
-    // NOTE: `pyproject.toml` should define select/ignore rules; remove this list if you use TOML
-    // "ruff.lint.select": ["E", "F", "I", "D", "N", "ANN"],
-    // ----------------------------
-    // Disable legacy Python linters (no conflicts!)
-    // ----------------------------
     "python.linting.enabled": false,
     "python.linting.pylintEnabled": false,
     "python.linting.flake8Enabled": false,
     "python.linting.mypyEnabled": false,
     "python.linting.ruffEnabled": false,
-    // ----------------------------
-    // Python Analysis (Pylance)
-    // ----------------------------
-    "python.languageServer": "Pylance",
+    "python.analysis.languageServerMode": "light",
     "python.analysis.typeCheckingMode": "strict",
     "python.analysis.autoImportCompletions": true,
-    "python.analysis.useLibraryCodeForTypes": true,
     "python.analysis.completeFunctionParens": true,
     "python.analysis.diagnosticSeverityOverrides": {
         "reportMissingDocstring": "none",
@@ -50,9 +33,6 @@
         "reportUnknownParameterType": "warning",
         "reportUnknownVariableType": "warning"
     },
-    // ----------------------------
-    // Editor Behavior
-    // ----------------------------
     "editor.parameterHints.enabled": true,
     "editor.signatureHelp.enabled": true,
     "editor.quickSuggestions": {
@@ -62,14 +42,11 @@
     },
     "editor.suggestOnTriggerCharacters": true,
     "editor.hover.enabled": "on",
-    // ----------------------------
-    // Notebook
-    // ----------------------------
     "notebook.lineNumbers": "on",
     "python-envs.defaultEnvManager": "ms-python.python:conda",
     "python-envs.defaultPackageManager": "ms-python.python:conda",
     "python-envs.pythonProjects": [],
     "cSpell.words": [
         "supress"
-    ],
+    ]
 }

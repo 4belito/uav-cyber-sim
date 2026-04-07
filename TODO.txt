@@ -1,5 +1,6 @@
 TODO:
 - Oracle close sincronization (logic,GCS Dones sincroniation issue with many drones)
+- Check all priveate methoid notations _method
 - GCS - Logic Comunicatioin (save traj)
 - organize data collection
 - us UV instead of conda

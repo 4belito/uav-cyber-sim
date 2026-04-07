@@ -14,7 +14,6 @@ import subprocess
 import threading
 import time
 from pathlib import Path
-from typing import Literal
 
 import matplotlib.pyplot as plt
 import zmq
@@ -22,7 +21,7 @@ import zmq
 from simulator.config import DATA_PATH, BasePort, Color
 from simulator.entities import SimGCS, SimVehicle
 from simulator.entities.riddata import RIDData
-from simulator.helpers.connections import create_zmq_sockets
+from simulator.helpers.connections import create_zmq_socket, create_zmq_sockets
 from simulator.helpers.coordinates import GRAPose
 from simulator.params.simulation import USE_NETWORK_SIM
 from simulator.runtime.grid import Grid
@@ -56,9 +55,7 @@ class Oracle:
         veh_port_offsets = {
             sysid: veh.port_offset_required for sysid, veh in vehs.items()
         }
-        gcs_port_offsets = {
-            name: gcs.port_offset_required for name, gcs in gcss.items()
-        }
+        self.n_entities = len(self.sysids) + len(self.gcss)
 
         # Sockets
         zmq_ctx = zmq.Context()
@@ -68,8 +65,8 @@ class Oracle:
         self.rid_out_socks = create_zmq_sockets(
             zmq_ctx, BasePort.RID_DOWN, zmq.PUB, veh_port_offsets
         )
-        self.gcs_socks = create_zmq_sockets(
-            zmq_ctx, BasePort.GCS_ORC, zmq.SUB, gcs_port_offsets
+        self.done_sock = create_zmq_socket(
+            zmq_ctx, zmq.ROUTER, BasePort.ORC_DONE, offset=0
         )
 
         # Threads
@@ -81,64 +78,75 @@ class Oracle:
             sysid: threading.Thread(target=self.retransmit_rid, args=(sysid,))
             for sysid in self.sysids
         }
+        self.done_thread = threading.Thread(target=self.wait_done)
 
-        self.gcs_threads = {
-            name: threading.Thread(target=self.wait_gcs_done, args=(name,))
-            for name in gcss
-        }
-
+        # Events and locks for thread coordination
+        self.stop_sys = {sysid: threading.Event() for sysid in self.sysids}
+        self.stop_gcs = {gcs_name: threading.Event() for gcs_name in self.gcss.keys()}
         self.rid_locks = {sysid: threading.Lock() for sysid in self.sysids}
+
+    def wait_done(self):
+        """Wait for DONE messages from all Vehicles, then ACK and exit."""
+        seen_done: set[str] = set()
+
+        while len(seen_done) < self.n_entities:
+            try:
+                frames = self.done_sock.recv_multipart()
+                identity = frames[0]
+                msg = frames[-1]
+
+                if msg == b"DONE":
+                    sender = identity.decode()
+                    if sender in seen_done:
+                        self.done_sock.send_multipart([identity, b"ACK"])  # type: ignore
+                        continue
+                    seen_done.add(sender)
+                    self.done_sock.send_multipart([identity, b"ACK"])  # type: ignore
+                    sender_id = sender.split("-")
+                    if sender_id[0] == "log":
+                        sysid = int(sender_id[1])
+                        self.stop_sys[sysid].set()
+                        if sysid in self._seen_in_grid:
+                            self.grid.remove_sysid(sysid)
+                            logging.info(
+                                f"Vehicle {sysid} completed mission and exited"
+                            )
+                    if sender_id[0] == "gcs":
+                        name = sender_id[1]
+                        self.stop_gcs[name].set()
+                        logging.info(f"GCS {name} completed")
+            except zmq.Again:
+                continue
+            except Exception as e:
+                logging.error(f"Error receiving DONE: {e}")
 
     def run(self):
         """Run the Oracle to manage Vehicle connections and communication."""
         logging.info(
             f"🏁 Starting Oracle with {len(self.sysids)} vehicles and "
-            f"{len(self.gcs_socks)} GCSs"
+            f"{len(self.gcss)} GCSs"
         )
 
         for thread in self.rid_in_threads.values():
             thread.start()
         for thread in self.rid_out_threads.values():
             thread.start()
-        for thread in self.gcs_threads.values():
-            thread.start()
+        self.done_thread.start()
 
-        while any(thread.is_alive() for thread in self.gcs_threads.values()):
+        while any(not event.is_set() for event in self.stop_sys.values()):
+            time.sleep(0.1)
+        logging.info("✅ All Vehicle threads completed")
+        while any(not event.is_set() for event in self.stop_gcs.values()):
             time.sleep(0.1)
         logging.info("✅ All GCS threads completed")
 
         logging.info("🎉 Oracle shutdown complete!")
 
-    def wait_gcs_done(self, gcs_name: str):
-        """Wait for a DONE message from one GCS, then stop all Vehicle threads."""
-        while True:
-            try:
-                msg = self.gcs_socks[gcs_name].recv_string(flags=zmq.NOBLOCK)
-                if msg == "DONE":
-                    logging.info(f"Received DONE from GCS {gcs_name}")
-                    for sysid in self.gcss[gcs_name].sysids:
-                        self.rid_in_threads[sysid].join()
-                        self.rid_out_threads[sysid].join()
-                    break
-            except zmq.Again:
-                # No message available, this is expected
-                continue
-            except Exception as e:
-                logging.error(f"Error receiving from GCS {gcs_name}: {e}")
-                continue
-            time.sleep(0.01)
-
     def update_rid(self, sysid: int):
         """Receive Remote ID messages from one Vehicle and update the store."""
-        while True:
+        while not self.stop_sys[sysid].is_set():
             try:
-                msg: RIDData | Literal["DONE"] = self.rid_in_socks[sysid].recv_pyobj()
-                if msg == "DONE":
-                    if sysid in self._seen_in_grid:
-                        self.grid.remove_sysid(sysid)
-                    logging.info(f"Vehicle {sysid} completed mission and exited")
-                    break
-                rid: RIDData = msg
+                rid: RIDData = self.rid_in_socks[sysid].recv_pyobj()
                 if sysid in self._seen_in_grid:
                     self.grid.update(sysid, rid)
                 else:
@@ -152,7 +160,7 @@ class Oracle:
 
     def retransmit_rid(self, sysid: int):
         """Retransmit Remote IDs to neighbor Vehicles (one-shot per update)."""
-        while self.rid_in_threads[sysid].is_alive():
+        while not self.stop_sys[sysid].is_set():
             if sysid not in self._seen_in_grid:
                 time.sleep(TX_LOOP_SLEEP)
                 continue

@@ -74,9 +74,14 @@ class GCS:
         self.suppress = set(suppress)
         self.vehruntimes = {vehrun.sysid: vehrun for vehrun in self._launch_vehicles()}
         self.conns = {sysid: vehrun.conn for sysid, vehrun in self.vehruntimes.items()}
-        self.zmq_ctx = zmq.Context()
-        self.orc_sock = create_zmq_socket(
-            self.zmq_ctx, zmq.PUB, BasePort.GCS_ORC, port_offset
+        self._ctx = zmq.Context()
+        self._done_sock = create_zmq_socket(
+            self._ctx,
+            zmq.DEALER,
+            BasePort.ORC_DONE,
+            offset=0,
+            timeout=-1,
+            identity=f"gcs-{self.name}".encode(),
         )
 
         # Data structures for trajectory logging
@@ -87,20 +92,41 @@ class GCS:
     ###
     def run(self):
         """Run the GCS monitoring loop until all Vehicles complete their missions."""
-        try:
-            with futures.ThreadPoolExecutor() as executor:
-                list(executor.map(self._monitor_vehicle, self.sysids))
+        sysids_snapshot = tuple(self.sysids)
 
-            logging.info("All Vehicles assigned have completed their missions")
-            self.orc_sock.send_string("DONE")  # type: ignore
-            logging.info("DONE message sent to Oracle")
-            trajectory_file = DATA_PATH / f"trajectories_{self.name}.pkl"
-            with open(trajectory_file, "wb") as file:
-                pickle.dump(self.paths, file)
-            logging.info(f"Trajectories saved to '{trajectory_file}'")
-        finally:
-            self.orc_sock.close(linger=0)
-            self.zmq_ctx.term()
+        with futures.ThreadPoolExecutor(max_workers=len(sysids_snapshot)) as executor:
+            futures_list = [
+                executor.submit(self._monitor_vehicle, sysid)
+                for sysid in sysids_snapshot
+            ]
+
+            for f in futures.as_completed(futures_list):
+                f.result()
+        logging.info("All Vehicles assigned have completed their missions")
+        self._done_sock.send_string("DONE")  # type: ignore
+        logging.info("DONE message sent to Oracle")
+        self._wait_until_ack()
+
+        trajectory_file = DATA_PATH / f"trajectories_{self.name}.pkl"
+        with open(trajectory_file, "wb") as file:
+            pickle.dump(self.paths, file)
+        logging.info(f"Trajectories saved to '{trajectory_file}'")
+
+        self._done_sock.close(linger=0)
+        self._ctx.term()
+
+    def _wait_until_ack(self):
+        """Wait until Oracle acknowledges DONE message."""
+        while True:
+            try:
+                msg = self._done_sock.recv_string()
+            except zmq.Again:
+                continue
+
+            if msg == "ACK":
+                return
+            else:
+                logging.warning(f"GCS {self.name} ignoring unexpected message: {msg}")
 
     def _launch_vehicles(self) -> list[VehicleRuntime]:
         """Launch ArduPilot and logic processes for each Vehicle."""
@@ -191,8 +217,9 @@ class GCS:
         logging.info(f"Monitoring Vehicle {sysid}")
         try:
             while not self._is_vehicle_plan_done(sysid):
-                self._get_global_pos(sysid)
-                self._save_pos()
+                # self._get_global_pos(sysid)
+                # self._save_pos()
+                pass
         finally:
             self._remove_vehicle(sysid)
             logging.debug(f"Monitor thread finished for Vehicle {sysid}")
