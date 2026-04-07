@@ -4,7 +4,13 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from simulator.config import ARDU_LOGS_PATH, DATA_PATH, LOGS_PATH
+from simulator.config import (
+    ARDU_LOGS_PATH,
+    DATA_PATH,
+    LOGS_PATH,
+    RUNTIME_GAZEBO_MODELS,
+    RUNTIME_GAZEBO_WORLDS,
+)
 
 ALL_PROCESSES = [
     "QGroundControl",
@@ -25,6 +31,14 @@ ALL_PROCESSES = [
     "exec bash",
 ]
 
+ALL_FOLDERS = [
+    DATA_PATH,
+    LOGS_PATH,
+    ARDU_LOGS_PATH,
+    RUNTIME_GAZEBO_MODELS,
+    RUNTIME_GAZEBO_WORLDS,
+]
+
 
 def kill_processes(victims: list[str]):
     """Kill all related processes or a given list of process names."""
@@ -35,7 +49,7 @@ def kill_processes(victims: list[str]):
 def clean(
     victim_processes: list[str] = ALL_PROCESSES,
     del_folders: list[Path] = [],
-    reset_folders: list[Path] = [DATA_PATH, LOGS_PATH, ARDU_LOGS_PATH],
+    reset_folders: list[Path] = ALL_FOLDERS,
 ):
     """End the simulation."""
     kill_processes(victim_processes)
