@@ -63,7 +63,7 @@ class ADSBInjector:
         self.sub = create_zmq_socket(
             self.ctx,
             zmq.SUB,
-            BasePort.ADSB_DOWN,
+            BasePort.ADSB,
             port_offset,
         )
 

@@ -19,8 +19,9 @@ ARDUPILOT_PATH = PROJECT_ROOT / "ardupilot"
 # --- Local Paths ---
 ARDU_LOGS_PATH = ROOT / "ardupilot_logs"
 LOGS_PATH = ROOT / "logs"
-VEH_PARAMS_PATH = ROOT / "params" / "vehicle.parm"
-SIM_PARAMS_PATH = ROOT / "params" / "simulation.py"
+PARAMS_PATH = ROOT / "params"
+VEH_PARAMS_PATH = PARAMS_PATH / "vehicle.parm"
+SIM_PARAMS_PATH = PARAMS_PATH / "simulation.py"
 DATA_PATH = ROOT / "data"
 RUNTIME_GAZEBO_MODELS = ROOT / "visualizer" / "gazebo" / "runtime_models"
 RUNTIME_GAZEBO_WORLDS = ROOT / "visualizer" / "gazebo" / "runtime_worlds"
@@ -50,18 +51,16 @@ class BasePort(IntEnum):
 
     # ONE-PER-UAV PORTS
     ARP = 5760  # ArduPilot master port (TCP: PROXY->ARP)
+    ADSB = 5761  # ORC -> ADSB injector
     ARP2 = 5762  # ArduPilot SERIAL1 (TCP: auto-opened by SITL)
     ARP3 = 5763  # ArduPilot SERIAL2 (TCP: auto-opened by SITL)
-    GCS = 14555  # Ground Control Station(UDP: LOGIC->GCS)
-    RID_UP = 14556  # Remote ID (LOGIC->ORC)
-    RID_DOWN = 14557  # Remote ID (ORC->LOGIC)
-    ADSB_DOWN = 14558  # ORC -> ADSB injector (per UAV)
+    RID_UP = 5764  # Remote ID (LOGIC->ORC)
+    RID_DOWN = 5765  # Remote ID (ORC->LOGIC)
+    GCS = 5766  # Ground Control Station (UDP: LOGIC->GCS)
 
-    # ONE-PER-GCS PORTS
-    ORC_DONE = 30000  # ZMQ ROUTER/DEALER (->ORC)
-
-    # FIXED PORT for QGC (UDP: SITL->QGC)
-    QGC = 14550  # QGroundControl UDP telemetry (SITL -> QGC)
+    # Universal Ports (fixed, not per UAV or GCS)
+    ORC_DONE = 5767  # ZMQ ROUTER/DEALER (->ORC)
+    QGC = 14550  # QGroundControl UDP telemetry DEFAULT port(UDP: SITL->QGC)
 
 
 # --- UAV Visualization Colors ---

@@ -56,6 +56,7 @@ class Simulator(Generic[VehT]):
         self.suppress = set(suppress_output)
         self.vehicles: dict[int, SimVehicle] = {}
         self.gcs: dict[str, SimGCS] = {}
+        self.orc_port_offset: int | None = None
         self.verbose = verbose
         self.n_instances = 0
         self.parms: dict[int, str] = {}
@@ -67,21 +68,31 @@ class Simulator(Generic[VehT]):
 
     def launch(self) -> Oracle:
         """Launch vehicle instances and visualizer."""
-        veh_port_offsets = self._find_veh_port_offsets()
-        gcs_port_offsets = self._find_gcs_port_offsets()
-        for sysid, offset in zip(sorted(self.vehicles), veh_port_offsets):
+        port_offsets = self._find_port_offsets(
+            [
+                BasePort.ARP,
+                BasePort.ADSB,
+                BasePort.ARP2,
+                BasePort.ARP3,
+                BasePort.RID_UP,
+                BasePort.RID_DOWN,
+                BasePort.GCS,
+            ],
+            len(self.vehicles),
+        )
+        self.orc_port_offset = self._find_port_offsets([BasePort.ORC_DONE], 1)[0]
+        for sysid, offset in zip(sorted(self.vehicles), port_offsets):
             self.vehicles[sysid].port_offset = offset
-        for gcs_name, offset in zip(sorted(self.gcs), gcs_port_offsets):
-            self.gcs[gcs_name].port_offset = offset
         self._save_logic_configs()
         self._save_gcs_configs()
-        self.visualizer.launch(veh_port_offsets)
+        self.visualizer.launch(port_offsets)
         self._launch_gcses()
         return Oracle(
             self.gra_origin,
             self.vehicles,
             self.gcs,
             transmission_range=self.transmission_range,
+            port_offset=self.orc_port_offset,
         )
 
     def add_vehicle(self, vehicle: SimVehicle, parm: str = str(VEH_PARAMS_PATH)):
@@ -141,7 +152,8 @@ class Simulator(Generic[VehT]):
                     "lon": self.gra_origin.lon,
                     "alt": self.gra_origin.alt,
                 },
-                "port_offset": veh.port_offset,
+                "veh_port_offset": veh.port_offset,
+                "oracle_port_offset": self.orc_port_offset,
                 "plan_spec": veh.plan.get_spec().to_dict(),
             }
             config_path = self.logic_folder / f"logic_config_{sysid}.json"
@@ -153,7 +165,7 @@ class Simulator(Generic[VehT]):
         for gcs_name, gcs in self.gcs.items():
             gcs_config = {
                 "name": gcs_name,
-                "port_offset": gcs.port_offset,
+                "oracle_port_offset": self.orc_port_offset,
                 "vehicles": [self._build_veh_config(sysid) for sysid in gcs.sysids],
                 "terminals": list(self.terminals),
                 "suppress": list(self.suppress),
@@ -162,22 +174,6 @@ class Simulator(Generic[VehT]):
             config_path = self.gcs_folder / f"gcs_config_{gcs_name}.json"
             with config_path.open("w") as f:
                 json.dump(gcs_config, f, indent=2)
-
-    def _find_veh_port_offsets(self):
-        base_ports = [
-            BasePort.ARP,
-            BasePort.ARP2,
-            BasePort.ARP3,
-            BasePort.RID_UP,
-            BasePort.RID_DOWN,
-        ]
-        return self._find_port_offsets(base_ports, len(self.vehicles))
-
-    def _find_gcs_port_offsets(self) -> list[int]:
-        base_ports = [BasePort.GCS]
-        return self._find_port_offsets(base_ports, len(self.gcs))
-
-    # TODO: add indivisual_port_find
 
     def _find_port_offsets(
         self,
@@ -211,7 +207,7 @@ class Simulator(Generic[VehT]):
             frame=veh.model,  # e.g. "gazebo-iris"
             firmware="ArduCopter",  # or "ArduPlane", etc.
         )
-
+        veh_parms = self.parms[veh.sysid]
         arp_cmd = [
             str(binary),
             "--model",
@@ -229,16 +225,14 @@ class Simulator(Generic[VehT]):
             self.visualizer.home_str(veh),
             f"--serial5=uart:/tmp/adsb_{sysid}_ardupilot:57600",
             "--defaults",
-            ",".join(
-                get_default_params(veh.model, "ArduCopter") + [str(VEH_PARAMS_PATH)]
-            ),
+            ",".join(get_default_params(veh.model, "ArduCopter") + [veh_parms]),
         ]
 
         arp_cmd.extend(self.visualizer.add_sitl_args(veh))
         logic_config_path = str(self.logic_folder / f"logic_config_{sysid}.json")
         veh_config: VehicleConfig = {
             "sysid": sysid,
-            "port_offset": port_offset,
+            "veh_port_offset": port_offset,
             "ardupilot_cmd": " ".join(arp_cmd),
             "logic_cmd": (
                 f"python3 -m simulator.logic"

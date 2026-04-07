@@ -24,7 +24,7 @@ from simulator.config import (
     LOGS_PATH,
     BasePort,
 )
-from simulator.configs import GCSConfig, VehicleConfig
+from simulator.configs import VehicleConfig
 from simulator.helpers.connections import create_udp_conn, create_zmq_socket
 from simulator.helpers.connections.mavlink.customenums.customcmd import CustomCmd
 from simulator.helpers.coordinates import GRA, GRAs
@@ -44,13 +44,13 @@ def main():
     """Run a GCS instance to monitor Vehicles."""
     config_path, verbose = parse_arguments()
     with open(config_path) as f:
-        config = json.load(f)
+        gcs_config = json.load(f)
     setup_logging(
-        LOGS_PATH / "GCSs" / f"GCS_{config['name']}.log",
+        LOGS_PATH / "GCSs" / f"GCS_{gcs_config['name']}.log",
         verbose=verbose,
         console_output=True,
     )
-    gcs = GCS(**config)
+    gcs = GCS(**gcs_config)
     gcs.run()
 
 
@@ -59,9 +59,9 @@ class GCS:
 
     def __init__(
         self,
-        vehicles: list[VehicleConfig],
         name: str,
-        port_offset: int,
+        vehicles: list[VehicleConfig],
+        oracle_port_offset: int,
         terminals: list[SimProcess],
         suppress: list[SimProcess],
     ) -> None:
@@ -79,7 +79,7 @@ class GCS:
             self._ctx,
             zmq.DEALER,
             BasePort.ORC_DONE,
-            offset=0,
+            offset=oracle_port_offset,
             timeout=-1,
             identity=f"gcs-{self.name}".encode(),
         )
@@ -205,7 +205,7 @@ class GCS:
         ## create MAVLink connection to the SITL instance for this Vehicle
         conn = create_udp_conn(
             base_port=BasePort.GCS,
-            offset=veh_config["port_offset"],
+            offset=veh_config["veh_port_offset"],
             mode="receiver",
             src_sysid=255,  # estándar GCS sysid
             src_compid=190,  # estándar GCS commponent ID
@@ -239,12 +239,12 @@ class GCS:
         self.n_vehicles -= 1
         logging.info(f"Vehicle {sysid} removed from GCS {self.name}")
 
-    @staticmethod
-    def load_config(config_path: str) -> GCSConfig:
-        """Load GCS configuration from a JSON file via command line argument."""
-        with open(config_path) as f:
-            gcs_config: GCSConfig = json.load(f)
-        return gcs_config
+    # @staticmethod
+    # def load_config(config_path: str) -> GCSConfig:
+    #     """Load GCS configuration from a JSON file via command line argument."""
+    #     with open(config_path) as f:
+    #         gcs_config: GCSConfig = json.load(f)
+    #     return gcs_config
 
     def _wait_for_pty(self, path: str, timeout: float = 3.0):
         t0 = time.time()

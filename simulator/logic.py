@@ -81,14 +81,15 @@ def main():
 def start_logic(config: LogicConfig):
     """Start bidirectional proxy for a given Vehicle system_id."""
     sysid = config["sysid"]
-    port_offset = config["port_offset"]
+    veh_port_offset = config["veh_port_offset"]
+    orc_port_offset = config["oracle_port_offset"]
     gra_orign = GRA(**config["gra_origin_dict"])
     plan_spec = PlanSpec(**config["plan_spec"])
 
     # wait_for_port(BasePort.ARP + port_offset, verbose=True)
     ap_conn = create_tcp_conn(
         base_port=BasePort.ARP,
-        offset=port_offset,
+        offset=veh_port_offset,
         role="client",
         src_sysid=connection_id(sysid),
         src_compid=140,
@@ -96,7 +97,7 @@ def start_logic(config: LogicConfig):
     logging.debug(f"Vehicle {sysid}: Logic connection established")
     cs_conn = create_udp_conn(
         base_port=BasePort.GCS,
-        offset=port_offset,
+        offset=veh_port_offset,
         mode="sender",
         src_sysid=1,
         src_compid=140,
@@ -105,7 +106,9 @@ def start_logic(config: LogicConfig):
 
     # Shared telemetry state
     data_logger = DataLogger(path=DATA_PATH / "msgs", sysid=sysid)
-    rid_mng = RIDManager(sysid, port_offset, gra_orign, data_logger=data_logger)
+    rid_mng = RIDManager(
+        sysid, veh_port_offset, orc_port_offset, gra_orign, data_logger=data_logger
+    )
     # Router stop signal
     mav_mng = MAVLinkManager(
         conn=ap_conn,
@@ -139,6 +142,9 @@ def start_logic(config: LogicConfig):
     rid_mng.start()
 
     plan = Plan.build(plan_spec)
+    bind_rid_getter = getattr(plan, "bind_rid_getter", None)
+    if bind_rid_getter is not None:
+        bind_rid_getter(rid_mng.get_latest)
     logic = VehicleLogic(
         plan=plan,
         gra_origin=gra_orign,

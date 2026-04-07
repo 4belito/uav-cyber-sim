@@ -43,6 +43,7 @@ class Oracle:
         gra_origin: GRAPose,
         vehs: dict[int, SimVehicle],
         gcss: dict[str, SimGCS],
+        port_offset: int,
         transmission_range: float = 40.0,
     ) -> None:
         # Narrow types for the type checker now that we've asserted no None values
@@ -66,7 +67,7 @@ class Oracle:
             zmq_ctx, BasePort.RID_DOWN, zmq.PUB, veh_port_offsets
         )
         self.done_sock = create_zmq_socket(
-            zmq_ctx, zmq.ROUTER, BasePort.ORC_DONE, offset=0
+            zmq_ctx, zmq.ROUTER, BasePort.ORC_DONE, offset=port_offset
         )
 
         # Threads

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Self
 
 from simulator.helpers.coordinates import ENU, ENUPose, ENUs
-from simulator.planner.actions import make_land, make_path, make_takeoff
+from simulator.planner.actions import make_hold, make_land, make_path, make_takeoff
 from simulator.planner.plan import Plan, PlanSpec
 
 
@@ -29,6 +29,8 @@ class GuidedPlan(Plan):
         land_wp = ENU(wps[-1].x, wps[-1].y, 0)
         if land:
             self.add(make_land(final_wp=land_wp))
+        else:
+            self.add(make_hold())
 
         self._spec = PlanSpec(
             plan_class="GuidedPlan",

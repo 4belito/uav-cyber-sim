@@ -38,6 +38,7 @@ class RIDManager:
         self,
         sysid: int,
         port_offset: int,
+        orc_port_offset: int,
         gra_origin: GRA,
         data_logger: DataLogger | None = None,
     ) -> None:
@@ -45,6 +46,7 @@ class RIDManager:
         self.sysid = sysid
         self.data: RIDData | None = None
         self.received_rid: Queue[RIDData] = Queue()
+        self._latest: dict[int, RIDData] = {}
         self._lock = threading.Lock()  # protects self.data and self.pending
         self._stop = threading.Event()
         self.pending = False  # whether there is new data to publish
@@ -69,7 +71,7 @@ class RIDManager:
         self._adsb_out_sock = create_zmq_socket(
             self._ctx,
             zmq.PUB,
-            BasePort.ADSB_DOWN,
+            BasePort.ADSB,
             port_offset,
         )
 
@@ -77,7 +79,7 @@ class RIDManager:
             self._ctx,
             zmq.DEALER,
             BasePort.ORC_DONE,
-            offset=0,
+            offset=orc_port_offset,
             timeout=-1,
             identity=f"log-{self.sysid}".encode(),
         )
@@ -156,12 +158,16 @@ class RIDManager:
             )
 
     # --- background loops ------------------------------------------------------
+    def get_latest(self, sysid: int) -> RIDData | None:
+        """Return the most recently received RID for a given sysid."""
+        return self._latest.get(sysid)
+
     def _receive(self, sock: zmq.Socket[bytes]) -> None:
         """Continuously receive RID data from nearby UAVs."""
         while not self._stop.is_set():
             try:
                 rid: RIDData = sock.recv_pyobj()  # type: ignore
-                # This is just accumulating rid as an example of processing RID.
+                self._latest[rid.sysid] = rid
                 self.received_rid.put(rid)
                 logging.debug(f"Uav {self.sysid} received RID: {rid.sysid}")
                 # Convert to ADS-B and forward
