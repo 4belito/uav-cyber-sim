@@ -3,7 +3,7 @@ Gazebo Simulator Module.
 
 This module defines a Gazebo-based simulator that extends the base Simulator class.
 It dynamically generates Vehicle model files, launches ArduPilot and logic processes,
-and modifies Gazebo world files to include drones and waypoint markers.
+and modifies Gazebo world files to include vehicles and waypoint markers.
 
 Main Features:
 - Supports custom models and color-coded Vehicles
@@ -62,7 +62,7 @@ class GazVehicle(Vehicle):
 class Gazebo(Visualizer[GazVehicle]):
     """
     Gazebo-specific simulator that launches Vehicles in a Gazebo world.
-    It configures drone models, world markers, and coordinates with ArduPilot logic.
+    It configures vehicle models, world markers, and coordinates with ArduPilot logic.
     """
 
     def __init__(
@@ -86,9 +86,9 @@ class Gazebo(Visualizer[GazVehicle]):
     def launch(self, port_offsets: list[int]):
         """Launch the Gazebo simulator with the specified Vehicle and waypoints."""
         base_models = [
-            f"iris_{veh.color.name.lower()}" for veh in self.vehicles.values()
+            self._resolve_base_model_name(veh) for veh in self.vehicles.values()
         ]
-        self._generate_drone_models_from_bases(
+        self._generate_vehicle_models_from_bases(
             base_models, base_port_in=9002, port_offsets=port_offsets
         )
         updated_world = self._update_world(self.world_path)
@@ -155,24 +155,27 @@ class Gazebo(Visualizer[GazVehicle]):
 
         return env
 
-    def _generate_drone_models_from_bases(
+    def _resolve_base_model_name(self, veh: GazVehicle) -> str:
+        return f"{veh.model}/{veh.color.name.lower()}"
+
+    def _generate_vehicle_models_from_bases(
         self,
         base_models: list[str],
         port_offsets: list[int],
         base_port_in: int = 9002,
     ) -> None:
-        template_path = ARDUPILOT_GAZEBO_MODELS / "drone"
+        template_path = ARDUPILOT_GAZEBO_MODELS / "gazebo-iris" / "template"
         RUNTIME_GAZEBO_MODELS.mkdir(parents=True, exist_ok=True)
 
         for i in range(self.num_vehicles):
-            name = f"drone{i + 1}"
+            name = f"vehicle_{i + 1}"
             new_model_path = RUNTIME_GAZEBO_MODELS / name
             if new_model_path.exists():
                 shutil.rmtree(new_model_path)
             shutil.copytree(template_path, new_model_path)
 
             sdf_path = new_model_path / "model.sdf"
-            with open(sdf_path, "r", encoding="utf-8") as f:
+            with open(sdf_path, encoding="utf-8") as f:
                 sdf = f.read()
 
             sdf = re.sub(r'<model name="[^"]+">', f'<model name="{name}">', sdf)
@@ -208,18 +211,18 @@ class Gazebo(Visualizer[GazVehicle]):
         if world_elem is None:
             raise ValueError("Could not find 'world' element in the XML.")
 
-        self._remove_old_models(world_elem)
+        # self._remove_old_models(world_elem)
         self._add_markers_elements(world_elem)
-        self._add_drone_elements(world_elem)
+        self._add_vehicle_elements(world_elem)
 
         tree.write(out_path)
         return out_path
 
-    def _remove_old_models(self, world_elem: ET.Element) -> None:
-        for model in world_elem.findall("model"):
-            model_name = model.attrib.get("name", "")
-            if model_name in {"green_waypoint", "red_waypoint", "drone", "iris_demo"}:
-                world_elem.remove(model)
+    # def _remove_old_models(self, world_elem: ET.Element) -> None:
+    #     for model in world_elem.findall("model"):
+    #         model_name = model.attrib.get("name", "")
+    #         if model_name in {"green_waypoint", "red_waypoint", "vehicle", "iris_demo"}:
+    #             world_elem.remove(model)
 
     def _add_markers_elements(self, world_elem: ET.Element):
         for mark in self.markers:
@@ -244,12 +247,12 @@ class Gazebo(Visualizer[GazVehicle]):
         ET.SubElement(model, "allow_auto_disable").text = "1"
         return model
 
-    def _add_drone_elements(self, world_elem: ET.Element) -> None:
+    def _add_vehicle_elements(self, world_elem: ET.Element) -> None:
         for i, veh in enumerate(self.vehicles.values()):
             x, y, z, h = veh.home
             pose = XYZRPY(x, y, z, 0, 0, heading_to_yaw(h))
-            drone_elem = self._generate_drone_element(f"drone{i + 1}", pose)
-            world_elem.append(drone_elem)
+            vehicle_elem = self._generate_vehicle_element(f"vehicle_{i + 1}", pose)
+            world_elem.append(vehicle_elem)
 
     def _add_inertial(self, link: ET.Element) -> None:
         inertial = ET.SubElement(link, "inertial")
@@ -294,7 +297,7 @@ class Gazebo(Visualizer[GazVehicle]):
         ET.SubElement(visual, "transparency").text = str(w.alpha)
         ET.SubElement(visual, "cast_shadows").text = "1"
 
-    def _generate_drone_element(self, instance_name: str, pose: XYZRPY) -> ET.Element:
+    def _generate_vehicle_element(self, instance_name: str, pose: XYZRPY) -> ET.Element:
         model = ET.Element("model", name=instance_name)
         ET.SubElement(model, "pose").text = f"{pose}"
         include = ET.SubElement(model, "include")
