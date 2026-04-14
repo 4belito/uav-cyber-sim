@@ -149,10 +149,11 @@ RUN cd /home/ubuntu/uav-cyber-sim/ardupilot_gazebo && \
 USER ubuntu
 RUN cd ardupilot/Tools/autotest && ./sim_vehicle.py -w -v ArduCopter || true
 
-# =========================
+# =========================c
 # ULI NET SIM
 # =========================
 FROM uli-net-sim:latest AS netsim
+USER root
 RUN mkdir -p /deps && apt-mark showmanual | sort -u > /deps/packages.txt
 
 FROM main AS final
@@ -164,17 +165,9 @@ RUN apt-get update && \
     xargs -r -a /tmp/packages.txt apt-get install --yes --no-install-recommends && \
     rm -rf /var/lib/apt/lists/* /tmp/packages.txt
 
-# =========================
-# UID/GID FIX
-# =========================
-ARG UID=1001
-ARG GID=1001
+COPY --from=netsim /usr/uli-net-sim /usr/uli-net-sim
+RUN chown -R ubuntu:ubuntu /home/ubuntu /usr/uli-net-sim
 
-RUN groupmod -o -g ${GID} ubuntu && \
-    usermod  -o -u ${UID} -g ${GID} ubuntu && \
-    chown -R ${UID}:${GID} /home/ubuntu
-
-COPY --from=netsim --chown=${UID}:${GID} /usr/uli-net-sim /usr/uli-net-sim
 
 USER ubuntu
 WORKDIR /home/ubuntu/uav-cyber-sim

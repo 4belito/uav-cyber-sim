@@ -74,7 +74,7 @@ class QGC(Visualizer[QGCVehicle]):
         visveh = self.vehicles[vehicle.sysid]
         return visveh.home.to_str()
 
-    def launch(self, port_offsets: list[int]):
+    def launch(self, port_offsets: dict[int, int]):
         """Launch the Gazebo."""
         # self._delete_all_links()
         # self._enable_autoconnect_udp()

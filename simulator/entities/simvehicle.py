@@ -23,6 +23,7 @@ class SimVehicle(Vehicle):
     port_offset: int | None = None
     instance: int | None = None
     model: str = "+"
+    firmware: str = "ArduCopter"
 
     def set_port_offset(self, offset: int):
         """Set the port offset for the vehicle."""
@@ -39,6 +40,7 @@ class SimVehicle(Vehicle):
         relative_home: ENUPose,  # relative to enu_origin
         relative_path: ENUs,  # relative waypoints
         model: str = "+",  # ("frame defines the model internally")
+        firmware: str = "ArduCopter",
     ) -> SimVehicle:
         """Create a SimVehicle from poses given relative to an ENU origin."""
         enu_home = enu_origin.to_abs(relative_home)
@@ -52,6 +54,7 @@ class SimVehicle(Vehicle):
             plan=plan,
             waypoints=ENUPose.unpose_all(waypoints),
             model=model,
+            firmware=firmware,
         )
 
     @property

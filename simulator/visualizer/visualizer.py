@@ -25,7 +25,7 @@ class Visualizer(ABC, Generic[VehT]):
         pass
 
     @abstractmethod
-    def launch(self, port_offsets: list[int]) -> None:
+    def launch(self, port_offsets: dict[int, int]) -> None:
         """Launch the visualizer."""
         pass
 

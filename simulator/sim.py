@@ -81,11 +81,13 @@ class Simulator(Generic[VehT]):
             len(self.vehicles),
         )
         self.orc_port_offset = self._find_port_offsets([BasePort.ORC_DONE], 1)[0]
-        for sysid, offset in zip(sorted(self.vehicles), port_offsets):
+        port_offsets_dict: dict[int, int] = {}
+        for sysid, offset in zip(sorted(self.vehicles), port_offsets, strict=True):
+            port_offsets_dict[sysid] = offset
             self.vehicles[sysid].port_offset = offset
         self._save_logic_configs()
         self._save_gcs_configs()
-        self.visualizer.launch(port_offsets)
+        self.visualizer.launch(port_offsets_dict)
         self._launch_gcses()
         return Oracle(
             self.gra_origin,
@@ -205,7 +207,7 @@ class Simulator(Generic[VehT]):
         inst = port_offset // self.port_step
         binary = ensure_sitl_built(
             frame=veh.model,  # e.g. "gazebo-iris"
-            firmware="ArduCopter",  # or "ArduPlane", etc.
+            firmware=veh.firmware,  # or "ArduPlane", etc.
         )
         veh_parms = self.parms[veh.sysid]
         arp_cmd = [
@@ -225,7 +227,7 @@ class Simulator(Generic[VehT]):
             self.visualizer.home_str(veh),
             f"--serial5=uart:/tmp/adsb_{sysid}_ardupilot:57600",
             "--defaults",
-            ",".join(get_default_params(veh.model, "ArduCopter") + [veh_parms]),
+            ",".join(get_default_params(veh.model, veh.firmware) + [veh_parms]),
         ]
 
         arp_cmd.extend(self.visualizer.add_sitl_args(veh))

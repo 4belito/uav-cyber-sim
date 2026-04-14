@@ -35,7 +35,7 @@ class NoVisualizer(Visualizer[NovisVehicle]):
         """Add GRA location to the vehicle command."""
         return self.gra_origin.to_abs(vehicle.home).to_str()
 
-    def launch(self, port_offsets: list[int]):
+    def launch(self, port_offsets: dict[int, int]):
         """Print a message indicating that no visualizer will be launched."""
         logging.info("🙈 Running without visualization.")
 
