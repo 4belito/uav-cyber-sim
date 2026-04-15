@@ -43,7 +43,9 @@ def create_process(
     bash_cmd = ["bash", "-c", full_cmd]
 
     env = env if env is not None else os.environ.copy()
-
+    # 🔴 Fix broken GNOME terminal session in VNC
+    env.pop("GNOME_TERMINAL_SERVICE", None)
+    env.pop("GNOME_TERMINAL_SCREEN", None)
     # =========================
     # Visible terminal (Linux)
     # =========================
@@ -53,7 +55,6 @@ def create_process(
             raise RuntimeError("DISPLAY not set. X11 forwarding may not be active.")
 
         env["DISPLAY"] = display_env
-
         if "SSH_CONNECTION" in env or "REMOTE_CONTAINERS" in env:
             terminal_cmd = [
                 "xterm",

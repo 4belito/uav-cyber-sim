@@ -42,14 +42,15 @@ class Simulator(Generic[VehT]):
     def __init__(
         self,
         visualizer: Visualizer[VehT],
-        terminals: list[SimProcess] = [],
-        suppress_output: list[SimProcess] = [
-            SimProcess.ARDUPILOT,
-            SimProcess.ADSB_SOCAT,
-        ],
+        terminals: list[SimProcess] | None = None,
+        suppress_output: list[SimProcess] | None = None,
         verbose: int = 1,
         transmission_range: int = 100,  # meters for inter-Vehicle communication
     ):
+        if terminals is None:
+            terminals = []
+        if suppress_output is None:
+            suppress_output = [SimProcess.ARDUPILOT, SimProcess.ADSB_SOCAT]
         self.visualizer = visualizer
         self.gra_origin = self.visualizer.gra_origin
         self.terminals = set(terminals)

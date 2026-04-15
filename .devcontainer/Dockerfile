@@ -146,8 +146,8 @@ RUN cd /home/ubuntu/uav-cyber-sim/ardupilot_gazebo && \
 # =========================
 # OPTIONAL: SIM_VEHICLE 
 # =========================
-USER ubuntu
-RUN cd ardupilot/Tools/autotest && ./sim_vehicle.py -w -v ArduCopter || true
+# USER ubuntu
+# RUN cd ardupilot/Tools/autotest && ./sim_vehicle.py -w -v ArduCopter || true
 
 # =========================c
 # ULI NET SIM

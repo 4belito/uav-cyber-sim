@@ -83,7 +83,7 @@ class Oracle:
 
         # Events and locks for thread coordination
         self.stop_sys = {sysid: threading.Event() for sysid in self.sysids}
-        self.stop_gcs = {gcs_name: threading.Event() for gcs_name in self.gcss.keys()}
+        self.stop_gcs = {gcs_name: threading.Event() for gcs_name in self.gcss}
         self.rid_locks = {sysid: threading.Lock() for sysid in self.sysids}
 
     def wait_done(self):
@@ -197,11 +197,9 @@ class Oracle:
                         o_cog = o_rid.cog
                         o_ele = o_rid.ele
                         operands.append(
-                            (
-                                f"{o_sysid},{round(o_pos.x, 3)},{round(o_pos.y, 3)},"
-                                f"{round(o_pos.z, 3)},{round(o_spd, 3)},"
-                                f"{round(o_cog, 3)},{round(o_ele, 3)}"
-                            )
+                            f"{o_sysid},{round(o_pos.x, 3)},{round(o_pos.y, 3)},"
+                            f"{round(o_pos.z, 3)},{round(o_spd, 3)},"
+                            f"{round(o_cog, 3)},{round(o_ele, 3)}"
                         )
 
                     # continue if there not at least two drones to simulate
@@ -244,14 +242,16 @@ class Oracle:
                     if result.stdout != "":
                         res = json.loads(result.stdout)
                     for o_sysid in o_sysids:
-                        if "Serial Number" in res:
-                            if str(o_sysid) in res["Serial Number"]:
-                                if (
-                                    str(sysid)
-                                    in res["Serial Number"][str(o_sysid)]["values"]
-                                ):
-                                    with self.rid_locks[o_sysid]:
-                                        self.rid_out_socks[o_sysid].send_pyobj(rid)  # type: ignore
+                        if (
+                            ("Serial Number" in res)
+                            and (str(o_sysid) in res["Serial Number"])
+                            and (
+                                str(sysid)
+                                in res["Serial Number"][str(o_sysid)]["values"]
+                            )
+                        ):
+                            with self.rid_locks[o_sysid]:
+                                self.rid_out_socks[o_sysid].send_pyobj(rid)  # type: ignore
                 else:
                     for o_sysid in self.grid.iter_neighbors_within(
                         sysid, rid.enu_pos, radius=None
