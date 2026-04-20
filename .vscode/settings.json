@@ -49,7 +49,18 @@
     "python-envs.pythonProjects": [],
     "cSpell.words": [
         "ardupilot",
+        "geopy",
+        "ipykernel",
+        "ipython",
+        "matplotlib",
         "novisualizer",
+        "numpy",
+        "plotly",
+        "psutil",
+        "pymap",
+        "pymavlink",
+        "pyserial",
+        "pyzmq",
         "SITL",
         "supress"
     ],
