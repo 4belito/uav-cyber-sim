@@ -1,5 +1,5 @@
 {
-    "python.defaultInterpreterPath": "/home/abeldg/.conda/envs/uav-cyber-sim11/bin/python",
+    "python.defaultInterpreterPath": "${workspaceFolder}/.venv/bin/python",
     "jupyter.jupyterServerType": "local",
     "editor.formatOnSave": true,
     "editor.codeActionsOnSave": {
@@ -43,10 +43,14 @@
     "editor.suggestOnTriggerCharacters": true,
     "editor.hover.enabled": "on",
     "notebook.lineNumbers": "on",
-    "python-envs.defaultEnvManager": "ms-python.python:conda",
-    "python-envs.defaultPackageManager": "ms-python.python:conda",
+    "python-envs.defaultEnvManager": "ms-python.python:venv",
+    "python-envs.defaultPackageManager": "ms-python.python:pip",
+    "python-envs.alwaysUseUv": true,
     "python-envs.pythonProjects": [],
     "cSpell.words": [
+        "ardupilot",
+        "novisualizer",
+        "SITL",
         "supress"
     ]
 }

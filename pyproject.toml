@@ -1,3 +1,22 @@
+[project]
+name = "uav-cyber-sim"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "folium",
+    "geopy",
+    "ipykernel",
+    "ipython",
+    "matplotlib",
+    "numpy",
+    "pandas",
+    "plotly",
+    "psutil",
+    "pymap3d",
+    "pymavlink",
+    "pyzmq",
+]
+
 [tool.ruff]
 line-length = 88
 target-version = "py311"

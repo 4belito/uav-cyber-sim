@@ -104,33 +104,11 @@ RUN mkdir -p QGroundControl && \
 RUN ./ardupilot/Tools/environment_install/install-prereqs-ubuntu.sh -y
 
 # =========================
-# MINICONDA
+# UV + PYTHON ENV
 # =========================
-RUN mkdir ~/miniconda3 && \
-    wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda3/miniconda.sh && \
-    bash ~/miniconda3/miniconda.sh -b -u -p ~/miniconda3 && \
-    rm ~/miniconda3/miniconda.sh && \
-    ~/miniconda3/bin/conda init
-
-# =========================
-# PYTHON ENV
-# =========================
-RUN ~/miniconda3/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main && \
-    ~/miniconda3/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r && \
-    ~/miniconda3/bin/conda create -n uav-cyber-sim python=3.11 -y && \
-    ~/miniconda3/bin/conda run -n uav-cyber-sim pip install \
-    folium \
-    geopy \
-    matplotlib \
-    nbformat \
-    notebook \
-    numpy \
-    plotly \
-    pymap3d \
-    pymavlink \
-    pyserial
-
+RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/home/ubuntu/.local/bin:${PATH}"
+RUN uv sync --project /home/ubuntu/uav-cyber-sim
 
 # =========================
 # BUILD ARDUPILOT GAZEBO PLUGIN
