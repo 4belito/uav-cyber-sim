@@ -13,7 +13,11 @@
       "Read(//home/abeldg/bin/**)",
       "Bash(ln -sf /home/abeldg/clean_home/bin/uv /home/abeldg/.local/bin/uv)",
       "Bash(ln -sf /home/abeldg/clean_home/bin/uvx /home/abeldg/.local/bin/uvx)",
-      "Bash(uv --version)"
+      "Bash(uv --version)",
+      "Bash(chmod 600 ~/.ssh/config)",
+      "Bash(ssh -T git@github.com)",
+      "Bash(ssh-add ~/.ssh/id_ed25519_github)",
+      "Bash(ssh -vT git@github.com)"
     ]
   }
 }
