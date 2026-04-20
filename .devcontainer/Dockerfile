@@ -1,3 +1,7 @@
+# Declared globally so it can be used in a FROM instruction (Dockerfile spec requirement).
+# Override with --build-arg NETSIM_IMAGE=uli-net-sim:latest to include the net-sim layer.
+ARG NETSIM_IMAGE=ubuntu:22.04
+
 FROM ubuntu:22.04 AS main
 
 SHELL ["/bin/bash", "--login", "-c"]
@@ -45,6 +49,7 @@ RUN apt-get update && apt-get install --yes --no-install-recommends \
     rsync \
     speech-dispatcher \
     wget \
+    xterm \
     xvfb \
     zlib1g-dev \
     gnupg \
@@ -54,7 +59,8 @@ RUN apt-get update && apt-get install --yes --no-install-recommends \
 # =========================
 # TIME + LOCALE
 # =========================
-RUN ln -sf /usr/share/zoneinfo/EST /etc/localtime && \
+ARG TZ=UTC
+RUN ln -sf /usr/share/zoneinfo/${TZ} /etc/localtime && \
     sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen && \
     locale-gen
 
@@ -71,7 +77,11 @@ RUN wget -qO- https://packages.osrfoundation.org/gazebo.key | gpg --dearmor | te
 # =========================
 # USER SETUP
 # =========================
-RUN useradd ubuntu --create-home --home-dir /home/ubuntu --shell /bin/bash && \
+ARG UID=1000
+ARG GID=1000
+RUN groupadd --gid ${GID} ubuntu && \
+    useradd ubuntu --create-home --home-dir /home/ubuntu --shell /bin/bash \
+    --uid ${UID} --gid ${GID} && \
     echo "ubuntu ALL=(ALL:ALL) NOPASSWD: ALL" >> /etc/sudoers
 
 USER ubuntu
@@ -85,7 +95,8 @@ WORKDIR /home/ubuntu
 # =========================
 # CLONE REPO (with submodules)
 # =========================
-RUN git clone --branch remove-sim_vehicle --recurse-submodules \
+ARG REPO_BRANCH=remove-sim_vehicle
+RUN git clone --branch ${REPO_BRANCH} --recurse-submodules \
     https://github.com/4belito/uav-cyber-sim.git
 
 WORKDIR /home/ubuntu/uav-cyber-sim
@@ -127,12 +138,19 @@ RUN cd /home/ubuntu/uav-cyber-sim/ardupilot_gazebo && \
 USER ubuntu
 RUN cd ardupilot/Tools/autotest && ./sim_vehicle.py -w -v ArduCopter || true
 
-# =========================c
-# ULI NET SIM
 # =========================
-FROM uli-net-sim:latest AS netsim
+# ULI NET SIM (optional)
+# Pass --build-arg NETSIM_IMAGE=uli-net-sim:latest to enable.
+# Defaults to a plain ubuntu image so the build works without the local image.
+# =========================
+FROM ${NETSIM_IMAGE} AS netsim
 USER root
-RUN mkdir -p /deps && apt-mark showmanual | sort -u > /deps/packages.txt
+RUN mkdir -p /deps /usr/uli-net-sim && \
+    if [ -d /usr/uli-net-sim-real ]; then \
+        apt-mark showmanual | sort -u > /deps/packages.txt; \
+    else \
+        touch /deps/packages.txt; \
+    fi
 
 FROM main AS final
 
@@ -140,7 +158,9 @@ COPY --from=netsim /deps/packages.txt /tmp/packages.txt
 
 USER root
 RUN apt-get update && \
-    xargs -r -a /tmp/packages.txt apt-get install --yes --no-install-recommends && \
+    if [ -s /tmp/packages.txt ]; then \
+        xargs -r -a /tmp/packages.txt apt-get install --yes --no-install-recommends; \
+    fi && \
     rm -rf /var/lib/apt/lists/* /tmp/packages.txt
 
 COPY --from=netsim /usr/uli-net-sim /usr/uli-net-sim

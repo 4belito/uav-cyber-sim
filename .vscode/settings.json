@@ -52,5 +52,6 @@
         "novisualizer",
         "SITL",
         "supress"
-    ]
+    ],
+    "cmake.sourceDirectory": "/home/abeldg/uav-cyber-sim/ardupilot/modules/Micro-CDR/ci/linux"
 }

@@ -1,37 +1,31 @@
 {
-  "name": "uav-cyber-sim (X11 over SSH)",
-  //"image": "uav-cyber-sim",
+  "name": "uav-cyber-sim",
   "build": {
     "context": "..",
     "dockerfile": "Dockerfile",
     "args": {
-      "UID": "1001",
-      "GID": "1001"
+      "UID": "${localEnv:UID:-1000}",
+      "GID": "${localEnv:GID:-1000}",
+      "NETSIM_IMAGE": "${localEnv:NETSIM_IMAGE:-ubuntu:22.04}"
     }
   },
+  // host networking gives full port access on Linux; on macOS/Windows Docker Desktop
+  // it is silently ignored — use forwardPorts below or run on Linux for large fleets
   "runArgs": [
     "--network",
     "host"
   ],
   "initializeCommand": "mkdir -p .claude",
+  // Xvfb display :99 is started in postStartCommand — works on every platform
+  // without requiring an X server on the host
   "containerEnv": {
-    "DISPLAY": "${env:DISPLAY}",
-    "XAUTHORITY": "/tmp/.Xauthority"
+    "DISPLAY": ":99"
   },
   "mounts": [
-    "type=bind,source=/tmp/.X11-unix,target=/tmp/.X11-unix",
-    "type=bind,source=${env:HOME}/.Xauthority,target=/tmp/.Xauthority",
     "source=${localWorkspaceFolder}/.claude,target=/root/.claude,type=bind,consistency=cached"
   ],
+  "postStartCommand": "Xvfb :99 -screen 0 1920x1080x24 &>/tmp/xvfb.log &",
   "postAttachCommand": "sudo chown -R ubuntu /workspaces",
-  // "customizations": {
-  //   "vscode": {
-  //     "extensions": [
-  //       "ms-toolsai.jupyter@2025.6.0",
-  //       "ms-python.python"
-  //     ]
-  //   }
-  //},
   "customizations": {
     "vscode": {
       "extensions": [
