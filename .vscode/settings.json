@@ -53,6 +53,7 @@
         "ipykernel",
         "ipython",
         "matplotlib",
+        "nbformat",
         "novisualizer",
         "numpy",
         "plotly",
