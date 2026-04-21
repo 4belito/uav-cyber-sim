@@ -1,13 +1,17 @@
 [project]
 name = "uav-cyber-sim"
 version = "0.1.0"
-requires-python = ">=3.11"
+requires-python = "==3.11.*"
 dependencies = [
+    "dronecan>=1.0.27",
     "empy==3.3.4",
+    "fastcrc>=0.3.5",
     "folium",
+    "future>=1.0.0",
     "geopy",
     "ipykernel",
     "ipython",
+    "lxml",
     "matplotlib",
     "nbformat",
     "numpy",
@@ -18,6 +22,7 @@ dependencies = [
     "pymavlink",
     "pyserial",
     "pyzmq",
+    "setuptools",
 ]
 
 [tool.ruff]
