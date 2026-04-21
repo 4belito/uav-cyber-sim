@@ -64,7 +64,8 @@
         "pyserial",
         "pyzmq",
         "SITL",
-        "supress"
+        "supress",
+        "venv"
     ],
     "cmake.sourceDirectory": "/home/abeldg/uav-cyber-sim/ardupilot/modules/Micro-CDR/ci/linux"
 }

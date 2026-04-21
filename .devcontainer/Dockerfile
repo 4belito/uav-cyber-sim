@@ -113,10 +113,12 @@ WORKDIR /home/ubuntu/uav-cyber-sim
 # =========================
 # QGroundControl
 # =========================
-RUN mkdir -p /home/ubuntu/QGroundControl && \
+# We place it in the repo folder so it persists and is easy to find
+RUN mkdir -p QGroundControl && \
     wget https://github.com/mavlink/qgroundcontrol/releases/download/v4.4.0/QGroundControl.AppImage \
-    -O /home/ubuntu/QGroundControl/QGroundControl.AppImage && \
-    chmod +x /home/ubuntu/QGroundControl/QGroundControl.AppImage && \
+    -O QGroundControl/QGroundControl.AppImage && \
+    chmod +x QGroundControl/QGroundControl.AppImage && \
+    # Standard Linux config path (stays in home)
     mkdir -p /home/ubuntu/.config/QGroundControl.org && \
     touch "/home/ubuntu/.config/QGroundControl.org/QGroundControl Daily.ini"
 

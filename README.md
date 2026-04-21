@@ -58,7 +58,11 @@ Build the Docker image for [uli-net-sim](https://github.com/brycethebjorkman/uli
 
 To enable running GUI applications (e.g. QGroundControl, Gazebo) inside Docker on Linux systems, launch the container with the following command:
 ```shell
-docker run -u ubuntu --env="DISPLAY" --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" --volume="/dev/dri:/dev/dri:ro" --name <container name> dalbick/uav-cyber-sim
+docker run -u ubuntu --env="DISPLAY" \
+  --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
+  --volume="/dev/dri:/dev/dri:ro" \
+  --name uav_sim \
+  4bel/uav-cyber-sim:latest
 ```
 
 VS Code's 'Dev Containers' extension can be used to attach to a running container in order to run the example Jupyter notebooks. 
