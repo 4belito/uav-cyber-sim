@@ -14,21 +14,17 @@ from simulator.config import (
 
 ALL_PROCESSES = [
     "QGroundControl",
+    "arduplane",
     "arducopter",
+    "ardurover",
+    "ardusub",
     "gazebo",
     "gzserver",
     "gzclient",
-    "mavproxy",
-    "sim_vehicle.py",
     "socat",
-    "adsb_injector.py",
-    "logic.py",
-    "gcs.py",
-    "sim.py",
     "simulator.adsb_injector",
     "simulator.logic",
     "simulator.gcs",
-    "exec bash",
 ]
 
 ALL_FOLDERS = [

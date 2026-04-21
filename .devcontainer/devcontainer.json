@@ -35,5 +35,8 @@
       ]
     }
   },
-  "remoteUser": "ubuntu"
+  "remoteUser": "ubuntu",
+  "containerUser": "ubuntu",
+  "updateRemoteUserUID": true,
+  "userEnvProbe": "loginInteractiveShell"
 }
