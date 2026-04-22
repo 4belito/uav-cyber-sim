@@ -139,16 +139,13 @@ class Gazebo(Visualizer[GazVehicle]):
         runtime = str(RUNTIME_GAZEBO_MODELS)
         base = str(ARDUPILOT_GAZEBO_MODELS)
 
-        env = {
+        env = os.environ.copy()
+        env.update({
             "GAZEBO_MODEL_PATH": f"{runtime}:{base}",
             "GAZEBO_PLUGIN_PATH": "/usr/lib/x86_64-linux-gnu/gazebo-11/plugins",
             "GAZEBO_RESOURCE_PATH": "/usr/share/gazebo-11",
             "LD_LIBRARY_PATH": "/usr/lib/x86_64-linux-gnu/gazebo-11/plugins",
-            "HOME": os.environ.get("HOME", ""),
-        }
-
-        if "DISPLAY" in os.environ:
-            env["DISPLAY"] = os.environ["DISPLAY"]
+        })
 
         return env
 

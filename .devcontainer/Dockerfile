@@ -198,4 +198,5 @@ RUN groupmod -o -g ${GID} ubuntu && \
 USER ubuntu
 WORKDIR /home/ubuntu/uav-cyber-sim
 
-ENTRYPOINT ["tail","-f","/dev/null"]
+ENV SHELL=/bin/bash
+CMD ["/bin/bash"]
