@@ -9,8 +9,11 @@ from pymavlink.dialects.v20.ardupilotmega import MAVLink_mission_item_message as
 from simulator.helpers.connections.mavlink.customtypes.mission import MissionLoader
 from simulator.helpers.connections.mavlink.enums import Cmd, CmdNav, Frame
 from simulator.helpers.coordinates import ENUPose, ENUs, GRAPose, GRAs
-from simulator.planner.actions import make_start_mission, make_upload_mission
-from simulator.planner.actions.monitoring import make_monitoring
+from simulator.planner.actions import (
+    make_monitoring,
+    make_start_mission,
+    make_upload_mission,
+)
 from simulator.planner.plan import Plan, PlanSpec
 
 
@@ -27,11 +30,11 @@ class AutoPlan(Plan):
         super().__init__(name=name)
         self.wps: GRAs
         self.mission_path = mission_path
-
-        self.add(make_upload_mission(self.mission_path))
+        item_count = MissionLoader().load(mission_path)
+        self.add(make_upload_mission(mission_path=self.mission_path))
         self.extend(Plan.arm(navigation_speed=navigation_speed))
         self.add(make_start_mission())
-        self.add(make_monitoring())
+        self.add(make_monitoring(item_count - 1))
 
         self._spec = PlanSpec(
             plan_class="AutoPlan",
@@ -128,12 +131,14 @@ class AutoPlan(Plan):
         land: bool = True,
     ) -> Self:
         """Create and save a basic mission to file."""
+        AutoPlan.save_basic_mission(
+            mission_path, sysid, gra_wps, land, navigation_speed
+        )
         plan = cls(
             name=name,
             mission_path=str(mission_path),
             navigation_speed=navigation_speed,
         )
-        plan.save_basic_mission(sysid, gra_wps, land, navigation_speed)
         return plan
 
     @classmethod
@@ -149,12 +154,8 @@ class AutoPlan(Plan):
         land: bool = True,
     ) -> Self:
         """Create and save a basic mission from relative waypoints to file."""
-        plan = cls(
-            name=name,
-            mission_path=str(mission_path),
-            navigation_speed=navigation_speed,
-        )
-        plan.save_basic_mission_from_relative(
+        AutoPlan.save_basic_mission_from_relative(
+            mission_path,
             sysid,
             gra_origin,
             relative_home,
@@ -162,17 +163,29 @@ class AutoPlan(Plan):
             land,
             navigation_speed,
         )
+
+        plan = cls(
+            name=name,
+            mission_path=str(mission_path),
+            navigation_speed=navigation_speed,
+        )
+
         return plan
 
+    @staticmethod
     def save_basic_mission(
-        self, sysid: int, gra_wps: GRAs, land: bool = True, speed: float = 5.0
-    ) -> None:
-        """Save the mission to file."""
-        self.wps = gra_wps
+        mission_path: str,
+        sysid: int,
+        gra_wps: GRAs,
+        land: bool = True,
+        speed: float = 5.0,
+    ):
+        """Save the mission to file and returns number of items."""
+        wps = gra_wps
         mission_loader = MissionLoader(sysid, target_component=0)
         mission_loader.add_latlonalt(
-            lat=self.wps[0].lat,
-            lon=self.wps[0].lon,
+            lat=wps[0].lat,
+            lon=wps[0].lon,
             altitude=0,
             terrain_alt=False,
         )
@@ -189,7 +202,7 @@ class AutoPlan(Plan):
                 0,
                 0,
                 0,
-                *self.wps[0],
+                *wps[0],
             )
         )
         if speed != 5.0:
@@ -216,7 +229,7 @@ class AutoPlan(Plan):
                     0,
                 )
             )
-        for wp in self.wps[1:]:
+        for wp in wps[1:]:
             mission_loader.add_latlonalt(
                 lat=wp.lat,
                 lon=wp.lon,
@@ -237,24 +250,25 @@ class AutoPlan(Plan):
                     0,
                     0,
                     0,
-                    self.wps[-1].lat,
-                    self.wps[-1].lon,
+                    wps[-1].lat,
+                    wps[-1].lon,
                     0,
                 )
             )
-        mission_loader.save(self.mission_path)
+        mission_loader.save(mission_path)
 
+    @staticmethod
     def save_basic_mission_from_relative(
-        self,
+        mission_path: str,
         sysid: int,
         gra_origin: GRAPose,
         relative_home: ENUPose,
         relative_path: ENUs,
         land: bool = True,
         speed: float = 5.0,
-    ) -> None:
+    ):
         """Convert ENU waypoints to GRAs and save the mission to file."""
         gra_home = gra_origin.to_abs(relative_home)
         grapose_wps = gra_home.to_abs_all(relative_path)
         gra_wps = GRAPose.unpose_all(grapose_wps)
-        self.save_basic_mission(sysid, gra_wps, land, speed)
+        AutoPlan.save_basic_mission(mission_path, sysid, gra_wps, land, speed)

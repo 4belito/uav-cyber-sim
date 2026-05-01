@@ -35,7 +35,7 @@ class MissionLoader:
 
     _loader: LoaderInterface
 
-    def __init__(self, target_system: int, target_component: int = 0):
+    def __init__(self, target_system: int = 1, target_component: int = 0):
         self._loader = MAVWPLoader(target_system, target_component)
 
     def count(self) -> int:

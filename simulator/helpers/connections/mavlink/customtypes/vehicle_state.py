@@ -8,6 +8,9 @@ import pymavlink.dialects.v20.ardupilotmega as mavlink
 class VehicleStateP(Protocol):
     """Typed interface for accessing MAVLink messages from VehicleState."""
 
+    # latest messages keyed by MAVLink message type name
+    messages: dict[str, mavlink.MAVLink_message]
+
     # ---------------------------------------------------------
     # Typed accessors
     # ---------------------------------------------------------

@@ -5,7 +5,7 @@ from __future__ import annotations
 import queue
 import threading
 from collections import defaultdict
-from typing import DefaultDict, cast
+from typing import cast
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 
@@ -22,9 +22,9 @@ class VehicleState:
 
         # Latest telemetry message per MAVLink type
         self.messages: dict[str, mavlink.MAVLink_message] = {}
-
+        # TODO: Check if queues is being used
         # Transactional message queues (MISSION_REQUEST, COMMAND_ACK, etc.)
-        self.queues: DefaultDict[str, queue.Queue[mavlink.MAVLink_message]] = (
+        self.queues: defaultdict[str, queue.Queue[mavlink.MAVLink_message]] = (
             defaultdict(queue.Queue)
         )
 

@@ -6,8 +6,9 @@ Supports static and dynamic waypoint modes and includes predefined plans.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from typing import Any, Callable, ClassVar, TypeVar
+from typing import Any, ClassVar, TypeVar
 
 from simulator.helpers.connections.mavlink.enums import CopterMode
 from simulator.helpers.coordinates import ENU, XY, ENUs, XYs

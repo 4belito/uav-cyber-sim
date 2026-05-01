@@ -1,5 +1,7 @@
 """Tools to stop simulation processes and clean up log files."""
 
+import glob
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -42,6 +44,15 @@ def kill_processes(victims: list[str]):
         subprocess.run(["pkill", "-9", "-f", process], check=False)
 
 
+def clean_adsb_ptys() -> None:
+    """Remove stale socat PTY symlinks from previous runs."""
+    for path in glob.glob("/tmp/adsb_*"):
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
 def clean(
     victim_processes: list[str] = ALL_PROCESSES,
     del_folders: list[Path] = [],
@@ -49,6 +60,7 @@ def clean(
 ):
     """End the simulation."""
     kill_processes(victim_processes)
+    clean_adsb_ptys()
     for folder in reset_folders + del_folders:
         del_folder(folder)
     for folder in reset_folders:
