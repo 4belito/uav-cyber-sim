@@ -86,5 +86,13 @@ class MAVConnection(Protocol):
     ) -> None:
         """Send the mission count message to the UAV."""
 
+    def mission_request_list_send(
+        self,
+        target_system: int,
+        target_component: int,
+        mission_type: int = 0,
+    ) -> None:
+        """Send MISSION_REQUEST_LIST; ArduPilot replies with MISSION_COUNT."""
+
     def send(self, mavmsg: mavlink.MAVLink_message) -> None:
         """Send the mission item."""

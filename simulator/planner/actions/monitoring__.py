@@ -13,6 +13,8 @@ from simulator.helpers.connections.mavlink.streams import ask_msg, stop_msg
 from simulator.planner.action import Action
 from simulator.planner.step import Step
 
+_STREAM_RETRY_INTERVAL = 0.5  # seconds between retries while waiting for MAVLink 2
+
 
 class CheckEndMission(Step):
     """Check for mission completion after the last mission item becomes active."""
@@ -21,15 +23,13 @@ class CheckEndMission(Step):
         super().__init__(name)
 
     def exec_fn(self) -> None:
-        """No execution needed; just checking."""
         self.mav_manager.state.messages.pop("MISSION_CURRENT", None)
-        reached_msg = ask_msg(
-            conn=self.conn, msg_id=MsgID.MISSION_ITEM_REACHED, interval=100_000
+        self.mav_manager.send(
+            ask_msg(conn=self.conn, msg_id=MsgID.MISSION_ITEM_REACHED, interval=100_000)
         )
-        current_msg = ask_msg(self.conn, msg_id=MsgID.MISSION_CURRENT, interval=100_000)
-
-        self.mav_manager.send(reached_msg)
-        self.mav_manager.send(current_msg)
+        self.mav_manager.send(
+            ask_msg(self.conn, msg_id=MsgID.MISSION_CURRENT, interval=100_000)
+        )
 
     def check_fn(self) -> bool:
         """Detect mission completion robustly for Plane/Copter."""
@@ -47,18 +47,31 @@ class CheckEndMission(Step):
 
 
 class MonitorItems(Step):
-    """
-    Check mission items
-    """
+    """Check mission items."""
 
-    def __init__(self, name: str, item_count: int):
+    def __init__(self, name: str):
         super().__init__(name)
         self._next_seqitem = 1
-        self._total = item_count
+        self._total = 0
 
     def exec_fn(self) -> None:
-        msg = ask_msg(conn=self.conn, msg_id=MsgID.MISSION_CURRENT, interval=100_000)
-        self.mav_manager.send(msg)
+        """Fetch mission size via MISSION_REQUEST_LIST, then start stream."""
+        while self._total == 0:
+            self.conn.mav.mission_request_list_send(
+                self.conn.target_system,
+                self.conn.target_component,
+            )
+            count_msg = self.mav_manager.state.wait_for(
+                "MISSION_COUNT", timeout=_STREAM_RETRY_INTERVAL
+            )
+            if count_msg is not None and count_msg.count > 0:
+                self._total = count_msg.count
+                logging.debug(f"Vehicle {self.sysid}: mission size = {self._total}")
+
+        self.mav_manager.state.messages.pop("MISSION_CURRENT", None)
+        self.mav_manager.send(
+            ask_msg(conn=self.conn, msg_id=MsgID.MISSION_CURRENT, interval=100_000)
+        )
 
     def check_fn(self) -> bool:
         msg = self.mav_manager.state.get("MISSION_CURRENT")
@@ -69,15 +82,18 @@ class MonitorItems(Step):
             self._next_seqitem = msg.seq + 1
         if self._next_seqitem > self._total:
             logging.info(f"Vehicle {self.sysid}: 🏁 Reached all items")
-            stop_msg(conn=self.conn, msg_id=MsgID.MISSION_CURRENT)
+            self.mav_manager.send(
+                stop_msg(conn=self.conn, msg_id=MsgID.MISSION_CURRENT)
+            )
             return True
+        self.mav_manager.state.messages.pop("MISSION_CURRENT", None)
         return False
 
 
-def make_monitoring(item_count: int) -> Action[Step]:
+def make_monitoring() -> Action[Step]:
     """Monitor mission progress and completion."""
     name = Action.Names.MONITOR_MISSION
     monitoring = Action[Step](name=name, emoji=name.emoji)
-    monitoring.add(MonitorItems(name="monitor items", item_count=item_count))
+    monitoring.add(MonitorItems(name="monitor items"))
     monitoring.add(CheckEndMission(name="check end mission"))
     return monitoring
