@@ -8,9 +8,13 @@ from typing import cast
 from simulator.config import ARDUPILOT_PATH
 from simulator.helpers.ardupilot.types import VehicleInfoProtocol
 
-sys.path.append(str(ARDUPILOT_PATH / "Tools" / "autotest"))
+_autotest = str(ARDUPILOT_PATH / "Tools" / "autotest")
+if _autotest not in sys.path:
+    sys.path.insert(0, _autotest)
 
-from pysim import vehicleinfo  # type: ignore
+from pysim import vehicleinfo  # type: ignore[import-untyped]  # noqa: E402
+
+vinfo = cast(VehicleInfoProtocol, vehicleinfo.VehicleInfo())  # type: ignore[reportUnknownMemberType]
 
 
 class Opts:
@@ -25,16 +29,13 @@ def ensure_sitl_built(frame: str, firmware: str) -> Path:
     Ensure the ArduPilot SITL binary for the given frame is built and return
     its path.
     """
-    vinfo = cast(VehicleInfoProtocol, vehicleinfo.VehicleInfo())  # type: ignore
 
-    # 3. resolve target
     info = vinfo.options_for_frame(frame, firmware, Opts())
-    waf_target: str = info["waf_target"]  # type: ignore
+    waf_target = info["waf_target"]
 
     binary_name = waf_target.split("/")[-1]
     binary_path = ARDUPILOT_PATH / "build" / "sitl" / "bin" / binary_name
 
-    # 4. build if needed
     if binary_path.exists():
         return binary_path
 
@@ -55,15 +56,11 @@ def get_default_params(frame: str, firmware: str) -> list[str]:
     Get the default parameter files for a given frame and firmware.
     Returns absolute paths.
     """
-    vinfo = cast(VehicleInfoProtocol, vehicleinfo.VehicleInfo())  # type: ignore
 
     info = vinfo.options_for_frame(frame, firmware, Opts())
+    params = info["default_params_filename"]
 
-    params: list[str] | str = info["default_params_filename"]  # type: ignore
-
-    # normalize to list
     if isinstance(params, str):
         params = [params]
 
-    # convert to absolute paths
     return [str(ARDUPILOT_PATH / "Tools" / "autotest" / p) for p in params]

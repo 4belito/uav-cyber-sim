@@ -29,7 +29,7 @@ def create_process(
     terminal_geometry: str = "80x10",
     new_process_group: bool = False,
     cwd: str | None = None,
-    env: dict[str, str] | None = None,  # 👈 ADD THIS
+    env: dict[str, str] | None = None,
 ) -> Popen[bytes]:
     """Launch a subprocess, optionally in a visible terminal."""
     redirect = " > /dev/null 2>&1" if suppress_output else ""

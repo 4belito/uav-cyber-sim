@@ -3,13 +3,10 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Generator, Iterable, Iterator
 from typing import (
-    Generator,
-    Iterable,
-    Iterator,
     NamedTuple,
     Self,
-    Type,
 )
 
 import folium
@@ -36,7 +33,7 @@ class XY(NamedTuple):
     y: float
 
     @classmethod
-    def list(cls: Type[Self], data: list[tuple[float, float]]) -> list[Self]:
+    def list(cls: type[Self], data: list[tuple[float, float]]) -> list[Self]:
         """Create XY instances from a list of (x, y) tuples."""
         return [cls(*pair) for pair in data]
 
@@ -92,7 +89,7 @@ class XYZ(NamedTuple):
     z: float
 
     @classmethod
-    def list(cls: Type[Self], data: list[tuple[float, float, float]]) -> list[Self]:
+    def list(cls: type[Self], data: list[tuple[float, float, float]]) -> list[Self]:
         """Create XYZ instances from a list of (x, y, z) tuples."""
         return [cls(*pair) for pair in data]
 
@@ -133,7 +130,7 @@ class LLA(NamedTuple):
     alt: float
 
     @classmethod
-    def list(cls: Type[Self], data: list[tuple[float, float, float]]) -> list[Self]:
+    def list(cls: type[Self], data: list[tuple[float, float, float]]) -> list[Self]:
         """Create LLA instances from a list of (lat, lon, alt) tuples."""
         return [cls(*pair) for pair in data]
 
@@ -168,7 +165,7 @@ class XYZPose(NamedTuple):
 
     @classmethod
     def list(
-        cls: Type[Self], data: list[tuple[float, float, float, float]]
+        cls: type[Self], data: list[tuple[float, float, float, float]]
     ) -> list[Self]:
         """Create XYZPose instances from (x, y, z, heading) tuples."""
         return [cls(*pair) for pair in data]

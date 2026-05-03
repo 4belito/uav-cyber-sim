@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Iterable, TypeAlias
+from typing import TypeAlias
 
 import numpy as np
 import plotly.graph_objects as go
@@ -60,17 +61,17 @@ def create_trajectory_figure(
     ranges = _compute_ranges(all_x, all_y, all_z, frames, ground)
     fig: go.Figure = go.Figure(data)
     fig.update_layout(  # type: ignore[arg-type]
-        title=dict(text=title, x=0.5, xanchor="center"),
-        scene=dict(
-            xaxis=dict(title="x", range=ranges[0]),
-            yaxis=dict(title="y", range=ranges[1]),
-            zaxis=dict(title="z", range=ranges[2]),
-            aspectmode="data",
-        ),
+        title={"text": title, "x": 0.5, "xanchor": "center"},
+        scene={
+            "xaxis": {"title": "x", "range": ranges[0]},
+            "yaxis": {"title": "y", "range": ranges[1]},
+            "zaxis": {"title": "z", "range": ranges[2]},
+            "aspectmode": "data",
+        },
         width=800,
         height=600,
         showlegend=True,
-        legend=dict(groupclick="togglegroup"),
+        legend={"groupclick": "togglegroup"},
     )
     return fig
 
@@ -137,8 +138,13 @@ def _build_plot_series(
                 legendgroup=group,
                 showlegend=False,
                 flatshading=False,
-                lighting=dict(ambient=0.35, diffuse=0.8, specular=0.2, roughness=0.9),
-                lightposition=dict(x=200, y=200, z=100),
+                lighting={
+                    "ambient": 0.35,
+                    "diffuse": 0.8,
+                    "specular": 0.2,
+                    "roughness": 0.9,
+                },
+                lightposition={"x": 200, "y": 200, "z": 100},
             )
         )
 
@@ -169,9 +175,12 @@ def _build_plot_series(
                     showlegend=True,
                     visible="legendonly",
                     hoverinfo="skip",
-                    marker=dict(
-                        symbol="circle", size=size_px, color=color, opacity=1.0
-                    ),
+                    marker={
+                        "symbol": "circle",
+                        "size": size_px,
+                        "color": color,
+                        "opacity": 1.0,
+                    },
                 )
             )
 

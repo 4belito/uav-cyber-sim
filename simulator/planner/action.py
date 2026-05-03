@@ -13,14 +13,6 @@ from simulator.helpers.coordinates import GRA
 from simulator.planner.step import MissionElement, State
 from simulator.runtime.vehicle.mav_manager import MAVLinkManager
 
-# TODO: Check binding of conn in Action and Step,
-# i think conn can be passed when actions/steps are instantiated
-
-# TODO: Treat concurrency Actions better usigng block and timeout
-
-# TODO: Check if NOT_STARTED and DONE may be combined into a single state
-
-
 T = TypeVar("T", bound=MissionElement)
 
 
@@ -107,10 +99,8 @@ class Action(MissionElement, Generic[T]):
     def _start_action(self):
         self.state = State.IN_PROGRESS
         logging.debug(
-            (
-                f"▶️ Vehicle {self.sysid}: {self.class_name} Started: "
-                f"{self.emoji} {self.name}"
-            )
+            f"▶️ Vehicle {self.sysid}: {self.class_name} Started: "
+            f"{self.emoji} {self.name}"
         )
 
     def _progress_action(self):
@@ -118,10 +108,8 @@ class Action(MissionElement, Generic[T]):
         if step is None or (step.state == State.DONE and step.next is None):
             self.state = State.DONE
             logging.info(
-                (
-                    f"✅ Vehicle {self.sysid}: {self.class_name} Done: "
-                    f"{self.emoji} {self.name}"
-                )
+                f"✅ Vehicle {self.sysid}: {self.class_name} Done: "
+                f"{self.emoji} {self.name}"
             )
         elif step.state == State.DONE:
             self.current = step.next

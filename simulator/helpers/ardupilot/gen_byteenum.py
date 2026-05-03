@@ -30,7 +30,7 @@ BASE_DIR = os.path.dirname(__file__)
 PARAM_PATH = os.path.join(BASE_DIR, "copter_params/apm.pdef.json")
 
 
-with open(PARAM_PATH, "r") as f:
+with open(PARAM_PATH) as f:
     params = json.load(f)
 
 
@@ -46,7 +46,7 @@ PARAM_DEFS = [
 
 def extract_param_values(key: str, prefix: str) -> list[str]:
     """Extract MAVLink enum values starting with a given prefix."""
-    return [k for k in params[key].keys() if k.startswith(prefix)]
+    return [k for k in params[key] if k.startswith(prefix)]
 
 
 def generate_param_enum(

@@ -1,5 +1,6 @@
 """Tools to stop simulation processes and clean up log files."""
 
+import contextlib
 import glob
 import os
 import shutil
@@ -47,27 +48,27 @@ def kill_processes(victims: list[str]):
 def clean_adsb_ptys() -> None:
     """Remove stale socat PTY symlinks from previous runs."""
     for path in glob.glob("/tmp/adsb_*"):
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(path)
-        except OSError:
-            pass
-
-
-def clean(
-    victim_processes: list[str] = ALL_PROCESSES,
-    del_folders: list[Path] = [],
-    reset_folders: list[Path] = ALL_FOLDERS,
-):
-    """End the simulation."""
-    kill_processes(victim_processes)
-    clean_adsb_ptys()
-    for folder in reset_folders + del_folders:
-        del_folder(folder)
-    for folder in reset_folders:
-        folder.mkdir(parents=True, exist_ok=True)
 
 
 def del_folder(path: Path):
     """Ensure a clean folder by deleting and recreating it."""
     if path.exists():
         shutil.rmtree(path)
+
+
+def clean(
+    victim_processes: list[str] = ALL_PROCESSES,
+    del_folders: list[Path] | None = None,
+    reset_folders: list[Path] = ALL_FOLDERS,
+):
+    """End the simulation."""
+    if del_folders is None:
+        del_folders = []
+    kill_processes(victim_processes)
+    clean_adsb_ptys()
+    for folder in reset_folders + del_folders:
+        del_folder(folder)
+    for folder in reset_folders:
+        folder.mkdir(parents=True, exist_ok=True)

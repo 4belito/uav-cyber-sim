@@ -34,7 +34,7 @@ class GoTo(Step):
         self.wp_margin = wp_margin
         self.msg_pos_interval = msg_pos_interval
         self.stop_asking_pos = stop_asking_pos
-        self.type_mask = int(0b110111111000)
+        self.type_mask = 0b110111111000
 
     def exec_fn(self) -> None:
         """Send a MAVLink command to move the vehicle to a global waypoint."""

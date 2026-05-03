@@ -34,10 +34,7 @@ class Arm(Step):
     def check_fn(self) -> bool:
         """Check if the vehicle is armed by inspecting HEARTBEAT messages."""
         msg = self.mav_manager.state.get("HEARTBEAT")
-        if msg:
-            if msg.base_mode & ModeFlag.SAFETY_ARMED:
-                return True
-        return False
+        return bool(msg and msg.base_mode & ModeFlag.SAFETY_ARMED)
 
 
 def make_arm() -> Action[Step]:

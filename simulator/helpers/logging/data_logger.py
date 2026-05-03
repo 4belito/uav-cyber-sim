@@ -18,7 +18,7 @@ class DataLogger:
     def __init__(self, path: Path, sysid: int) -> None:
         path.mkdir(parents=True, exist_ok=True)
         self.sysid = sysid
-        self._file = open(path / f"veh_{sysid}.jsonl", "a")
+        self._path = path / f"veh_{sysid}.jsonl"
 
     def write(self, record: Record) -> None:
         """Write a record to the JSONL file with error handling."""
@@ -30,12 +30,8 @@ class DataLogger:
             }
 
             safe = make_json_safe(record)
-            self._file.write(json.dumps(safe) + "\n")
-            self._file.flush()
+            with self._path.open("a") as f:
+                f.write(json.dumps(safe) + "\n")
 
         except Exception as e:
             logging.error(f"Data write error: {e}")
-
-    def close(self) -> None:
-        """Close the JSONL file. Should be called when done logging."""
-        self._file.close()

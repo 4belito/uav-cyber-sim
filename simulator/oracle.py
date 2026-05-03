@@ -292,9 +292,9 @@ class Oracle:
                 ax.scatter(  # type: ignore
                     xs,
                     ys,
-                    zs,
+                    zs,  # type: ignore
                     c=[gcs_color.value],  # Use the actual color value
-                    s=12,  # type: ignore
+                    s=12,
                     alpha=0.8,
                     label=f"Vehicle {sysid}",
                     depthshade=True,

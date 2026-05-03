@@ -69,14 +69,18 @@ class GuidedPlan(Plan):
         ylen: float,
         alt: float,
         name: str = "guided_rectangle_plan",
-        enu_origin: ENUPose = ENUPose(0, 0, 0, 0),
-        relative_home: ENUPose = ENUPose(0, 0, 0, 0),
+        enu_origin: ENUPose | None = None,
+        relative_home: ENUPose | None = None,
         clockwise: bool = True,
         wp_margin: float = 0.5,
         navigation_speed: float = 5,
         land: bool = True,
     ) -> Self:
         """Create a rectangular guided plan."""
+        if enu_origin is None:
+            enu_origin = ENUPose(0, 0, 0, 0)
+        if relative_home is None:
+            relative_home = ENUPose(0, 0, 0, 0)
         rel_wps = Plan.create_rectangle_path(
             xlen=xlen, ylen=ylen, alt=alt, clockwise=clockwise
         )
@@ -94,14 +98,18 @@ class GuidedPlan(Plan):
     def from_relative_path(
         cls,
         relative_path: ENUs,
-        enu_origin: ENUPose = ENUPose(0, 0, 0, 0),
-        relative_home: ENUPose = ENUPose(0, 0, 0, 0),
-        name: str = "guided_rectangle_plan",
+        enu_origin: ENUPose | None = None,
+        relative_home: ENUPose | None = None,
+        name: str = "guided_plan",
         wp_margin: float = 0.5,
         navigation_speed: float = 5,
         land: bool = True,
     ) -> Self:
         """Create GuidedPlan from relative path."""
+        if enu_origin is None:
+            enu_origin = ENUPose(0, 0, 0, 0)
+        if relative_home is None:
+            relative_home = ENUPose(0, 0, 0, 0)
         abs_home = enu_origin.to_abs(relative_home)
         abs_path = abs_home.to_abs_all(relative_path)
         wps = ENUPose.unpose_all(abs_path)
@@ -119,14 +127,18 @@ class GuidedPlan(Plan):
         side_len: float,
         alt: float,
         name: str = "guided_square_plan",
-        enu_origin: ENUPose = ENUPose(0, 0, 0, 0),
-        relative_home: ENUPose = ENUPose(0, 0, 0, 0),
+        enu_origin: ENUPose | None = None,
+        relative_home: ENUPose | None = None,
         clockwise: bool = True,
         wp_margin: float = 0.5,
         navigation_speed: float = 5,
         land: bool = True,
     ) -> Self:
         """Create a square guided plan."""
+        if enu_origin is None:
+            enu_origin = ENUPose(0, 0, 0, 0)
+        if relative_home is None:
+            relative_home = ENUPose(0, 0, 0, 0)
         return cls.rectangle_traj(
             xlen=side_len,
             ylen=side_len,

@@ -39,9 +39,7 @@ class CheckDisarmed(Step):
         msg = self.mav_manager.state.get("HEARTBEAT")
         if not msg:
             return False
-        if msg.base_mode & ModeFlag.SAFETY_ARMED:
-            return False
-        return True
+        return not msg.base_mode & ModeFlag.SAFETY_ARMED
 
 
 class EKFStatus(Step):
@@ -103,8 +101,6 @@ class GPSStatus(Step):
                 f"fix_type = {msg.fix_type} (need at least 3 for 3D fix)"
             )
             return False
-            # raise StepFailed(f"GPS fix too weak (fix_type = {msg.fix_type})")
-        # stop_msg(conn, msg_id=MsgID.GPS_RAW_INT)
         return True
 
 

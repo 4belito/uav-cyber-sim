@@ -18,9 +18,6 @@ from simulator.helpers.connections.mavlink.enums import Cmd, MissionResult
 from simulator.planner.action import Action
 from simulator.planner.step import Step
 
-_REQUEST_TIMEOUT = 2.0
-_MAX_COUNT_RETRIES = 5
-
 
 def _got_request(state: VehicleStateP, seq: int) -> bool:
     """Return True if the latest MISSION_REQUEST or MISSION_REQUEST_INT matches seq."""
@@ -63,9 +60,6 @@ class SendMissionCount(Step):
     def __init__(self, name: str, item_count: int) -> None:
         super().__init__(name=name)
         self._count = item_count
-        self._retries = 0
-        self._last_sent: float = 0.0
-        self._count_msg: object = None
 
     def exec_fn(self) -> None:
         """Send MISSION_COUNT and clear stale request cache."""
@@ -74,28 +68,13 @@ class SendMissionCount(Step):
             self.conn.target_system, self.conn.target_component, self._count
         )
         self.mav_manager.send(self._count_msg)
-        self._last_sent = time.time()
-        self._retries = 0
 
     def check_fn(self) -> bool:
         """Return True once ArduPilot requests seq=0; retry MISSION_COUNT on timeout."""
-        if _got_request(self.mav_manager.state, 0):
-            return True
-        if time.time() - self._last_sent > _REQUEST_TIMEOUT:
-            if self._retries >= _MAX_COUNT_RETRIES:
-                raise RuntimeError(
-                    f"Vehicle {self.sysid}: MISSION_COUNT: no response after "
-                    f"{_MAX_COUNT_RETRIES} retries"
-                )
-            self._retries += 1
-            logging.warning(
-                f"Vehicle {self.sysid}: MISSION_COUNT timeout, "
-                f"retry {self._retries}/{_MAX_COUNT_RETRIES}"
-            )
-            _clear_requests(self.mav_manager.state)
-            self.mav_manager.send(self._count_msg)
-            self._last_sent = time.time()
-        return False
+        while not _got_request(self.mav_manager.state, 0):
+            self.exec_fn()
+            time.sleep(0.01)
+        return True
 
 
 class SendMissionItem(Step):

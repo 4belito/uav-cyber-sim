@@ -1,6 +1,11 @@
 """Protocol for vehicle information."""
 
-from typing import Protocol
+from typing import Protocol, TypedDict
+
+
+class FrameOptions(TypedDict):
+    waf_target: str
+    default_params_filename: str | list[str]
 
 
 class VehicleInfoProtocol(Protocol):
@@ -14,6 +19,6 @@ class VehicleInfoProtocol(Protocol):
         frame: str,
         vehicle: str,
         opts: object,
-    ) -> dict[str, object]:
+    ) -> FrameOptions:
         """Return a dictionary of options for the given frame and vehicle type."""
         ...

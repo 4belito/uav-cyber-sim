@@ -29,9 +29,7 @@ class SwitchMode(Step):
     def check_fn(self) -> bool:
         """Verify the vehicle has switched to the target flight mode."""
         msg = self.mav_manager.state.get("HEARTBEAT")
-        if msg and msg.custom_mode == self.flight_mode.value:
-            return True
-        return False
+        return bool(msg and msg.custom_mode == self.flight_mode.value)
 
 
 def make_set_mode(flight_mode: CopterMode) -> Action[Step]:

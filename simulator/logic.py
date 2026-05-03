@@ -18,7 +18,6 @@ from simulator.helpers.connections import (
     create_tcp_conn,
     create_udp_conn,
     send_heartbeat,
-    # wait_for_port,
 )
 from simulator.helpers.connections.mavlink.customenums.customcmd import CustomCmd
 from simulator.helpers.connections.mavlink.enums import DataStream, MsgID
@@ -86,7 +85,6 @@ def start_logic(config: LogicConfig):
     gra_orign = GRA(**config["gra_origin_dict"])
     plan_spec = PlanSpec(**config["plan_spec"])
 
-    # wait_for_port(BasePort.ARP + port_offset, verbose=True)
     ap_conn = create_tcp_conn(
         base_port=BasePort.ARP,
         offset=veh_port_offset,
@@ -181,9 +179,6 @@ def start_logic(config: LogicConfig):
         # 2. close connections
         cs_conn.close()
 
-        # 3. close logger
-        data_logger.close()
-
         logging.info(f"Vehicle {sysid} logic stopped")
 
 
@@ -205,7 +200,6 @@ class VehicleLogic:
 
         # Plan
         self.plan = plan
-        # TODO: Pass the plan alread binded
         self.plan.bind(self.gra_origin, mav_manager)
 
         # Communication properties (positions are local)

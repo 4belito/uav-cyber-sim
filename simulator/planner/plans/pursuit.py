@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any, Callable, Self
+from collections.abc import Callable
+from typing import Any, Self
 
 from simulator.entities.riddata import RIDData
 from simulator.helpers.connections.mavlink.enums import Frame, MsgID
@@ -17,7 +18,7 @@ from simulator.planner.step import Step
 
 RIDGetter = Callable[[int], RIDData | None]
 
-_TYPE_MASK = int(0b110111111000)  # position only, same as GoTo
+_TYPE_MASK = 0b110111111000  # position only, same as GoTo
 
 
 class PursueStep(Step):
@@ -77,22 +78,21 @@ class PursueStep(Step):
     def check_fn(self) -> bool:
         """Refresh GoTo with the latest target position; never signals done."""
         now = time.time()
-        if now - self._last_update >= self.update_interval:
-            if self._get_target is not None:
-                rid = self._get_target(self.target_sysid)
-                if rid is not None:
-                    self.target_pos = rid.enu_pos
-                    self._send_goto(rid.enu_pos)
-                    logging.info(
-                        f"🎯 Pursuer {self.sysid}: targeting sysid={self.target_sysid}"
-                        f" at {rid.enu_pos}"
-                    )
-                else:
-                    logging.debug(
-                        f"🎯 Pursuer {self.sysid}: no RID yet for "
-                        f"sysid={self.target_sysid}"
-                    )
-                self._last_update = now
+        update_needed = now - self._last_update >= self.update_interval
+        if update_needed and self._get_target is not None:
+            rid = self._get_target(self.target_sysid)
+            if rid is not None:
+                self.target_pos = rid.enu_pos
+                self._send_goto(rid.enu_pos)
+                logging.info(
+                    f"🎯 Pursuer {self.sysid}: targeting sysid={self.target_sysid}"
+                    f" at {rid.enu_pos}"
+                )
+            else:
+                logging.debug(
+                    f"🎯 Pursuer {self.sysid}: no RID yet for sysid={self.target_sysid}"
+                )
+            self._last_update = now
         return False  # never completes
 
 

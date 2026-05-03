@@ -32,7 +32,7 @@ manual_imports: list[
     str
 ] = []  # Add any manually written enums to be included in __init__.py
 
-with open(PARAM_PATH, "r") as f:
+with open(PARAM_PATH) as f:
     param_data = json.load(f)
 
 PARAM_DEFS = [

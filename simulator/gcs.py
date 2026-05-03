@@ -239,13 +239,6 @@ class GCS:
         self.n_vehicles -= 1
         logging.info(f"Vehicle {sysid} removed from GCS {self.name}")
 
-    # @staticmethod
-    # def load_config(config_path: str) -> GCSConfig:
-    #     """Load GCS configuration from a JSON file via command line argument."""
-    #     with open(config_path) as f:
-    #         gcs_config: GCSConfig = json.load(f)
-    #     return gcs_config
-
     def _wait_for_pty(self, path: str, timeout: float = 3.0):
         t0 = time.time()
         while not os.path.exists(path):
