@@ -10,6 +10,12 @@ format.
 import logging
 import time
 
+from pymavlink import mavutil
+from pymavlink.dialects.v20.ardupilotmega import (
+    MAVLink_mission_item_int_message as ItemIntMsg,
+)
+from pymavlink.dialects.v20.ardupilotmega import MAVLink_mission_item_message as ItemMsg
+
 from simulator.helpers.connections.mavlink.customtypes.mission import MissionLoader
 from simulator.helpers.connections.mavlink.customtypes.vehicle_state import (
     VehicleStateP,
@@ -19,12 +25,57 @@ from simulator.planner.action import Action
 from simulator.planner.step import Step
 
 
+def mission_item_to_int(
+    wp: ItemMsg,
+) -> ItemIntMsg:
+    """Convert MISSION_ITEM to MISSION_ITEM_INT before sending to ArduPilot."""
+
+    mission_type = getattr(
+        wp,
+        "mission_type",
+        mavutil.mavlink.MAV_MISSION_TYPE_MISSION,
+    )
+
+    frame = wp.frame
+
+    if frame == mavutil.mavlink.MAV_FRAME_GLOBAL:
+        frame = mavutil.mavlink.MAV_FRAME_GLOBAL_INT
+    elif frame == mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT:
+        frame = mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT
+    elif frame == mavutil.mavlink.MAV_FRAME_GLOBAL_TERRAIN_ALT:
+        frame = mavutil.mavlink.MAV_FRAME_GLOBAL_TERRAIN_ALT_INT
+
+    is_global = frame in {
+        mavutil.mavlink.MAV_FRAME_GLOBAL_INT,
+        mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,
+        mavutil.mavlink.MAV_FRAME_GLOBAL_TERRAIN_ALT_INT,
+    }
+
+    x = int(wp.x * 1e7) if is_global else int(wp.x)
+    y = int(wp.y * 1e7) if is_global else int(wp.y)
+
+    return mavutil.mavlink.MAVLink_mission_item_int_message(
+        wp.target_system,
+        wp.target_component,
+        wp.seq,
+        frame,
+        wp.command,
+        wp.current,
+        wp.autocontinue,
+        wp.param1,
+        wp.param2,
+        wp.param3,
+        wp.param4,
+        x,
+        y,
+        wp.z,
+        mission_type,
+    )
+
+
 def _got_request(state: VehicleStateP, seq: int) -> bool:
     """Return True if the latest MISSION_REQUEST or MISSION_REQUEST_INT matches seq."""
     req = state.get("MISSION_REQUEST")
-    if req is not None and req.seq == seq:
-        return True
-    req = state.get("MISSION_REQUEST_INT")
     return req is not None and req.seq == seq
 
 
@@ -50,6 +101,7 @@ class ClearMission(Step):
         ack = self.mav_manager.state.get("MISSION_ACK")
         if ack and MissionResult(ack.type) == MissionResult.ACCEPTED:
             logging.info(f"🧹 Vehicle {self.sysid}: Cleared previous mission")
+            self.mav_manager.state.messages.pop("MISSION_ACK", None)
             return True
         return False
 
@@ -71,9 +123,10 @@ class SendMissionCount(Step):
 
     def check_fn(self) -> bool:
         """Return True once ArduPilot requests seq=0; retry MISSION_COUNT on timeout."""
-        while not _got_request(self.mav_manager.state, 0):
+        while not _got_request(state=self.mav_manager.state, seq=0):
             self.exec_fn()
             time.sleep(0.01)
+        _clear_requests(self.mav_manager.state)
         return True
 
 
@@ -91,7 +144,8 @@ class SendMissionItem(Step):
         _clear_requests(self.mav_manager.state)
         mission = MissionLoader(self.conn.target_system, self.conn.target_component)
         mission.load(self._mission_path)
-        self.mav_manager.send(mission.wp(self._seq))
+        msg = mission_item_to_int(mission.wp(self._seq))
+        self.mav_manager.send(msg)
 
         wp = mission.item(self._seq)
         cmd_name = Cmd(wp.command).name
@@ -109,7 +163,6 @@ class SendMissionItem(Step):
             ack = self.mav_manager.state.wait_for("MISSION_ACK", timeout=5.0)
             if ack and MissionResult(ack.type) == MissionResult.ACCEPTED:
                 logging.info(f"✅ Vehicle {self.sysid}: Mission successfully loaded!")
-
                 return True
             return False
         return _got_request(self.mav_manager.state, self._seq + 1)

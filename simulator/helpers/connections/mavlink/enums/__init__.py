@@ -15,6 +15,7 @@ from .missionresult import MissionResult
 from .modeflag import ModeFlag
 from .msgid import MsgID
 from .paramtype import ParamType
+from .planemode import PlaneMode
 from .sensorflag import SensorFlag
 from .state import State
 from .type import Type
@@ -35,6 +36,7 @@ __all__ = [
     "ModeFlag",
     "MsgID",
     "ParamType",
+    "PlaneMode",
     "SensorFlag",
     "State",
     "Type",

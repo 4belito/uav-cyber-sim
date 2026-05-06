@@ -7,7 +7,7 @@ manual use—typically after updating or regenerating MAVLink definitions—rath
 than regular execution during normal operation.
 
 Run from the repo root:
-    python -m helpers.connections.mavlink.gen_intenum
+    python -m simulator.helpers.connections.mavlink.gen_intenum
 
 
 This ensures proper imports like:
@@ -89,6 +89,12 @@ ENUM_DEFS = [
         "group": "COPTER_MODE_",
         "name": "CopterMode",
         "doc": "MAVLink codes for Copter flight mode.",
+    },
+    {
+        "key": "PLANE_MODE",
+        "group": "PLANE_MODE_",
+        "name": "PlaneMode",
+        "doc": "MAVLink codes for Plane flight mode.",
     },
     {
         "key": "MAV_PARAM_TYPE",

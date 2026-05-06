@@ -51,6 +51,13 @@ class MAVLinkManager(threading.Thread):
                 if msg.get_type().startswith("UNKNOWN"):
                     msg = decode_unknown_message(msg)
 
+                # Heartbeats from non-autopilot sources (e.g. echoed GCS/logic
+                # heartbeats routed back by ArduPilot) must not overwrite the
+                # vehicle autopilot's HEARTBEAT in state.  The autopilot always
+                # uses srcComponent == 1 (MAV_COMP_ID_AUTOPILOT1).
+                if msg.get_type() == "HEARTBEAT" and msg.get_srcComponent() != 1:
+                    continue
+
                 self.state.update(msg)
 
                 # Log all received MAVLink messages with their type and timestamp

@@ -2,12 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any, Self
+from typing import Any, Literal, Self
 
 from pymavlink.dialects.v20.ardupilotmega import MAVLink_mission_item_message as ItemMsg
 
 from simulator.helpers.connections.mavlink.customtypes.mission import MissionLoader
-from simulator.helpers.connections.mavlink.enums import Cmd, CmdNav, Frame
+from simulator.helpers.connections.mavlink.enums import (
+    Cmd,
+    CmdNav,
+    Frame,
+)
 from simulator.helpers.coordinates import ENUPose, ENUs, GRAPose, GRAs
 from simulator.planner.actions import (
     make_monitoring,
@@ -25,6 +29,7 @@ class AutoPlan(Plan):
         self,
         name: str,
         mission_path: str,
+        firmware: Literal["ArduPlane", "ArduCopter"],
         navigation_speed: float = 5.0,
     ):
         super().__init__(name=name)
@@ -32,7 +37,12 @@ class AutoPlan(Plan):
         self.mission_path = mission_path
         item_count = MissionLoader().load(mission_path)
         self.add(make_upload_mission(mission_path=self.mission_path))
-        self.extend(Plan.arm(navigation_speed=navigation_speed))
+        self.extend(
+            Plan.arm(
+                navigation_speed=navigation_speed,
+                firmware=firmware,
+            )
+        )
         self.add(make_start_mission())
         self.add(make_monitoring(item_count - 1))
 
@@ -42,6 +52,7 @@ class AutoPlan(Plan):
                 "name": name,
                 "mission_path": mission_path,
                 "navigation_speed": navigation_speed,
+                "firmware": firmware,
             },
         )
 
@@ -55,6 +66,7 @@ class AutoPlan(Plan):
         return cls(
             name=kwargs["name"],
             mission_path=kwargs["mission_path"],
+            firmware=kwargs["firmware"],
             navigation_speed=kwargs.get("navigation_speed", 5),
         )
 
@@ -129,6 +141,7 @@ class AutoPlan(Plan):
         mission_path: str,
         navigation_speed: float = 5.0,
         land: bool = True,
+        firmware: Literal["ArduPlane", "ArduCopter"] = "ArduCopter",
     ) -> Self:
         """Create and save a basic mission to file."""
         AutoPlan.save_basic_mission(
@@ -138,6 +151,7 @@ class AutoPlan(Plan):
             name=name,
             mission_path=str(mission_path),
             navigation_speed=navigation_speed,
+            firmware=firmware,
         )
         return plan
 
@@ -152,6 +166,7 @@ class AutoPlan(Plan):
         mission_path: str,
         navigation_speed: float = 5.0,
         land: bool = True,
+        firmware: Literal["ArduPlane", "ArduCopter"] = "ArduCopter",
     ) -> Self:
         """Create and save a basic mission from relative waypoints to file."""
         AutoPlan.save_basic_mission_from_relative(
@@ -168,6 +183,7 @@ class AutoPlan(Plan):
             name=name,
             mission_path=str(mission_path),
             navigation_speed=navigation_speed,
+            firmware=firmware,
         )
 
         return plan
@@ -202,7 +218,7 @@ class AutoPlan(Plan):
                 0,
                 0,
                 0,
-                *wps[0],
+                *wps[1],
             )
         )
         if speed != 5.0:
@@ -229,7 +245,7 @@ class AutoPlan(Plan):
                     0,
                 )
             )
-        for wp in wps[1:]:
+        for wp in wps[1:-1]:
             mission_loader.add_latlonalt(
                 lat=wp.lat,
                 lon=wp.lon,

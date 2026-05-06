@@ -5,7 +5,7 @@ Includes logic for creating a mode-switching Action with execution and verificat
 steps based on HEARTBEAT messages and supported flight modes.
 """
 
-from simulator.helpers.connections.mavlink.enums import CopterMode, ModeFlag
+from simulator.helpers.connections.mavlink.enums import CopterMode, ModeFlag, PlaneMode
 from simulator.planner.action import Action
 from simulator.planner.step import Step
 
@@ -13,26 +13,26 @@ from simulator.planner.step import Step
 class SwitchMode(Step):
     """Step to switch the vehicle flight mode."""
 
-    def __init__(self, name: str, flight_mode: CopterMode) -> None:
+    def __init__(self, name: str, flight_mode: CopterMode | PlaneMode) -> None:
         super().__init__(name)
-        self.flight_mode = flight_mode
+        self._flight_mode = flight_mode
 
     def exec_fn(self) -> None:
         """Send the SET_MODE command to the vehicle with the given mode value."""
         msg = self.conn.mav.set_mode_encode(
             self.conn.target_system,
             ModeFlag.CUSTOM_MODE_ENABLED,
-            self.flight_mode.value,
+            self._flight_mode.value,
         )
         self.mav_manager.send(msg)
 
     def check_fn(self) -> bool:
         """Verify the vehicle has switched to the target flight mode."""
         msg = self.mav_manager.state.get("HEARTBEAT")
-        return bool(msg and msg.custom_mode == self.flight_mode.value)
+        return bool(msg and msg.custom_mode == self._flight_mode.value)
 
 
-def make_set_mode(flight_mode: CopterMode) -> Action[Step]:
+def make_set_mode(flight_mode: CopterMode | PlaneMode) -> Action[Step]:
     """Create an Action to switch the vehicle flight mode."""
     name = Action.Names.CHANGE_FLIGHTMODE
     action = Action[Step](name, emoji=name.emoji)

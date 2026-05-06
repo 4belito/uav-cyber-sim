@@ -8,9 +8,9 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from typing import Any, ClassVar, TypeVar
+from typing import Any, ClassVar, Literal, TypeVar
 
-from simulator.helpers.connections.mavlink.enums import CopterMode
+from simulator.helpers.connections.mavlink.enums import CopterMode, PlaneMode
 from simulator.helpers.coordinates import ENU, XY, ENUs, XYs
 from simulator.planner.action import Action
 from simulator.planner.actions import (
@@ -22,7 +22,7 @@ from simulator.planner.actions import (
 from simulator.planner.step import Step
 
 P = TypeVar("P", bound="Plan")
-
+# TODO: Substitute Any with a more specific type
 ActionSequence = Action[Action[Step]]
 
 
@@ -120,11 +120,19 @@ class Plan(ActionSequence, ABC):
         cls,
         name: str = "ARM",
         navigation_speed: float = 5,
+        firmware: Literal["ArduPlane", "ArduCopter"] = "ArduCopter",
     ) -> ActionSequence:
         """Create a plan to execute a mission in auto mode."""
+        guided_mode: CopterMode | PlaneMode
+        match firmware:
+            case "ArduCopter":
+                guided_mode = CopterMode.GUIDED
+            case "ArduPlane":
+                guided_mode = PlaneMode.GUIDED
+
         actions = ActionSequence(name, emoji="🔐")
-        actions.add(make_pre_arm())
-        actions.add(make_set_mode(CopterMode.GUIDED))
+        actions.add(make_pre_arm(firmware=firmware))
+        actions.add(make_set_mode(guided_mode))
         if navigation_speed != 5:
             actions.add(make_change_nav_speed(speed=navigation_speed))
         actions.add(make_arm())

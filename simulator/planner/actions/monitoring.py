@@ -1,60 +1,47 @@
 """
-Upload mission action module.
-
-Defines mission monitoring helpers for ArduPilot-based vehicles.
-This version is safer for ArduPlane because MISSION_CURRENT is treated as the
-currently active item, not as proof that prior items were physically reached.
+Mission monitoring helpers for ArduPilot-based vehicles.
 """
 
 import logging
 
-from simulator.helpers.connections.mavlink.enums import MsgID
+from simulator.helpers.connections.mavlink.enums import ModeFlag, MsgID
 from simulator.helpers.connections.mavlink.streams import ask_msg, stop_msg
 from simulator.planner.action import Action
 from simulator.planner.step import Step
 
 
 class CheckEndMission(Step):
-    """Check for mission completion after the last mission item becomes active."""
+    """Wait for the vehicle to disarm, confirming it has physically stopped."""
 
     def __init__(self, name: str):
         super().__init__(name)
+        self._was_armed: bool = False
 
     def exec_fn(self) -> None:
-        """No execution needed; just checking."""
-        self.mav_manager.state.messages.pop("MISSION_CURRENT", None)
-        reached_msg = ask_msg(
-            conn=self.conn, msg_id=MsgID.MISSION_ITEM_REACHED, interval=100_000
-        )
-        current_msg = ask_msg(self.conn, msg_id=MsgID.MISSION_CURRENT, interval=100_000)
-
-        self.mav_manager.send(reached_msg)
-        self.mav_manager.send(current_msg)
+        pass  # HEARTBEAT is always streaming; no setup needed
 
     def check_fn(self) -> bool:
-        """Detect mission completion robustly for Plane/Copter."""
-        current_msg = self.mav_manager.state.get("MISSION_CURRENT")
-        reached_msg = self.mav_manager.state.get("MISSION_ITEM_REACHED")
-        if (
-            reached_msg
-            and current_msg
-            and reached_msg.seq >= 1
-            and current_msg.seq == 1
-        ):
-            logging.info(f"Vehicle {self.sysid}: Mission completed")
+        hb = self.mav_manager.state.get("HEARTBEAT")
+        if hb is None:
+            return False
+        is_armed = bool(hb.base_mode & ModeFlag.SAFETY_ARMED)
+        if is_armed:
+            self._was_armed = True
+        elif self._was_armed:
+            logging.info(
+                f"Vehicle {self.sysid}: 🏁 Mission complete - vehicle disarmed"
+            )
             return True
         return False
 
 
 class MonitorItems(Step):
-    """
-    Check mission items
-    """
+    """Track mission progress via MISSION_CURRENT.seq."""
 
-    def __init__(self, name: str, item_count: int):
+    def __init__(self, name: str, last_item_seq: int):
         super().__init__(name)
-        self._next_seqitem = 1
-        self._total = item_count
+        self._last_seen_seq: int | None = None
+        self._last_item_seq = last_item_seq
 
     def exec_fn(self) -> None:
         msg = ask_msg(conn=self.conn, msg_id=MsgID.MISSION_CURRENT, interval=100_000)
@@ -64,20 +51,66 @@ class MonitorItems(Step):
         msg = self.mav_manager.state.get("MISSION_CURRENT")
         if msg is None:
             return False
-        if msg.seq >= self._next_seqitem:
-            logging.info(f"Vehicle {self.sysid}: ⭐ Reached item: {msg.seq}")
-            self._next_seqitem = msg.seq + 1
-        if self._next_seqitem > self._total:
-            logging.info(f"Vehicle {self.sysid}: 🏁 Reached all items")
-            stop_msg(conn=self.conn, msg_id=MsgID.MISSION_CURRENT)
+
+        current_seq = msg.seq
+
+        if self._last_seen_seq is None:
+            self._last_seen_seq = current_seq
+            logging.info(f"Vehicle {self.sysid}: ▶️ Current mission item: {current_seq}")
+            return False
+
+        if current_seq != self._last_seen_seq:
+            completed_seq = self._last_seen_seq
+
+            logging.info(
+                f"Vehicle {self.sysid}: ✅ Completed mission item: {completed_seq}"
+            )
+            logging.info(f"Vehicle {self.sysid}: ▶️ Current mission item: {current_seq}")
+
+            self._last_seen_seq = current_seq
+
+        if current_seq >= self._last_item_seq:
+            logging.info(f"Vehicle {self.sysid}: ▶️ Final mission item active")
+            self.mav_manager.send(
+                stop_msg(conn=self.conn, msg_id=MsgID.MISSION_CURRENT)
+            )
             return True
+
         return False
 
 
+# class MonitorItems(Step):
+#     """Track mission item progress via MISSION_CURRENT.seq."""
+
+#     def __init__(self, name: str, item_count: int):
+#         super().__init__(name)
+#         self._next_seqitem = 1
+#         self._total = item_count
+
+#     def exec_fn(self) -> None:
+#         msg = ask_msg(conn=self.conn, msg_id=MsgID.MISSION_CURRENT, interval=100_000)
+#         self.mav_manager.send(msg)
+
+#     def check_fn(self) -> bool:
+#         msg = self.mav_manager.state.get("MISSION_CURRENT")
+#         if msg is None:
+#             return False
+#         if msg.seq >= self._next_seqitem:
+#             logging.info(f"Vehicle {self.sysid}: ⭐ Reached item: {msg.seq}")
+#             self._next_seqitem = msg.seq + 1
+#         if self._next_seqitem > self._total:
+#             logging.info(f"Vehicle {self.sysid}: 🏁 Reached all items")
+#             self.mav_manager.send(
+#                 stop_msg(conn=self.conn, msg_id=MsgID.MISSION_CURRENT)
+#             )
+#             return True
+#         return False
+
+
 def make_monitoring(item_count: int) -> Action[Step]:
-    """Monitor mission progress and completion."""
+    """Monitor mission progress and wait for the vehicle to disarm."""
     name = Action.Names.MONITOR_MISSION
     monitoring = Action[Step](name=name, emoji=name.emoji)
-    monitoring.add(MonitorItems(name="monitor items", item_count=item_count))
+    monitoring.add(MonitorItems(name="monitor items", last_item_seq=item_count))
     monitoring.add(CheckEndMission(name="check end mission"))
     return monitoring

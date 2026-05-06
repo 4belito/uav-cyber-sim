@@ -4,11 +4,18 @@ from collections.abc import Mapping, Sequence
 from typing import TypeAlias, cast
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
+import pymavlink.dialects.v20.development as development_mavlink
 
 from simulator.helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from simulator.helpers.connections.mavlink.enums import CmdSet, DataStream
 
-# from simulator.helpers.coordinates import ENU, GRA
+
+class DummyWriter:
+    def write(self, data: bytes) -> int:
+        return len(data)
+
+
+secondary_decoder = development_mavlink.MAVLink(DummyWriter())
 
 JSONType: TypeAlias = (
     dict[str, "JSONType"] | list["JSONType"] | str | int | float | bool | None
@@ -72,16 +79,31 @@ def request_sensor_streams(
         )
     return msgs
 
+
 # Secondary MAVLink decoder (used to decode UNKNOWN_* messages)
-secondary_decoder = mavlink.MAVLink(None)
+# secondary_decoder = mavlink.MAVLink(None)
+
+
+# def decode_unknown_message(msg: mavlink.MAVLink_message) -> mavlink.MAVLink_message:
+#     """Attempt to decode an UNKNOWN_* message using a secondary MAVLink parser."""
+#     try:
+#         decoded = secondary_decoder.parse_char(msg.get_msgbuf())
+#         if decoded:
+#             return decoded
+#     except Exception:
+#         pass
+#     return msg
 
 
 def decode_unknown_message(msg: mavlink.MAVLink_message) -> mavlink.MAVLink_message:
     """Attempt to decode an UNKNOWN_* message using a secondary MAVLink parser."""
     try:
-        decoded = secondary_decoder.parse_char(msg.get_msgbuf())
-        if decoded:
-            return decoded
+        buf = msg.get_msgbuf()
+        decoded = None
+        for byte in buf:
+            decoded = secondary_decoder.parse_char(bytes([byte]))
+        if decoded is not None:
+            return cast(mavlink.MAVLink_message, decoded)
     except Exception:
         pass
     return msg

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Self
+from typing import Any, Literal, Self
 
 from simulator.helpers.coordinates import ENU, ENUPose, ENUs
 from simulator.planner.actions import make_hold, make_land, make_path, make_takeoff
@@ -21,9 +21,15 @@ class GuidedPlan(Plan):
         navigation_speed: float = 5,
         takeoff_alt: float = 1.0,
         land: bool = True,
+        firmware: Literal["ArduPlane", "ArduCopter"] = "ArduCopter",
     ):
         super().__init__(name=name)
-        self.extend(Plan.arm(navigation_speed=navigation_speed))
+        self.extend(
+            Plan.arm(
+                navigation_speed=navigation_speed,
+                firmware=firmware,
+            )
+        )
         self.add(make_takeoff(altitude=takeoff_alt))
         self.add(make_path(wps=wps, wp_margin=wp_margin))
         land_wp = ENU(wps[-1].x, wps[-1].y, 0)
@@ -41,6 +47,7 @@ class GuidedPlan(Plan):
                 "navigation_speed": navigation_speed,
                 "takeoff_alt": takeoff_alt,
                 "land": land,
+                "firmware": firmware,
             },
         )
 
@@ -60,6 +67,7 @@ class GuidedPlan(Plan):
             navigation_speed=kwargs.get("navigation_speed", 5),
             takeoff_alt=kwargs.get("takeoff_alt", 1.0),
             land=kwargs.get("land", True),
+            firmware=kwargs.get("firmware", "ArduCopter"),
         )
 
     @classmethod
@@ -104,6 +112,7 @@ class GuidedPlan(Plan):
         wp_margin: float = 0.5,
         navigation_speed: float = 5,
         land: bool = True,
+        firmware: Literal["ArduPlane", "ArduCopter"] = "ArduCopter",
     ) -> Self:
         """Create GuidedPlan from relative path."""
         if enu_origin is None:
@@ -119,6 +128,7 @@ class GuidedPlan(Plan):
             wp_margin=wp_margin,
             navigation_speed=navigation_speed,
             land=land,
+            firmware=firmware,
         )
 
     @classmethod
@@ -133,6 +143,7 @@ class GuidedPlan(Plan):
         wp_margin: float = 0.5,
         navigation_speed: float = 5,
         land: bool = True,
+        firmware: Literal["ArduPlane", "ArduCopter"] = "ArduCopter",
     ) -> Self:
         """Create a square guided plan."""
         if enu_origin is None:
