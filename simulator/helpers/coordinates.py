@@ -429,7 +429,7 @@ class ENUPose(XYZPose):
         if isinstance(point, ENU):
             point = point.pose()
         x, y, z, h = point
-        x_rot, y_rot = XY(x, y).rotate(self.heading)
+        x_rot, y_rot = XY(x, y).rotate(-self.heading)
         return ENUPose.add(self, ENUPose(x_rot, y_rot, z, h))
 
     def to_rel(self, point: ENU | ENUPose) -> ENUPose:
@@ -437,7 +437,7 @@ class ENUPose(XYZPose):
         if isinstance(point, ENU):
             point = point.pose()
         p = ENUPose.sub(point, self)
-        x_rot, y_rot = XY(p.x, p.y).rotate(-self.heading)
+        x_rot, y_rot = XY(p.x, p.y).rotate(self.heading)
         return ENUPose(x_rot, y_rot, p.z, p.heading)
 
     def to_str(self) -> str:
@@ -504,7 +504,7 @@ class GRAPose(LLAPose):
         if isinstance(p, ENU):
             p = p.pose()
         # rotate local offset by origin heading, then apply on globe
-        x_rot, y_rot = XY(p.x, p.y).rotate(self.heading)
+        x_rot, y_rot = XY(p.x, p.y).rotate(-self.heading)
         lat, lon, alt = map(
             float,
             enu2geodetic(  # type: ignore
@@ -538,7 +538,7 @@ class GRAPose(LLAPose):
             ),
         )
         # rotate back into the origin's local frame
-        xl, yl = XY(e, n).rotate(-self.heading)
+        xl, yl = XY(e, n).rotate(self.heading)
         h_rel = (p.heading - self.heading) % 360
         return ENUPose(xl, yl, u, h_rel)
 

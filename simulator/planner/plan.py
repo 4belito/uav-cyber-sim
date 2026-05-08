@@ -107,9 +107,9 @@ class Plan(ActionSequence, ABC):
             coords = XY.list(
                 [
                     (0, 0),
-                    (xlen, 0),
-                    (xlen, ylen),
                     (0, ylen),
+                    (-xlen, ylen),
+                    (-xlen, 0),
                     (0, 0),
                 ]
             )

@@ -205,22 +205,6 @@ class AutoPlan(Plan):
             altitude=0,
             terrain_alt=False,
         )
-        mission_loader.add(
-            ItemMsg(
-                sysid,
-                0,
-                0,
-                Frame.GLOBAL_RELATIVE_ALT,
-                CmdNav.TAKEOFF,
-                0,
-                0,
-                0,
-                0,
-                0,
-                0,
-                *wps[1],
-            )
-        )
         if speed != 5.0:
             # speed_type = 0 → airspeed, 1 → ground speed, 2 → climb rate
             # speed = target speed (in m/s)
@@ -245,6 +229,22 @@ class AutoPlan(Plan):
                     0,
                 )
             )
+        mission_loader.add(
+            ItemMsg(
+                sysid,
+                0,
+                0,
+                Frame.GLOBAL_RELATIVE_ALT,
+                CmdNav.TAKEOFF,
+                0,
+                0,
+                0,
+                0,
+                0,
+                0,
+                *wps[1],
+            )
+        )
         for wp in wps[1:-1]:
             mission_loader.add_latlonalt(
                 lat=wp.lat,
