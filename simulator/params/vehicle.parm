@@ -30,7 +30,7 @@ ADSB_LIST_MAX 25
 # ADS-B Avoidance Configuration
 # ===============================
 # Enable ADS-B avoidance system
-AVD_ENABLE 1
+AVD_ENABLE 0
 
 # Fail-safe action when collision predicted
 # 0 = None, 1 = Report, 2 = Climb/Descend, 3 = Move Horizontally

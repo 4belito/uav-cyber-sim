@@ -48,6 +48,74 @@ DATA_STREAM_IDS = [
 ]
 RID_INTERVAL = int(1_000_000 / REMOTE_ID_FREQUENCY)
 
+_PARAMS_TO_VERIFY: tuple[str, ...] = (
+    "PTCH_LIM_MAX_DEG",
+    "PTCH_LIM_MIN_DEG",
+    "TECS_PITCH_MAX",
+    "TECS_PITCH_MIN",
+    "TECS_CLMB_MAX",
+    "TECS_SPDWEIGHT",
+    "TECS_PTCH_DAMP",
+    "THR_SLEWRATE",
+    "TKOFF_THR_SLEW",
+    "TECS_INTEG_GAIN",
+    "PTCH2SRV_TCONST",
+    "PTCH2SRV_RMAX_UP",
+    "PTCH2SRV_RMAX_DN",
+    "AIRSPEED_CRUISE",
+    "ROLL_LIMIT_DEG",
+)
+
+
+def _dump_critical_params(
+    ap_conn: MAVConnection, mav_manager: MAVLinkManager, sysid: int
+) -> None:
+    """Request and log critical ArduPlane parameters to verify parm file loading.
+
+    Sends PARAM_REQUEST_READ for each critical parameter name and waits for
+    the PARAM_VALUE response. Results appear in logic_N.log so the Phase B
+    telemetry parser can verify which values were actually active at runtime.
+    """
+    # Drain any stale PARAM_VALUE messages queued before this call.
+    while mav_manager.state.wait_for("PARAM_VALUE", timeout=0) is not None:
+        pass
+
+    logging.info("Vehicle %s: === PARAM DUMP START ===", sysid)
+    for name in _PARAMS_TO_VERIFY:
+        ap_conn.mav.param_request_read_send(
+            ap_conn.target_system,
+            ap_conn.target_component,
+            name.encode("ascii"),
+            -1,  # -1 = lookup by name, not by index
+        )
+        deadline = time.monotonic() + 1.0
+        found = False
+        while time.monotonic() < deadline:
+            msg = mav_manager.state.wait_for("PARAM_VALUE", timeout=0.05)
+            if msg is None:
+                continue
+            recv_name: str = msg.param_id
+            if isinstance(recv_name, (bytes, bytearray)):
+                recv_name = recv_name.decode("ascii", errors="replace")
+            recv_name = recv_name.rstrip("\x00")
+            logging.info(
+                "Vehicle %s: PARAM_VALUE param_id : %s param_value : %s",
+                sysid,
+                recv_name,
+                msg.param_value,
+            )
+            if recv_name == name:
+                found = True
+                break
+        if not found:
+            logging.warning(
+                "Vehicle %s: PARAM_VALUE param_id : %s NOT RECEIVED",
+                sysid,
+                name,
+            )
+    logging.info("Vehicle %s: === PARAM DUMP END ===", sysid)
+
+
 # TODO: Refactor this module
 heartbeat_event = mavutil.periodic_event(HEARTBEAT_FREQUENCY)
 rid_event = mavutil.periodic_event(REMOTE_ID_FREQUENCY)
@@ -137,6 +205,8 @@ def start_logic(config: LogicConfig):
         hb.get_srcComponent(),
     )
 
+    _dump_critical_params(ap_conn, mav_mng, sysid)
+
     rid_mng.start()
 
     plan = Plan.build(plan_spec)
@@ -170,7 +240,11 @@ def start_logic(config: LogicConfig):
                 break
 
             logic.act()
-            time.sleep(0.01)
+            # time.sleep(0.01)
+
+            # msgs = mav_mng.state.messages.copy()
+            # for msg_type, msg in msgs.items():
+            #     logging.debug(f"{msg_type}: {msg}")
     finally:
         # 1. stop producers
         mav_mng.stop()

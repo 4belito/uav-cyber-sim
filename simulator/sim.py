@@ -9,6 +9,7 @@ import socket
 from typing import Generic
 
 from simulator.config import (
+    ARDU_LOGS_PATH,
     DATA_PATH,
     ENV_CMD_PYT,
     LOGS_PATH,
@@ -203,6 +204,10 @@ class Simulator(Generic[VehT]):
 
     def _build_veh_config(self, sysid: int) -> VehicleConfig:
         veh = self.vehicles[sysid]
+
+        eeprom_path = ARDU_LOGS_PATH / f"veh_{sysid}" / "eeprom.bin"
+        if eeprom_path.exists():
+            eeprom_path.unlink()
 
         port_offset = veh.port_offset_required
         inst = port_offset // self.port_step

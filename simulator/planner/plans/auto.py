@@ -195,6 +195,7 @@ class AutoPlan(Plan):
         gra_wps: GRAs,
         land: bool = True,
         speed: float = 5.0,
+        takeoff_alt: float | None = None,
     ):
         """Save the mission to file and returns number of items."""
         wps = gra_wps
@@ -229,6 +230,10 @@ class AutoPlan(Plan):
                     0,
                 )
             )
+        # takeoff_alt lets the TAKEOFF command finish below cruise altitude so
+        # TECS handles the final climb at controlled speed — prevents the abrupt
+        # full-throttle → cruise transition that causes phugoid oscillation.
+        tk_alt = takeoff_alt if takeoff_alt is not None else wps[1].alt
         mission_loader.add(
             ItemMsg(
                 sysid,
@@ -242,10 +247,12 @@ class AutoPlan(Plan):
                 0,
                 0,
                 0,
-                *wps[1],
+                wps[1].lat,
+                wps[1].lon,
+                tk_alt,
             )
         )
-        for wp in wps[1:-1]:
+        for wp in wps[2:-1]:
             mission_loader.add_latlonalt(
                 lat=wp.lat,
                 lon=wp.lon,
