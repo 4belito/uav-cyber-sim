@@ -1,26 +1,38 @@
 """
 Generate IntEnum source files for selected MAVLink enums and constants.
 
-This script extracts matching entries from `pymavlink.mavutil` and generates
-`IntEnum` classes into the `enums/` folder. It is meant for occasional,
-manual use—typically after updating or regenerating MAVLink definitions—rather
-than regular execution during normal operation.
+Reads:
+    pymavlink.mavutil (MAVLink enum definitions from the installed pymavlink package)
+
+Writes:
+    simulator/helpers/connections/mavlink/enums/<name>.py  (one file per entry in ENUM_DEFS / ATTR_DEFS)
+    simulator/helpers/connections/mavlink/enums/__init__.py (updated with all enum exports)
+
+It is intended for occasional, developer-triggered use—typically after updating
+or regenerating MAVLink definitions—rather than regular execution.
 
 Run from the repo root:
-    python -m simulator.helpers.connections.mavlink.gen_intenum
 
-
-This ensures proper imports like:
-    from helpers.codegen import write_init_file
-
-Avoid running directly (e.g., `python gen_intenum.py`), as it may break imports.
+    python tools/gen_mavlink_enums.py
 """
 
+import importlib.util
 import os
 
 from pymavlink import mavutil
 
-from simulator.helpers.codegen import make_docstring, write_init_file
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_MAVLINK_HELPERS = os.path.join(
+    _REPO_ROOT, "simulator", "helpers", "connections", "mavlink"
+)
+
+_codegen_path = os.path.join(_REPO_ROOT, "simulator", "helpers", "codegen.py")
+_spec = importlib.util.spec_from_file_location("codegen", _codegen_path)
+assert _spec is not None and _spec.loader is not None
+_codegen = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(_codegen)  # type: ignore[union-attr]
+make_docstring = _codegen.make_docstring
+write_init_file = _codegen.write_init_file
 
 # Define constants to loop over
 ENUM_DEFS = [
@@ -195,7 +207,7 @@ def generate_enum_source(
 
 def write_enum_file(
     name: str, doc: str, values: dict[str, int], key: str, group: str, outfile: str
-):
+) -> None:
     """Write generated IntEnum to file."""
     code = generate_enum_source(name, doc, values, key, group)
     os.makedirs(os.path.dirname(outfile), exist_ok=True)
@@ -205,10 +217,10 @@ def write_enum_file(
 
 
 if __name__ == "__main__":
-    base_dir = os.path.join(os.path.dirname(__file__), "enums")
+    enum_dir = os.path.join(_MAVLINK_HELPERS, "enums")
 
     for enum in ENUM_DEFS:
-        outfile = os.path.join(base_dir, f"{enum['name'].lower()}.py")
+        outfile = os.path.join(enum_dir, f"{enum['name'].lower()}.py")
         values = extract_enum_values(enum["key"], enum["group"])
         write_enum_file(
             enum["name"],
@@ -220,7 +232,7 @@ if __name__ == "__main__":
         )
 
     for attr in ATTR_DEFS:
-        outfile = os.path.join(base_dir, f"{attr['name'].lower()}.py")
+        outfile = os.path.join(enum_dir, f"{attr['name'].lower()}.py")
         values = extract_attr_values(attr["prefix"])
         write_enum_file(
             attr["name"],
@@ -230,4 +242,4 @@ if __name__ == "__main__":
             attr["prefix"],
             outfile,
         )
-    write_init_file(base_dir, [e["name"] for e in ENUM_DEFS + ATTR_DEFS])
+    write_init_file(enum_dir, [e["name"] for e in ENUM_DEFS + ATTR_DEFS])

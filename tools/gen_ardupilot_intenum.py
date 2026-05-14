@@ -13,7 +13,7 @@ ArduPilot parameter definitions—rather than regular execution.
 
 Run from the repo root:
 
-    python tools/gen_intenum.py
+    python tools/gen_ardupilot_intenum.py
 """
 
 import importlib.util

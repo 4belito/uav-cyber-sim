@@ -13,7 +13,7 @@ ArduPilot parameter definitions—rather than regular execution.
 
 Run from the repo root:
 
-    python tools/gen_byteenum.py
+    python tools/gen_ardupilot_byteenum.py
 """
 
 import importlib.util
