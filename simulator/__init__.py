@@ -8,7 +8,4 @@ and ground control software.
 from .oracle import Oracle
 from .sim import Simulator
 
-__all__ = [
-    "Simulator",
-    "Oracle",
-]
+__all__ = ["Simulator", "Oracle"]

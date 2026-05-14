@@ -8,10 +8,9 @@ from pymavlink.dialects.v20.ardupilotmega import MAVLink_mission_item_message as
 
 from simulator.helpers.connections.mavlink.customtypes.mission import MissionLoader
 from simulator.helpers.connections.mavlink.enums import (
-    Cmd,
     CmdNav,
     Frame,
-)
+)  # Cmd,
 from simulator.helpers.coordinates import ENUPose, ENUs, GRAPose, GRAs
 from simulator.planner.actions import (
     make_monitoring,
@@ -145,7 +144,10 @@ class AutoPlan(Plan):
     ) -> Self:
         """Create and save a basic mission to file."""
         AutoPlan.save_basic_mission(
-            mission_path, sysid, gra_wps, land, navigation_speed
+            mission_path,
+            sysid,
+            gra_wps,
+            land,  # navigation_speed
         )
         plan = cls(
             name=name,
@@ -176,7 +178,7 @@ class AutoPlan(Plan):
             relative_home,
             relative_path,
             land,
-            navigation_speed,
+            # navigation_speed,
         )
 
         plan = cls(
@@ -194,7 +196,7 @@ class AutoPlan(Plan):
         sysid: int,
         gra_wps: GRAs,
         land: bool = True,
-        speed: float = 5.0,
+        # speed: float = 5.0,
         takeoff_alt: float | None = None,
     ):
         """Save the mission to file and returns number of items."""
@@ -206,30 +208,30 @@ class AutoPlan(Plan):
             altitude=0,
             terrain_alt=False,
         )
-        if speed != 5.0:
-            # speed_type = 0 → airspeed, 1 → ground speed, 2 → climb rate
-            # speed = target speed (in m/s)
-            # throttle = throttle (usually -1 = unchanged)
-            speed_type = 1
-            throttle = -1
-            mission_loader.add(
-                ItemMsg(
-                    sysid,
-                    0,
-                    0,
-                    Frame.GLOBAL_RELATIVE_ALT,
-                    Cmd.DO_CHANGE_SPEED,
-                    0,
-                    0,
-                    speed_type,
-                    speed,
-                    throttle,
-                    0,
-                    0,
-                    0,
-                    0,
-                )
-            )
+        # if speed != 5.0:
+        #     # speed_type = 0 → airspeed, 1 → ground speed, 2 → climb rate
+        #     # speed = target speed (in m/s)
+        #     # throttle = throttle (usually -1 = unchanged)
+        #     speed_type = 1
+        #     throttle = -1
+        #     mission_loader.add(
+        #         ItemMsg(
+        #             sysid,
+        #             0,
+        #             0,
+        #             Frame.GLOBAL_RELATIVE_ALT,
+        #             Cmd.DO_CHANGE_SPEED,
+        #             0,
+        #             0,
+        #             speed_type,
+        #             speed,
+        #             throttle,
+        #             0,
+        #             0,
+        #             0,
+        #             0,
+        #         )
+        #     )
         # takeoff_alt lets the TAKEOFF command finish below cruise altitude so
         # TECS handles the final climb at controlled speed — prevents the abrupt
         # full-throttle → cruise transition that causes phugoid oscillation.
@@ -252,7 +254,7 @@ class AutoPlan(Plan):
                 tk_alt,
             )
         )
-        for wp in wps[2:-1]:
+        for wp in wps[1:-1]:
             mission_loader.add_latlonalt(
                 lat=wp.lat,
                 lon=wp.lon,
@@ -288,10 +290,15 @@ class AutoPlan(Plan):
         relative_home: ENUPose,
         relative_path: ENUs,
         land: bool = True,
-        speed: float = 5.0,
+        # speed: float = 5.0,
     ):
         """Convert ENU waypoints to GRAs and save the mission to file."""
         gra_home = gra_origin.to_abs(relative_home)
         grapose_wps = gra_home.to_abs_all(relative_path)
         gra_wps = GRAPose.unpose_all(grapose_wps)
-        AutoPlan.save_basic_mission(mission_path, sysid, gra_wps, land, speed)
+        AutoPlan.save_basic_mission(
+            mission_path,
+            sysid,
+            gra_wps,
+            land,  # speed
+        )

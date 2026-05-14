@@ -134,7 +134,7 @@ class Plan(ActionSequence, ABC):
         actions.add(make_pre_arm(firmware=firmware))
         actions.add(make_set_mode(guided_mode))
         if navigation_speed != 5:
-            actions.add(make_change_nav_speed(speed=navigation_speed))
+            actions.add(make_change_nav_speed(speed=navigation_speed, firmware=firmware))
         actions.add(make_arm())
         return actions
 
