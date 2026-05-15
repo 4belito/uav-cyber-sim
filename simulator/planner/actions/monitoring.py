@@ -3,10 +3,17 @@ Mission monitoring helpers for ArduPilot-based vehicles.
 """
 
 import logging
+from typing import Literal
 
-from simulator.helpers.connections.mavlink.enums import ModeFlag, MsgID
+from simulator.helpers.connections.mavlink.enums import (
+    ModeFlag,
+    MsgID,
+    PlaneMode,
+)
 from simulator.helpers.connections.mavlink.streams import ask_msg, stop_msg
 from simulator.planner.action import Action
+from simulator.planner.actions.change_mode import SwitchMode
+from simulator.planner.plan import CopterMode
 from simulator.planner.step import Step
 
 
@@ -79,38 +86,22 @@ class MonitorItems(Step):
         return False
 
 
-# class MonitorItems(Step):
-#     """Track mission item progress via MISSION_CURRENT.seq."""
-
-#     def __init__(self, name: str, item_count: int):
-#         super().__init__(name)
-#         self._next_seqitem = 1
-#         self._total = item_count
-
-#     def exec_fn(self) -> None:
-#         msg = ask_msg(conn=self.conn, msg_id=MsgID.MISSION_CURRENT, interval=100_000)
-#         self.mav_manager.send(msg)
-
-#     def check_fn(self) -> bool:
-#         msg = self.mav_manager.state.get("MISSION_CURRENT")
-#         if msg is None:
-#             return False
-#         if msg.seq >= self._next_seqitem:
-#             logging.info(f"Vehicle {self.sysid}: ⭐ Reached item: {msg.seq}")
-#             self._next_seqitem = msg.seq + 1
-#         if self._next_seqitem > self._total:
-#             logging.info(f"Vehicle {self.sysid}: 🏁 Reached all items")
-#             self.mav_manager.send(
-#                 stop_msg(conn=self.conn, msg_id=MsgID.MISSION_CURRENT)
-#             )
-#             return True
-#         return False
-
-
-def make_monitoring(item_count: int) -> Action[Step]:
+def make_monitoring(
+    item_count: int, firmware: Literal["ArduCopter", "ArduPlane"]
+) -> Action[Step]:
     """Monitor mission progress and wait for the vehicle to disarm."""
     name = Action.Names.MONITOR_MISSION
     monitoring = Action[Step](name=name, emoji=name.emoji)
     monitoring.add(MonitorItems(name="monitor items", last_item_seq=item_count))
     monitoring.add(CheckEndMission(name="check end mission"))
+
+    # Switch to STABILIZE/MANUAL to reset the ArduPilot state machine.
+    reset_mode: CopterMode | PlaneMode
+    match firmware:
+        case "ArduCopter":
+            reset_mode = CopterMode.STABILIZE
+        case "ArduPlane":
+            reset_mode = PlaneMode.MANUAL
+
+    monitoring.add(SwitchMode(name="Switch to manual", flight_mode=reset_mode))
     return monitoring

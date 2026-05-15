@@ -76,8 +76,6 @@ class QGC(Visualizer[QGCVehicle]):
 
     def launch(self, port_offsets: dict[int, int]):
         """Launch the Gazebo."""
-        # self._delete_all_links()
-        # self._enable_autoconnect_udp()
         create_process(
             cmd=" ".join([os.path.expanduser(QGC_PATH), "--appimage-extract-and-run"]),
             visible=False,

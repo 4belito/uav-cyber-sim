@@ -43,7 +43,7 @@ class AutoPlan(Plan):
             )
         )
         self.add(make_start_mission())
-        self.add(make_monitoring(item_count - 1))
+        self.add(make_monitoring(item_count - 1, firmware=firmware))
 
         self._spec = PlanSpec(
             plan_class="AutoPlan",
