@@ -216,6 +216,24 @@ This forces ArduPilot to reload all parameters from scratch on next launch.
 
 ---
 
+## JSON Model Files and ROMFS (Multicopter Frames)
+
+Multicopter SITL physics can be overridden via a JSON file without modifying C++ source — unlike `SIM_Plane.cpp` which requires recompilation for aerodynamic coefficient changes.
+
+**Model string format:** `"<frame_type>:@ROMFS/models/<name>.json"` e.g. `"x:@ROMFS/models/iris.json"`
+
+**Critical gotcha — ROMFS is compiled in:** `@ROMFS/` paths are embedded into the binary at build time via `ap_romfs_embedded.h`. Adding a new JSON file after the binary was compiled will cause a `PANIC: <name>.json failed to load` crash.
+
+**Absolute paths don't work as a bypass:** `AP_Filesystem_posix.cpp:map_filename()` strips the leading `/` from all paths in SITL mode, turning `/abs/path/file.json` into a relative path that fails to resolve.
+
+**Auto-rebuild fix** (implemented in `simulator/external/sitl.py`): `_romfs_json_newer_than()` compares the mtime of every `*.json` in `ardupilot/Tools/autotest/models/` against the binary. `ensure_sitl_built` triggers a waf rebuild automatically when any JSON is newer. No manual action needed after adding or editing JSON model files.
+
+JSON models live in `ardupilot/Tools/autotest/models/` (same directory as `Callisto.json`, `freestyle.json`).
+
+> **Confidence:** Confirmed — crash reproduced, POSIX map_filename source read, auto-rebuild implemented and verified
+
+---
+
 ## `_dump_critical_params` (logic.py)
 
 Function at `simulator/logic.py:70–116`.

@@ -19,13 +19,27 @@ _vinfo = cast(VehicleInfoProtocol, vehicleinfo.VehicleInfo())  # type: ignore[re
 _opts = SimpleNamespace(model=None, build_target=None)
 
 
+def _romfs_json_newer_than(binary_path: Path) -> bool:
+    """Return True if any ROMFS JSON model file is newer than the binary.
+
+    ROMFS data is compiled into the binary at build time. A newer JSON file
+    means the binary must be rebuilt so the updated model is embedded.
+    """
+    models_dir = ARDUPILOT_PATH / "Tools" / "autotest" / "models"
+    binary_mtime = binary_path.stat().st_mtime
+    return any(
+        json_file.stat().st_mtime > binary_mtime
+        for json_file in models_dir.glob("*.json")
+    )
+
+
 def ensure_sitl_built(frame: str, firmware: str) -> Path:
     """Ensure the SITL binary for the given frame is built and return its path."""
     info = _vinfo.options_for_frame(frame, firmware, _opts)
     binary_name = info["waf_target"].split("/")[-1]
     binary_path = ARDUPILOT_PATH / "build" / "sitl" / "bin" / binary_name
 
-    if binary_path.exists():
+    if binary_path.exists() and not _romfs_json_newer_than(binary_path):
         return binary_path
 
     waf = ARDUPILOT_PATH / "modules" / "waf" / "waf-light"
