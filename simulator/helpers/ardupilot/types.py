@@ -6,6 +6,7 @@ from typing import Protocol, TypedDict
 class FrameOptions(TypedDict):
     waf_target: str
     default_params_filename: str | list[str]
+    model: str
 
 
 class VehicleInfoProtocol(Protocol):

@@ -8,7 +8,6 @@ format.
 """
 
 import logging
-import time
 
 from pymavlink import mavutil
 from pymavlink.dialects.v20.ardupilotmega import (
@@ -29,12 +28,6 @@ def mission_item_to_int(
     wp: ItemMsg,
 ) -> ItemIntMsg:
     """Convert MISSION_ITEM to MISSION_ITEM_INT before sending to ArduPilot."""
-
-    mission_type = getattr(
-        wp,
-        "mission_type",
-        mavutil.mavlink.MAV_MISSION_TYPE_MISSION,
-    )
 
     frame = wp.frame
 
@@ -69,13 +62,12 @@ def mission_item_to_int(
         x,
         y,
         wp.z,
-        mission_type,
     )
 
 
 def _got_request(state: VehicleStateP, seq: int) -> bool:
     """Return True if the latest MISSION_REQUEST or MISSION_REQUEST_INT matches seq."""
-    req = state.get("MISSION_REQUEST")
+    req = state.get("MISSION_REQUEST_INT") or state.get("MISSION_REQUEST")
     return req is not None and req.seq == seq
 
 
@@ -125,7 +117,7 @@ class SendMissionCount(Step):
         """Return True once ArduPilot requests seq=0; retry MISSION_COUNT on timeout."""
         while not _got_request(state=self.mav_manager.state, seq=0):
             self.exec_fn()
-            time.sleep(0.01)
+            # time.sleep(0.05)
         _clear_requests(self.mav_manager.state)
         return True
 

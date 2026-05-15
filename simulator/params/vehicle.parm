@@ -21,7 +21,7 @@ SERIAL6_PROTOCOL 2
 # ADS-B Receiver Configuration
 # ===============================
 # ADS-B type: 1 = MAVLink protocol
-ADSB_TYPE 1
+ADSB_TYPE 0
 
 # Maximum number of ADS-B vehicles to track
 ADSB_LIST_MAX 25

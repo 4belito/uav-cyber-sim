@@ -18,7 +18,11 @@ from simulator.config import (
 )
 from simulator.configs.gcs import VehicleConfig
 from simulator.entities import SimGCS, SimVehicle, VehT
-from simulator.external.sitl import ensure_sitl_built, get_default_params
+from simulator.external.sitl import (
+    ensure_sitl_built,
+    get_default_params,
+    get_frame_info,
+)
 from simulator.helpers.logging.setup_log import setup_logging
 from simulator.helpers.math import connection_id
 from simulator.helpers.processes import SimProcess, create_process
@@ -216,10 +220,13 @@ class Simulator(Generic[VehT]):
             firmware=veh.firmware,  # or "ArduPlane", etc.
         )
         veh_parms = self.parms[veh.sysid]
+        frame_info = get_frame_info(veh.model, veh.firmware)
+        sitl_model = frame_info["model"]
+        default_params = get_default_params(frame_info)
         arp_cmd = [
             str(binary),
             "--model",
-            veh.model,
+            sitl_model,
             "-I" + str(inst),
             "--speedup",
             str(SIM_SPEEDUP),
@@ -233,7 +240,7 @@ class Simulator(Generic[VehT]):
             self.visualizer.home_str(veh),
             f"--serial5=uart:/tmp/adsb_{sysid}_ardupilot:57600",
             "--defaults",
-            ",".join(get_default_params(veh.model, veh.firmware) + [veh_parms]),
+            ",".join(default_params + [veh_parms]),
         ]
 
         arp_cmd.extend(self.visualizer.add_sitl_args(veh))
