@@ -172,9 +172,9 @@ def start_logic(config: LogicConfig):
             logic.act()
             # time.sleep(0.01)
 
-            msgs = mav_mng.state.messages.copy()
-            for msg_type, msg in msgs.items():
-                logging.debug(f"{msg_type}: {msg}")
+            # msgs = mav_mng.state.messages.copy()
+            # for msg_type, msg in msgs.items():
+            #     logging.debug(f"{msg_type}: {msg}")
     finally:
         # 1. stop producers
         mav_mng.stop()

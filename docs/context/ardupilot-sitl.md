@@ -95,31 +95,110 @@ TKOFF_THR_MINACC 0   # no minimum acceleration needed before throttle
 
 > **Confidence:** Confirmed from repo
 
-### Navigation (L1 Guidance)
+### Navigation (L1 Guidance) and Roll Controller
+
+These must match the firmware defaults that `gazebo-zephyr` uses implicitly (it loads no `models/plane.parm`). `plane-zephyr` loads `models/plane.parm` first, so the values below must be explicitly overridden:
+
 ```
-NAVL1_PERIOD  12     # vs ArduPilot default 17-25 s
-NAVL1_DAMPING 0.75
-WP_RADIUS     20     # vs ArduPilot default 30 m
+NAVL1_PERIOD  17     # firmware default (AP_L1_Control.cpp); matches gazebo-zephyr
+NAVL1_DAMPING 0.75   # firmware default
+WP_RADIUS     90     # firmware default (config.h: WP_RADIUS_DEFAULT=90)
+                     # models/plane.parm sets 50 — must override to 90
+RLL2SRV_TCONST 0.5  # firmware default; models/plane.parm sets 0.25 (2× too fast)
+RLL2SRV_RMAX   0    # firmware default (unlimited); models/plane.parm sets 90
 ```
 
-**Rationale for Zephyr at 11 m/s:**
-- Minimum turn radius at 45° bank: `V²/(g·tan45°) ≈ 12 m`
-- L1 lookahead: `NAVL1_PERIOD × speed / (2π)`
-  - Default 17 s → ~30 m lookahead = 2.5× turn radius → wide waypoint transitions
-  - 12 s → ~21 m lookahead = 1.7× turn radius → tighter, less overshoot
-- `WP_RADIUS 20` ≈ 1.6× minimum turn radius (default 30 m caused overshoot on WP2)
+**`models/plane.parm` trap:** This file is loaded for `plane-zephyr` but NOT for `gazebo-zephyr`. It sets `WP_RADIUS=50`, `RLL2SRV_TCONST=0.25`, `RLL2SRV_RMAX=90`, and `NAVL1_PERIOD=15` — all of which diverge from Gazebo's firmware defaults. Every value must be explicitly overridden in `plane-zephyr.parm`.
 
-> **Confidence:** Confirmed from current chat (physics-derived, tested behavior)
+**L1 lookahead at 11 m/s:** `17 × 11 / (2π) ≈ 30 m` (1.7× Zephyr min turn radius of ~12 m at 45° bank). Period=12 caused cross-track orbit at final approach; 17 converges cleanly.
 
-## Headless Equivalent of `gazebo-zephyr`
+**WP_RADIUS=90 on small missions:** With 100 m legs, 90 m acceptance radius leaves only 10 m of effective straight flight per leg — TECS never stabilises altitude or speed. For trajectory comparison between SITL and Gazebo, use legs ≥ 300 m.
 
-The `gazebo-zephyr` frame has `external: True` in ArduPilot's `vehicleinfo.py` — it requires a running Gazebo instance (FDM ports 9002/9003). It cannot be used with pure ArduPilot SITL.
+> **Confidence:** Confirmed — firmware defaults read from source (`AP_L1_Control.cpp`, `AP_RollController.cpp`, `ArduPlane/config.h`); WP_RADIUS mismatch verified from log analysis
 
-**Headless equivalent:** `plane-elevon` — same elevon servo layout, uses ArduPilot's internal physics (no Gazebo required).
+## Headless Equivalent of `gazebo-zephyr` (`plane-zephyr`)
 
-To use: change the `--vehicle` SITL arg from `gazebo-zephyr` to `plane-elevon`. Load `plane-zephyr.parm` (or the equivalent parm file) separately via `--add-param-file` as usual.
+The `gazebo-zephyr` frame has `external: True` in `vehicleinfo.py` — requires a running Gazebo instance. For pure SITL (no Gazebo), use the **`plane-zephyr`** frame defined in `vehicleinfo.py`:
 
-> **Confidence:** Confirmed from ArduPilot source (`vehicleinfo.py`)
+```python
+# ardupilot/Tools/autotest/pysim/vehicleinfo.py
+"plane-zephyr": {
+    "model": "plane-zephyr-elevon",   # triggers -elevon AND -zephyr in SIM_Plane.cpp
+    "waf_target": "bin/arduplane",
+    "default_params_filename": [
+        "models/plane.parm",           # loaded first; most values overridden below
+        "default_params/plane-zephyr.parm",
+    ],
+},
+```
+
+> **Confidence:** Confirmed from repo (`vehicleinfo.py`)
+
+## Frame-String Routing: How SITL Selects the Physics Model
+
+`SITL_cmdline.cpp` uses **prefix matching** (`strncasecmp(name, model_str, strlen(name))`) against its model table:
+
+| Model string | Prefix match | Physics class |
+|---|---|---|
+| `plane-zephyr-elevon` | `plane` | `Plane::create` → `SIM_Plane.cpp` |
+| `gazebo-zephyr` | `gazebo` | `Gazebo::create` → external physics |
+
+**Consequence:** `SIM_Plane.cpp` is **never executed** during a Gazebo run. Changes to `SIM_Plane.cpp` (including the `-zephyr` branch) cannot affect `gazebo-zephyr` behaviour.
+
+Within `SIM_Plane.cpp`, the frame string is checked with `strstr`:
+- `-elevon` → enables elevon mixing
+- `-zephyr` → overrides aerodynamic coefficients (see section below)
+- `-heavy`, `-jet`, `-soaring` → other presets (unrelated)
+
+> **Confidence:** Confirmed from `SITL_cmdline.cpp` and `SIM_Plane.cpp`
+
+---
+
+## SITL Physics Model: Zephyr Aerodynamic Coefficients
+
+`SIM_Plane.cpp` defaults to **Skywalker 2013** aerodynamics (hardcoded in `SIM_Plane.h`). The `-zephyr` branch added to `SIM_Plane.cpp` overrides these with values derived from the Gazebo Zephyr LiftDragPlugin:
+
+```cpp
+// SIM_Plane.cpp — added after the -soaring block
+if (strstr(frame_str, "-zephyr")) {
+    mass = 1.9f;                       // model.sdf: wing(1.5)+prop(0.05)+flaps(0.2)+imu(0.15)
+    thrust_scale = (mass * GRAVITY_MSS) / hover_throttle;
+    coefficient.s           = 0.50f;   // LiftDragPlugin main wing area
+    coefficient.b           = 1.50f;   // wingspan from model.sdf joint positions
+    coefficient.c           = 0.333f;  // mean chord = s/b
+    coefficient.c_lift_0    = 0.48f;   // cla*a0 = 3.7*0.13 (see formula below)
+    coefficient.c_lift_a    = 3.7f;    // main-wing cla from LiftDragPlugin
+    coefficient.c_drag_p    = 0.064f;  // cda from LiftDragPlugin
+    coefficient.alpha_stall = 0.3391f; // stall angle (rad) from LiftDragPlugin
+    coefficient.oswald      = 0.80f;   // lower efficiency for delta-wing AR≈4.5
+}
+```
+
+**Skywalker vs Zephyr comparison:**
+
+| Coefficient | Skywalker 2013 (SITL default) | Zephyr (Gazebo) |
+|---|---|---|
+| mass | 2.0 kg | 1.9 kg |
+| s (wing area) | 0.45 m² | 0.50 m² |
+| c_lift_a | 6.9 | 3.7 |
+| c_lift_0 | 0.56 | 0.48 |
+| c_drag_p | 0.10 | 0.064 |
+| alpha_stall | 0.471 rad (27°) | 0.339 rad (19.4°) |
+| AR | 7.85 | ~4.5 (delta wing) |
+
+**Gazebo → SITL coefficient conversion:**
+
+The Gazebo `LiftDragPlugin` formula is `CL = cla * (alpha + a0)` (a0 is *added*, not subtracted). The SITL `last_letter` formula is `CL = c_lift_0 + c_lift_a * alpha`. Mapping:
+```
+c_lift_0 = cla × a0  =  3.7 × 0.13  =  0.481 ≈ 0.48
+c_lift_a = cla       =  3.7
+```
+
+**What TECS compensates for automatically:** differences in c_lift_0 and c_lift_a shift the trim AoA and pitch angle, but TECS adjusts throttle/pitch to maintain AIRSPEED_CRUISE regardless. The gross trajectory shape is the same; only fine details (cruise pitch angle, throttle set-point) differ.
+
+**What TECS cannot compensate for:** moment coefficients (`c_l_*`, `c_m_*`, `c_n_*`) remain at Skywalker values — no Zephyr-specific data. These affect turn dynamics and stability margins but not the gross waypoint-to-waypoint path.
+
+> **Confidence:** Confirmed — coefficients read from `ardupilot_gazebo/models/gazebo-zephyr/template/model.sdf` and `SIM_Plane.h`; SITL binary rebuilt and verified
 
 ---
 

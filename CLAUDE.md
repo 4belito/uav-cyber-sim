@@ -123,5 +123,5 @@ Detailed architecture notes, confirmed behaviors, known bugs and fixes live in [
 
 - [`mavlink-routing.md`](docs/context/mavlink-routing.md) — port map, QGC connection model, ArduPilot MissionItemProtocol behavior
 - [`mission-planning.md`](docs/context/mission-planning.md) — AutoPlan order, upload protocol, PushMissionToGCS
-- [`ardupilot-sitl.md`](docs/context/ardupilot-sitl.md) — parm files, Gazebo Zephyr axis alignment, TECS/L1 tuning
+- [`ardupilot-sitl.md`](docs/context/ardupilot-sitl.md) — parm files, Gazebo Zephyr axis alignment, TECS/L1 tuning, plane-zephyr SITL physics model, frame-string routing
 - [`known-issues.md`](docs/context/known-issues.md) — fixed bugs and their root causes
