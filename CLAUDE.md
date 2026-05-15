@@ -116,3 +116,12 @@ Abstract `Visualizer` base in [simulator/visualizer/visualizer.py](simulator/vis
 - `ardupilot_gazebo/` — Gazebo plugin bridging SITL to physics engine
 
 After cloning: `git submodule update --init --recursive`
+
+## Extended Context
+
+Detailed architecture notes, confirmed behaviors, known bugs and fixes live in [`docs/context/`](docs/context/):
+
+- [`mavlink-routing.md`](docs/context/mavlink-routing.md) — port map, QGC connection model, ArduPilot MissionItemProtocol behavior
+- [`mission-planning.md`](docs/context/mission-planning.md) — AutoPlan order, upload protocol, PushMissionToGCS
+- [`ardupilot-sitl.md`](docs/context/ardupilot-sitl.md) — parm files, Gazebo Zephyr axis alignment, TECS/L1 tuning
+- [`known-issues.md`](docs/context/known-issues.md) — fixed bugs and their root causes
