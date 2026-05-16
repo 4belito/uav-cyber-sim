@@ -11,6 +11,7 @@ dependencies = [
     "geopy",
     "ipykernel",
     "ipython",
+    "jinja2>=3.1.6",
     "lxml",
     "matplotlib",
     "nbformat",

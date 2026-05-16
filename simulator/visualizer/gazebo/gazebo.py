@@ -21,6 +21,8 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
+import jinja2
+
 from simulator.config import (
     ARDUPILOT_GAZEBO_MODELS,
     RUNTIME_GAZEBO_MODELS,
@@ -46,6 +48,7 @@ COLOR_MAP: dict[Color, str] = {
     Color.ORANGE: "1.0 0.5 0.0 1",
     Color.YELLOW: "1.0 1.0 0.0 1",
     Color.WHITE: "1.0 1.0 1.0 1",
+    Color.BLACK: "0.0 0.0 0.0 1",
 }
 
 
@@ -140,14 +143,47 @@ class Gazebo(Visualizer[GazVehicle]):
         base = str(ARDUPILOT_GAZEBO_MODELS)
 
         env = os.environ.copy()
-        env.update({
-            "GAZEBO_MODEL_PATH": f"{runtime}:{base}",
-            "GAZEBO_PLUGIN_PATH": "/usr/lib/x86_64-linux-gnu/gazebo-11/plugins",
-            "GAZEBO_RESOURCE_PATH": "/usr/share/gazebo-11",
-            "LD_LIBRARY_PATH": "/usr/lib/x86_64-linux-gnu/gazebo-11/plugins",
-        })
+        env.update(
+            {
+                "GAZEBO_MODEL_PATH": f"{runtime}:{base}",
+                "GAZEBO_PLUGIN_PATH": "/usr/lib/x86_64-linux-gnu/gazebo-11/plugins",
+                "GAZEBO_RESOURCE_PATH": "/usr/share/gazebo-11",
+                "LD_LIBRARY_PATH": "/usr/lib/x86_64-linux-gnu/gazebo-11/plugins",
+            }
+        )
 
         return env
+
+    @staticmethod
+    def _render_color_model(model_name: str, color: Color) -> None:
+        """Render all color_template/*.j2 files into runtime_models/{model}/{color}/.
+
+        Preserves subdirectory structure; strips the .j2 suffix from output names.
+        Non-template files (e.g. model.config) are copied as-is.
+        Called only when color_template/ exists. Models with hand-crafted per-color
+        SDFs don't need this.
+        """
+        src = ARDUPILOT_GAZEBO_MODELS / model_name / "color_template"
+        out = RUNTIME_GAZEBO_MODELS / model_name / color.value
+
+        env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(src)))
+        context = {"color": color.value}
+
+        for path in src.rglob("*"):
+            if not path.is_file():
+                continue
+            rel = path.relative_to(src)
+            if path.suffix == ".j2":
+                dest = out / rel.with_suffix("")
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_text(
+                    env.get_template(rel.as_posix()).render(**context),
+                    encoding="utf-8",
+                )
+            else:
+                dest = out / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy(path, dest)
 
     def _generate_vehicle_models_from_bases(
         self,
@@ -157,8 +193,17 @@ class Gazebo(Visualizer[GazVehicle]):
 
         RUNTIME_GAZEBO_MODELS.mkdir(parents=True, exist_ok=True)
 
+        seen: set[tuple[str, Color]] = set()
+        for veh in self.vehicles.values():
+            key = (veh.model, veh.color)
+            if key not in seen:
+                seen.add(key)
+                template = ARDUPILOT_GAZEBO_MODELS / veh.model / "color_template"
+                if template.exists():
+                    self._render_color_model(veh.model, veh.color)
+
         for sysid, veh in self.vehicles.items():
-            template_path = ARDUPILOT_GAZEBO_MODELS / veh.model / "template"
+            template_path = ARDUPILOT_GAZEBO_MODELS / veh.model / "ardupilot"
             name = f"vehicle_{sysid}"
             new_model_path = RUNTIME_GAZEBO_MODELS / name
             if new_model_path.exists():
@@ -170,10 +215,9 @@ class Gazebo(Visualizer[GazVehicle]):
                 sdf = f.read()
 
             sdf = re.sub(r'<model name="[^"]+">', f'<model name="{name}">', sdf)
-            sdf = re.sub(
-                r"<include>\s*<uri>model://[^<]+</uri>\s*</include>",
-                f"<include>\n  <uri>model://{veh.model}/{veh.color.name.lower()}</uri>\n</include>",
-                sdf,
+            sdf = sdf.replace(
+                f"<uri>model://{veh.model}/physics</uri>",
+                f"<uri>model://{veh.model}/{veh.color.value}</uri>",
             )
 
             port_in = base_port_in + port_offsets[sysid]

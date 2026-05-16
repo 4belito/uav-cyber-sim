@@ -1,5 +1,34 @@
 # Known Issues, Root Causes, and Fixes
 
+## [FIXED] Gazebo Plane Renders White (No Texture)
+
+**Symptom:** Zephyr plane spawns in Gazebo with a solid white mesh — color texture not applied.
+
+**Root cause:** `_generate_vehicle_models_from_bases` used a regex to replace the `<include>` URI:
+```python
+re.sub(r"<include>\s*<uri>model://[^<]+</uri>\s*</include>", ...)
+```
+This silently fails when `<include>` contains a sibling `<pose>` element (as the zephyr does):
+```xml
+<include>
+  <uri>model://gazebo-zephyr/physics</uri>
+  <pose>0 0 0.2 0 0 0</pose>   ← breaks the regex
+</include>
+```
+No match → URI stays as `physics` → Gazebo loads the uncolored physics model → white plane.
+
+**Fix:** Replace regex with targeted string replace (only touches the URI line, leaves `<pose>` intact):
+```python
+sdf = sdf.replace(
+    f"<uri>model://{veh.model}/physics</uri>",
+    f"<uri>model://{veh.model}/{veh.color.value}</uri>",
+)
+```
+
+> **Confidence:** Confirmed; fix implemented in `simulator/visualizer/gazebo/gazebo.py`
+
+---
+
 ## [FIXED] QGC Mission Waypoints Never Display
 
 **Symptom:** QGC connects and shows the vehicle, but the mission waypoints never appear in Fly View after the Logic process uploads the mission.

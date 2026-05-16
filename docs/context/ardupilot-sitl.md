@@ -16,22 +16,24 @@
 
 ```
 ardupilot_gazebo/models/gazebo-zephyr/
-  base/       ← physics model (SDF), meshes, inertia
-  template/   ← ArduPilot plugin + LiftDrag aerodynamics
-  red/        ← color variant
+  physics/          ← physics model (SDF), meshes, textures
+  ardupilot/        ← ArduPilot plugin + LiftDrag aerodynamics (includes physics/ at runtime)
+  color_template/   ← Jinja2 templates; rendered per-color into runtime_models/
 ```
 
-The **template** SDF includes the base model and adds:
+The **ardupilot** SDF includes the physics model and adds:
 - `libLiftDragPlugin.so` plugins for wing, elevons, rudders, propeller blades
-- `libArduPilotPlugin.so` bridge (FDM ports 9002/9003)
+- `libArduPilotPlugin.so` bridge (FDM ports patched at runtime)
 
-> **Confidence:** Confirmed from repo
+See `docs/context/gazebo-models.md` for the full color template system.
+
+> **Confidence:** Confirmed from repo (refactored in plane-model branch)
 
 ## Axis Alignment (Project-Specific Change)
 
 The project modified the Gazebo Zephyr model to align Gazebo and ArduPilot coordinate frames:
 
-**In `template/model.sdf`:**
+**In `ardupilot/model.sdf`:**
 - Model pose: `<pose>0 0 0 0 0 3.141593</pose>` — 180° yaw rotation
 - `<modelXYZToAirplaneXForwardZDown>0 0 0 3.141593 0 0</modelXYZToAirplaneXForwardZDown>`
 - `<gazeboXYZToNED>0 0 0 3.141593 0 1.57079632</gazeboXYZToNED>`
