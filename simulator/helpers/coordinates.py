@@ -468,6 +468,16 @@ class ENUPose(XYZPose):
         """Vectorize `unpose` over a sequence of ENUPose."""
         return [p.unpose() for p in poses]
 
+    @staticmethod
+    def resolve_path(
+        origin: ENUPose,
+        relative_home: ENUPose,
+        relative_path: list[ENU],
+    ) -> list[ENU]:
+        """Absolute waypoints from an origin, a relative home, and a relative path."""
+        abs_home = origin.to_abs(relative_home)
+        return ENUPose.unpose_all(abs_home.to_abs_all(relative_path))
+
     def draw(self, ax: Axes, label: str, color: str, alpha: float = 1.0):
         """Draws an ENUPose on a matplotlib Axes with an arrow and label."""
         arrow_scale = 2  # in meters
@@ -569,6 +579,16 @@ class GRAPose(LLAPose):
     def unpose_all(poses: Iterable[GRAPose]) -> GRAs:
         """Vectorize `unpose` over a sequence of GRAPose."""
         return [p.unpose() for p in poses]
+
+    @staticmethod
+    def resolve_path(
+        origin: GRAPose,
+        relative_home: ENUPose,
+        relative_path: list[ENU],
+    ) -> GRAs:
+        """Absolute GRA waypoints from a GRAPose origin, relative home, and relative path."""
+        gra_home = origin.to_abs(relative_home)
+        return GRAPose.unpose_all(gra_home.to_abs_all(relative_path))
 
 
 # === Type aliases for grouped data (inputs are usually Iterable) ===

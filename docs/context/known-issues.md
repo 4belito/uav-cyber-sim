@@ -107,6 +107,58 @@ Controlled by `push_to_gcs=True` (default) on `make_upload_mission()`.
 
 ---
 
+## [FIXED] `Model.__call__` Case Mismatch — Gazebo Always Gets Wrong Model Path
+
+**Symptom:** `FileNotFoundError: .../ardupilot_gazebo/models/zephyr/ardupilot` — the raw
+StrEnum value (`"zephyr"`) is used instead of the resolved Gazebo name (`"gazebo-zephyr"`).
+
+**Root cause (two-part):**
+1. `Model.__call__` compared `visualizer_name == "gazebo"` (lowercase) but `Gazebo.name`
+   returns `"Gazebo"` (capital G) → comparison always False → falls through to non-Gazebo branch.
+2. `Gazebo.get_visvehicle` passed `vehicle.model` (the raw `Model` enum) directly into
+   `GazVehicle(model=...)` instead of calling `vehicle.model(self.name)` to resolve the string.
+   But since `GazVehicle` should keep `model: Model`, the resolution must happen inside
+   `_generate_vehicle_models_from_bases` via `model_name = veh.model(self.name)`.
+
+**Fixes:**
+- `config.py` `Model.__call__`: `visualizer_name.lower() == "gazebo"`.
+- `gazebo.py` `_generate_vehicle_models_from_bases`: `model_name = veh.model(self.name)` at
+  the top of each loop; use `model_name` for all path building and SDF string replacement.
+
+> **Confidence:** Confirmed; fix implemented.
+
+---
+
+## [FIXED] SITL Crashes on `port_offset=0` — "EOF on TCP socket" / "bind failed"
+
+**Symptom:** `create_tcp_conn` gets repeated `EOF on TCP socket` when `port_offset=0` (SITL base_port=5760). High offsets (e.g. 320) work fine.
+
+**Root cause (two-part):**
+
+1. **SITL binds multiple sequential TCP ports, not just the base.** With `--base-port 5760`:
+   - SERIAL0 = 5760, SERIAL1 = 5762, SERIAL2 = 5763, SERIAL5 = 5765, …
+   - Port 5765 = `BasePort.RID_DOWN`. An Oracle ZMQ `PUB` socket from a previous simulation run in **another Jupyter kernel** holds port 5765. SITL fails: `bind failed on port 5765 - Address already in use` and exits code 1.
+   - SITL briefly owns port 5760 (detectable by `wait_for_port`), then crashes. Pymavlink connects, gets EOF as SITL dies.
+
+2. **`is_port_open` was killing SITL.** The original helper used a raw socket connect to probe if the port was open. ArduPilot SITL exits when a client connects and immediately drops the connection. This was inadvertently killing SITL during startup polling.
+
+**Fixes applied:**
+
+- `simulator/helpers/connections/ports.py`:
+  - Replaced `is_port_open` (socket-connect probe) with `is_port_listening` using `ss -tlnH` — checks LISTEN state without connecting.
+  - Added `startup_delay=1.0` to `wait_for_port` — gives SITL time to finish binding all serial ports before the first MAVLink connection attempt.
+
+- `simulator/helpers/cleanup.py` `_kill_stale_sim_sockets`:
+  - Replaced `ss --kill` (requires root, always fails) with `fuser -k -KILL port/tcp` — kills any same-user process holding ports in the simulation range [5760, 5780). Works without root.
+
+- `simulator/oracle.py`:
+  - Added `_active: set[Oracle]` module-level registry and `close()` method.
+  - `clean()` calls `_close_oracles()` first to release ZMQ sockets held by the **current** kernel before `fuser` handles other kernels.
+
+> **Confidence:** Root cause confirmed by SITL log (`bind failed on port 5765`); fix tested end-to-end.
+
+---
+
 ## [KNOWN] `mypy` / `ruff` Not in Primary `.venv`
 
 `ruff` and `mypy` are not installed in the main `.venv` (only in `.venv_broken`). Use `uv run python -c "..."` for quick import checks. For linting, use the tools via their full path in `.venv_broken/bin/` if needed, or run `uv sync` to reinstall dev dependencies.

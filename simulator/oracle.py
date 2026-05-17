@@ -29,6 +29,9 @@ from simulator.runtime.grid import Grid
 TX_LOOP_SLEEP = 0.01
 RX_LOOP_SLEEP = 0.10
 
+# Module-level registry so clean() can reach active Oracle instances
+_active: set["Oracle"] = set()
+
 
 class Oracle:
     """
@@ -59,16 +62,17 @@ class Oracle:
         self.n_entities = len(self.sysids) + len(self.gcss)
 
         # Sockets
-        zmq_ctx = zmq.Context()
+        self._zmq_ctx = zmq.Context()
         self.rid_in_socks = create_zmq_sockets(
-            zmq_ctx, BasePort.RID_UP, zmq.SUB, veh_port_offsets
+            self._zmq_ctx, BasePort.RID_UP, zmq.SUB, veh_port_offsets
         )
         self.rid_out_socks = create_zmq_sockets(
-            zmq_ctx, BasePort.RID_DOWN, zmq.PUB, veh_port_offsets
+            self._zmq_ctx, BasePort.RID_DOWN, zmq.PUB, veh_port_offsets
         )
         self.done_sock = create_zmq_socket(
-            zmq_ctx, zmq.ROUTER, BasePort.ORC_DONE, offset=port_offset
+            self._zmq_ctx, zmq.ROUTER, BasePort.ORC_DONE, offset=port_offset
         )
+        _active.add(self)
 
         # Threads
         self.rid_in_threads = {
@@ -142,6 +146,11 @@ class Oracle:
         logging.info("✅ All GCS threads completed")
 
         logging.info("🎉 Oracle shutdown complete!")
+
+    def close(self) -> None:
+        """Close all ZMQ sockets and terminate the context."""
+        self._zmq_ctx.destroy(linger=0)
+        _active.discard(self)
 
     def update_rid(self, sysid: int):
         """Receive Remote ID messages from one Vehicle and update the store."""

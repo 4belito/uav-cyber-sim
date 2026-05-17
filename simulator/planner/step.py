@@ -11,6 +11,7 @@ from enum import StrEnum
 from typing import Self
 
 from simulator.helpers.connections import MAVConnection
+from simulator.helpers.connections.mavlink.enums import Frame
 from simulator.helpers.coordinates import ENU, GRA
 from simulator.runtime.vehicle.mav_manager import MAVLinkManager
 
@@ -158,6 +159,22 @@ class Step(MissionElement, ABC):
             logging.warning("⚠️ Already done! Cannot perform this step again!")
         elif self.state == State.FAILED:
             logging.warning("⚠️ Already failed! Cannot perform this step again!")
+
+    _POSITION_TYPE_MASK: int = 0b110111111000
+
+    def send_position_target(self, target: ENU, type_mask: int = _POSITION_TYPE_MASK) -> None:
+        """Encode and send SET_POSITION_TARGET_GLOBAL_INT for a local ENU target."""
+        gra_wp = self.origin.to_abs(target)
+        msg = self.conn.mav.set_position_target_global_int_encode(
+            10,
+            self.conn.target_system,
+            self.conn.target_component,
+            Frame.GLOBAL_INT,
+            type_mask,
+            *gra_wp.to_global_int_alt_in_meters(),
+            0, 0, 0, 0, 0, 0, 0, 0,
+        )
+        self.conn.mav.send(msg)
 
     def get_enu_position(self) -> ENU | None:
         """Get the current ENU position of the vehicle."""

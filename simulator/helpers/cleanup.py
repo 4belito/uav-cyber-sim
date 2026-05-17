@@ -5,6 +5,7 @@ import glob
 import os
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 from simulator.config import (
@@ -39,10 +40,20 @@ ALL_FOLDERS = [
 ]
 
 
-def kill_processes(victims: list[str]):
-    """Kill all related processes or a given list of process names."""
+def kill_processes(victims: list[str], wait_timeout: float = 2.0) -> None:
+    """Kill all related processes and wait until they are gone."""
     for process in victims:
         subprocess.run(["pkill", "-9", "-f", process], check=False)
+
+    deadline = time.monotonic() + wait_timeout
+    while time.monotonic() < deadline:
+        still_alive = [
+            p for p in victims
+            if subprocess.run(["pgrep", "-f", p], capture_output=True).returncode == 0
+        ]
+        if not still_alive:
+            break
+        time.sleep(0.05)
 
 
 def clean_adsb_ptys() -> None:
@@ -58,15 +69,37 @@ def del_folder(path: Path):
         shutil.rmtree(path)
 
 
+def _close_oracles() -> None:
+    """Close all active Oracle ZMQ contexts in the current kernel."""
+    from simulator.oracle import _active  # avoid circular import at module level
+    for oracle in list(_active):
+        oracle.close()
+
+
+def _kill_stale_sim_sockets(base: int = 5760, span: int = 20) -> None:
+    """Kill any process holding a TCP port in the simulation range.
+
+    SITL binds sequential ports starting at base (SERIAL0–SERIAL9). If a
+    previous Oracle ZMQ socket in another kernel holds e.g. port base+5
+    (RID_DOWN / SERIAL5), SITL will fail to bind it and exit.  `fuser -k`
+    works without root on processes owned by the same user.
+    """
+    ports = [f"{port}/tcp" for port in range(base, base + span)]
+    subprocess.run(["fuser", "-k", "-KILL", *ports], capture_output=True)
+    time.sleep(0.5)
+
+
 def clean(
     victim_processes: list[str] = ALL_PROCESSES,
     del_folders: list[Path] | None = None,
     reset_folders: list[Path] = ALL_FOLDERS,
-):
-    """End the simulation."""
+) -> None:
+    """End the simulation and free all ports it used."""
     if del_folders is None:
         del_folders = []
+    _close_oracles()
     kill_processes(victim_processes)
+    _kill_stale_sim_sockets()
     clean_adsb_ptys()
     for folder in reset_folders + del_folders:
         del_folder(folder)

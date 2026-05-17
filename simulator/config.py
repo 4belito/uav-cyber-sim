@@ -6,6 +6,7 @@ Defines system paths, base communication ports, and a color enum for UAV visuali
 
 from enum import IntEnum, StrEnum
 from pathlib import Path
+from typing import Literal, cast
 
 # --- System Paths ---
 ROOT = Path(__file__).parent
@@ -93,6 +94,37 @@ class Color(StrEnum):
             Color.BLACK: "⬛",
             Color.WHITE: "⬜",
         }[self]
+
+
+Firmware = Literal["ArduPlane", "ArduCopter"]
+
+
+class Model(StrEnum):
+    """Enum for supported UAV models in visualizations."""
+
+    IRIS = "iris"
+    ZEPHYR = "zephyr"
+
+    @property
+    def firmware(self) -> Firmware:
+        """Return the corresponding ArduPilot firmware for the model."""
+        return cast(
+            Firmware,
+            {
+                Model.IRIS: "ArduCopter",
+                Model.ZEPHYR: "ArduPlane",
+            }[self],
+        )
+
+    def __call__(self, visualizer_name: str) -> str:
+        """Return the corresponding Gazebo model name for the UAV model."""
+        if visualizer_name.lower() == "gazebo":
+            return "gazebo-" + self.value
+        else:
+            return {
+                Model.IRIS: "copter-iris",
+                Model.ZEPHYR: "plane-zephyr",
+            }[self]
 
 
 Colors = list[Color]

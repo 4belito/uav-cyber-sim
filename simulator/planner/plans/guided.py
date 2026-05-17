@@ -119,9 +119,7 @@ class GuidedPlan(Plan):
             enu_origin = ENUPose(0, 0, 0, 0)
         if relative_home is None:
             relative_home = ENUPose(0, 0, 0, 0)
-        abs_home = enu_origin.to_abs(relative_home)
-        abs_path = abs_home.to_abs_all(relative_path)
-        wps = ENUPose.unpose_all(abs_path)
+        wps = ENUPose.resolve_path(enu_origin, relative_home, relative_path)
         return cls(
             name=name,
             wps=wps,

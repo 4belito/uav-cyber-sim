@@ -10,6 +10,7 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from typing import Any, ClassVar, Literal, TypeVar
 
+from simulator.helpers.ardupilot.firmware import guided_mode
 from simulator.helpers.connections.mavlink.enums import CopterMode, PlaneMode
 from simulator.helpers.coordinates import ENU, XY, ENUs, XYs
 from simulator.planner.action import Action
@@ -57,9 +58,9 @@ class Plan(ActionSequence, ABC):
         """Build a Plan from JSON-serializable arguments."""
         raise NotImplementedError
 
-    def extend(self, action_suqnece: ActionSequence) -> None:
+    def extend(self, action_sequence: ActionSequence) -> None:
         """Append another plan's steps to this plan."""
-        for action in action_suqnece.steps:
+        for action in action_sequence.steps:
             self.add(action)
 
     def get_spec(self) -> PlanSpec:
@@ -123,16 +124,9 @@ class Plan(ActionSequence, ABC):
         firmware: Literal["ArduPlane", "ArduCopter"] = "ArduCopter",
     ) -> ActionSequence:
         """Create a plan to execute a mission in auto mode."""
-        guided_mode: CopterMode | PlaneMode
-        match firmware:
-            case "ArduCopter":
-                guided_mode = CopterMode.GUIDED
-            case "ArduPlane":
-                guided_mode = PlaneMode.GUIDED
-
         actions = ActionSequence(name, emoji="🔐")
         actions.add(make_pre_arm(firmware=firmware))
-        actions.add(make_set_mode(guided_mode))
+        actions.add(make_set_mode(guided_mode(firmware)))
         if navigation_speed != 5:
             actions.add(
                 make_change_nav_speed(speed=navigation_speed, firmware=firmware)

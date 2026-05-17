@@ -1,5 +1,39 @@
 # Gazebo Model Color Template System
 
+## `Model` Enum and Gazebo Model Name Resolution
+
+`config.py` defines `Model(StrEnum)` with a `__call__` method that resolves the
+visualizer-specific model folder name:
+
+```python
+Model.IRIS("gazebo")   → "gazebo-iris"
+Model.ZEPHYR("gazebo") → "gazebo-zephyr"
+Model.IRIS("novis")    → "copter-iris"
+Model.ZEPHYR("novis")  → "plane-zephyr"
+```
+
+The comparison is `visualizer_name.lower() == "gazebo"` — **always pass `.lower()`**
+or the comparison silently falls through because `Gazebo.name` returns `"Gazebo"` (capital G).
+
+### Pattern for all Gazebo model path operations
+
+`GazVehicle.model` stores `Model` (not `str`). In
+`_generate_vehicle_models_from_bases`, resolve the string at the point of use:
+
+```python
+model_name = veh.model(self.name)   # self.name = "Gazebo" → .lower() in __call__
+template_path = ARDUPILOT_GAZEBO_MODELS / model_name / "ardupilot"
+```
+
+### Do NOT widen `model: Model` to `model: str` in a subclass
+
+`GazVehicle(Vehicle)` must keep `model: Model` (inherited). Declaring `model: str`
+widens the parent type — Pylance strict rejects the `__init__` call because the
+synthesised signature still uses `Model`. Keep `model: Model`; resolve to `str` at
+point of use via `veh.model(visualizer_name)`.
+
+
+
 ## Directory Convention
 
 Every model in `ardupilot_gazebo/models/<model>/` follows this layout:

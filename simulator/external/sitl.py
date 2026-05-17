@@ -6,7 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
 
-from simulator.config import ARDUPILOT_PATH
+from simulator.config import ARDUPILOT_PATH, Firmware
 from simulator.helpers.ardupilot.types import FrameOptions, VehicleInfoProtocol
 
 _autotest = str(ARDUPILOT_PATH / "Tools" / "autotest")
@@ -33,7 +33,7 @@ def _romfs_json_newer_than(binary_path: Path) -> bool:
     )
 
 
-def ensure_sitl_built(frame: str, firmware: str) -> Path:
+def ensure_sitl_built(frame: str, firmware: Firmware) -> Path:
     """Ensure the SITL binary for the given frame is built and return its path."""
     info = _vinfo.options_for_frame(frame, firmware, _opts)
     binary_name = info["waf_target"].split("/")[-1]
@@ -54,7 +54,7 @@ def ensure_sitl_built(frame: str, firmware: str) -> Path:
     return binary_path
 
 
-def get_frame_info(frame: str, firmware: str) -> FrameOptions:
+def get_frame_info(frame: str, firmware: Firmware) -> FrameOptions:
     """Return vehicleinfo options for the given frame and firmware."""
     return _vinfo.options_for_frame(frame, firmware, _opts)
 
@@ -65,3 +65,9 @@ def get_default_params(info: FrameOptions) -> list[str]:
     if isinstance(params, str):
         params = [params]
     return [str(ARDUPILOT_PATH / "Tools" / "autotest" / p) for p in params]
+
+
+def resolve_sitl_build(frame: str, firmware: Firmware) -> tuple[Path, str, list[str]]:
+    binary = ensure_sitl_built(frame, firmware)
+    frame_info = get_frame_info(frame, firmware)
+    return binary, frame_info["model"], get_default_params(frame_info)

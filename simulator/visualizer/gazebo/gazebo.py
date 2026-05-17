@@ -57,7 +57,6 @@ class GazVehicle(Vehicle):
     """Represents a vehicle with a model and a trajectory."""
 
     home: ENUPose
-    model: str
     color: Color
     mtraj: GazMarkers
 
@@ -195,15 +194,17 @@ class Gazebo(Visualizer[GazVehicle]):
 
         seen: set[tuple[str, Color]] = set()
         for veh in self.vehicles.values():
-            key = (veh.model, veh.color)
+            model_name = veh.model(self.name)
+            key = (model_name, veh.color)
             if key not in seen:
                 seen.add(key)
-                template = ARDUPILOT_GAZEBO_MODELS / veh.model / "color_template"
+                template = ARDUPILOT_GAZEBO_MODELS / model_name / "color_template"
                 if template.exists():
-                    self._render_color_model(veh.model, veh.color)
+                    self._render_color_model(model_name, veh.color)
 
         for sysid, veh in self.vehicles.items():
-            template_path = ARDUPILOT_GAZEBO_MODELS / veh.model / "ardupilot"
+            model_name = veh.model(self.name)
+            template_path = ARDUPILOT_GAZEBO_MODELS / model_name / "ardupilot"
             name = f"vehicle_{sysid}"
             new_model_path = RUNTIME_GAZEBO_MODELS / name
             if new_model_path.exists():
@@ -216,8 +217,8 @@ class Gazebo(Visualizer[GazVehicle]):
 
             sdf = re.sub(r'<model name="[^"]+">', f'<model name="{name}">', sdf)
             sdf = sdf.replace(
-                f"<uri>model://{veh.model}/physics</uri>",
-                f"<uri>model://{veh.model}/{veh.color.value}</uri>",
+                f"<uri>model://{model_name}/physics</uri>",
+                f"<uri>model://{model_name}/{veh.color.value}</uri>",
             )
 
             port_in = base_port_in + port_offsets[sysid]

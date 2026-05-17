@@ -293,9 +293,7 @@ class AutoPlan(Plan):
         # speed: float = 5.0,
     ):
         """Convert ENU waypoints to GRAs and save the mission to file."""
-        gra_home = gra_origin.to_abs(relative_home)
-        grapose_wps = gra_home.to_abs_all(relative_path)
-        gra_wps = GRAPose.unpose_all(grapose_wps)
+        gra_wps = GRAPose.resolve_path(gra_origin, relative_home, relative_path)
         AutoPlan.save_basic_mission(
             mission_path,
             sysid,

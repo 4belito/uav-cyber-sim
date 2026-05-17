@@ -8,7 +8,7 @@ from collections.abc import Callable
 from typing import Any, Self
 
 from simulator.entities.riddata import RIDData
-from simulator.helpers.connections.mavlink.enums import Frame, MsgID
+from simulator.helpers.connections.mavlink.enums import MsgID
 from simulator.helpers.connections.mavlink.streams import ask_msg
 from simulator.helpers.coordinates import ENU
 from simulator.planner.action import Action
@@ -17,9 +17,6 @@ from simulator.planner.plan import Plan, PlanSpec
 from simulator.planner.step import Step
 
 RIDGetter = Callable[[int], RIDData | None]
-
-_TYPE_MASK = 0b110111111000  # position only, same as GoTo
-
 
 class PursueStep(Step):
     """
@@ -44,26 +41,6 @@ class PursueStep(Step):
         """Set the RID lookup function used by this step."""
         self._get_target = fn
 
-    def _send_goto(self, target: ENU) -> None:
-        gra_wp = self.origin.to_abs(target)
-        go_msg = self.conn.mav.set_position_target_global_int_encode(
-            10,
-            self.conn.target_system,
-            self.conn.target_component,
-            Frame.GLOBAL_INT,
-            _TYPE_MASK,
-            *gra_wp.to_global_int_alt_in_meters(),
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-        )
-        self.conn.mav.send(go_msg)
-
     def exec_fn(self) -> None:
         """Send initial GoTo if target RID is already available."""
         msg = ask_msg(self.conn, MsgID.GLOBAL_POSITION_INT, interval=100_000)
@@ -72,7 +49,7 @@ class PursueStep(Step):
             rid = self._get_target(self.target_sysid)
             if rid is not None:
                 self.target_pos = rid.enu_pos
-                self._send_goto(rid.enu_pos)
+                self.send_position_target(rid.enu_pos)
                 self._last_update = time.time()
 
     def check_fn(self) -> bool:
@@ -83,7 +60,7 @@ class PursueStep(Step):
             rid = self._get_target(self.target_sysid)
             if rid is not None:
                 self.target_pos = rid.enu_pos
-                self._send_goto(rid.enu_pos)
+                self.send_position_target(rid.enu_pos)
                 logging.info(
                     f"🎯 Pursuer {self.sysid}: targeting sysid={self.target_sysid}"
                     f" at {rid.enu_pos}"

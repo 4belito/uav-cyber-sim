@@ -18,11 +18,7 @@ from simulator.config import (
 )
 from simulator.configs.gcs import VehicleConfig
 from simulator.entities import SimGCS, SimVehicle, VehT
-from simulator.external.sitl import (
-    ensure_sitl_built,
-    get_default_params,
-    get_frame_info,
-)
+from simulator.external.sitl import resolve_sitl_build
 from simulator.helpers.logging.setup_log import setup_logging
 from simulator.helpers.math import connection_id
 from simulator.helpers.processes import SimProcess, create_process
@@ -209,20 +205,15 @@ class Simulator(Generic[VehT]):
     def _build_veh_config(self, sysid: int) -> VehicleConfig:
         veh = self.vehicles[sysid]
 
+        port_offset = veh.port_offset_required
+        veh_parms = self.parms[veh.sysid]
         eeprom_path = ARDU_LOGS_PATH / f"veh_{sysid}" / "eeprom.bin"
         if eeprom_path.exists():
             eeprom_path.unlink()
-
-        port_offset = veh.port_offset_required
         inst = port_offset // self.port_step
-        binary = ensure_sitl_built(
-            frame=veh.model,  # e.g. "gazebo-iris"
-            firmware=veh.firmware,  # or "ArduPlane", etc.
-        )
-        veh_parms = self.parms[veh.sysid]
-        frame_info = get_frame_info(veh.model, veh.firmware)
-        sitl_model = frame_info["model"]
-        default_params = get_default_params(frame_info)
+        frame = veh.model(self.visualizer.name)
+        firmware = veh.model.firmware
+        binary, sitl_model, default_params = resolve_sitl_build(frame, firmware)
         arp_cmd = [
             str(binary),
             "--model",

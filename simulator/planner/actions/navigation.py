@@ -8,7 +8,7 @@ Includes:
 
 import logging
 
-from simulator.helpers.connections.mavlink.enums import Frame, MsgID
+from simulator.helpers.connections.mavlink.enums import MsgID
 from simulator.helpers.connections.mavlink.streams import (
     ask_msg,
     stop_msg,
@@ -38,24 +38,7 @@ class GoTo(Step):
 
     def exec_fn(self) -> None:
         """Send a MAVLink command to move the vehicle to a global waypoint."""
-        gra_wp = self.origin.to_abs(self.wp)
-        go_msg = self.conn.mav.set_position_target_global_int_encode(
-            10,
-            self.conn.target_system,
-            self.conn.target_component,
-            Frame.GLOBAL_INT,
-            self.type_mask,
-            *gra_wp.to_global_int_alt_in_meters(),
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-        )
-        self.conn.mav.send(go_msg)
+        self.send_position_target(self.wp, self.type_mask)
         msg = ask_msg(
             self.conn, MsgID.GLOBAL_POSITION_INT, interval=self.msg_pos_interval
         )
