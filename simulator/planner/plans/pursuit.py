@@ -7,16 +7,17 @@ import time
 from collections.abc import Callable
 from typing import Any, Self
 
+from simulator.config import Firmware
 from simulator.entities.riddata import RIDData
 from simulator.helpers.connections.mavlink.enums import MsgID
 from simulator.helpers.connections.mavlink.streams import ask_msg
-from simulator.helpers.coordinates import ENU
 from simulator.planner.action import Action
 from simulator.planner.actions import make_takeoff
 from simulator.planner.plan import Plan, PlanSpec
 from simulator.planner.step import Step
 
 RIDGetter = Callable[[int], RIDData | None]
+
 
 class PursueStep(Step):
     """
@@ -84,6 +85,7 @@ class PursuitPlan(Plan):
         self,
         name: str,
         target_sysid: int,
+        firmware: Firmware,
         speed: float = 3.0,
         takeoff_alt: float = 1.0,
         update_interval: float = 1.0,
@@ -91,7 +93,7 @@ class PursuitPlan(Plan):
         super().__init__(name=name)
         self.target_sysid = target_sysid
 
-        self.extend(Plan.arm(navigation_speed=speed))
+        self.extend(Plan.arm(firmware=firmware, navigation_speed=speed))
         self.add(make_takeoff(altitude=takeoff_alt))
 
         pursue_action = Action[Step](
@@ -113,6 +115,7 @@ class PursuitPlan(Plan):
                 "speed": speed,
                 "takeoff_alt": takeoff_alt,
                 "update_interval": update_interval,
+                "firmware": firmware,
             },
         )
 
@@ -129,4 +132,5 @@ class PursuitPlan(Plan):
             speed=kwargs.get("speed", 3.0),
             takeoff_alt=kwargs.get("takeoff_alt", 1.0),
             update_interval=kwargs.get("update_interval", 1.0),
+            firmware=kwargs["firmware"],
         )
