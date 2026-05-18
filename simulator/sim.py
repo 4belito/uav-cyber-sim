@@ -149,13 +149,11 @@ class Simulator(Generic[VehT]):
         """Save the logic configurations for each Vehicle."""
         self.logic_folder.mkdir(parents=True, exist_ok=True)
         for sysid, veh in self.vehicles.items():
+            home_heading = self.visualizer.gra_home(veh).heading
             logic_config = {
                 "sysid": sysid,
-                "gra_origin_dict": {
-                    "lat": self.gra_origin.lat,
-                    "lon": self.gra_origin.lon,
-                    "alt": self.gra_origin.alt,
-                },
+                "gra_origin_dict": self.gra_origin.unpose()._asdict(),
+                "home_heading": home_heading,
                 "veh_port_offset": veh.port_offset,
                 "oracle_port_offset": self.orc_port_offset,
                 "plan_spec": veh.plan.get_spec().to_dict(),
@@ -228,7 +226,7 @@ class Simulator(Generic[VehT]):
             "--slave 0",
             "--sim-address=127.0.0.1",
             "--home",
-            self.visualizer.home_str(veh),
+            self.visualizer.gra_home(veh).to_str(),
             f"--serial5=uart:/tmp/adsb_{sysid}_ardupilot:57600",
             "--defaults",
             ",".join(default_params + [veh_parms]),

@@ -83,7 +83,9 @@ def start_logic(config: LogicConfig):
     sysid = config["sysid"]
     veh_port_offset = config["veh_port_offset"]
     orc_port_offset = config["oracle_port_offset"]
-    gra_orign = GRA(**config["gra_origin_dict"])
+    d = config["gra_origin_dict"]
+    gra_origin = GRA(d["lat"], d["lon"], d["alt"])
+    home_heading = float(config.get("home_heading", 0.0))
     plan_spec = PlanSpec(**config["plan_spec"])
 
     ap_conn = create_tcp_conn(
@@ -106,7 +108,11 @@ def start_logic(config: LogicConfig):
     # Shared telemetry state
     data_logger = DataLogger(path=DATA_PATH / "msgs", sysid=sysid)
     rid_mng = RIDManager(
-        sysid, veh_port_offset, orc_port_offset, gra_orign, data_logger=data_logger
+        sysid,
+        veh_port_offset,
+        orc_port_offset,
+        gra_origin,
+        data_logger=data_logger,
     )
     # Router stop signal
     mav_mng = MAVLinkManager(
@@ -145,8 +151,9 @@ def start_logic(config: LogicConfig):
         bind_rid_getter(rid_mng.get_latest)
     logic = VehicleLogic(
         plan=plan,
-        gra_origin=gra_orign,
+        gra_origin=gra_origin,
         mav_manager=mav_mng,
+        home_heading=home_heading,
     )
 
     try:
@@ -194,6 +201,7 @@ class VehicleLogic:
         plan: Plan,
         gra_origin: GRA,
         mav_manager: MAVLinkManager,
+        home_heading: float = 0.0,
     ):
         # Vehicle Creation
         self.conn = mav_manager.conn
@@ -204,7 +212,7 @@ class VehicleLogic:
 
         # Plan
         self.plan = plan
-        self.plan.bind(self.gra_origin, mav_manager)
+        self.plan.bind(self.gra_origin, mav_manager, home_heading)
 
         # Communication properties (positions are local)
         self.rid: RIDData | None = None

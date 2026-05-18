@@ -42,25 +42,21 @@ class MissionElement(ABC):
     """
 
     def __init__(self, name: str = "action name", emoji: str = "📝") -> None:
-        # General Properties(Step and Action shared)
         self.class_name = self.__class__.__name__
         self.name = name
         self.emoji = emoji
         self.state = State.NOT_STARTED
-
-        ## Building properties
         self.prev: Self | None = None
         self.next: Self | None = None
-
-        ## live property(after building)
         self.origin: GRA
+        self.home_heading: float = 0.0
         self.mav_manager: MAVLinkManager
-        self.target_pos: ENU | None = None  # Default target (global) position
-        self.curr_pos: ENU | None = None  # Default current (global) position
+        self.target_pos: ENU | None = None
+        self.curr_pos: ENU | None = None
 
     @abstractmethod
     def act(self):
-        """Execute the mission lement action; override in subclasses."""
+        """Execute the mission element action; override in subclasses."""
         pass
 
     def reset(self):
@@ -71,15 +67,11 @@ class MissionElement(ABC):
         return f"{self.state.emoji} <{self.class_name} '{self.emoji} {self.name}'>"
 
     def bind(
-        self,
-        origin: GRA,
-        mav_manager: MAVLinkManager,
+        self, origin: GRA, mav_manager: MAVLinkManager, home_heading: float = 0.0
     ) -> None:
-        """
-        Binds the mission element to a MAVLink connection, origin, and vehicle
-        state.
-        """
+        """Bind the mission element to a MAVLink connection and origin pose."""
         self.origin = origin
+        self.home_heading = home_heading
         self.mav_manager = mav_manager
         logging.debug(
             f"🔗 Vehicle {self.sysid}: {self.class_name} '{self.name}' is now connected"
@@ -162,7 +154,9 @@ class Step(MissionElement, ABC):
 
     _POSITION_TYPE_MASK: int = 0b110111111000
 
-    def send_position_target(self, target: ENU, type_mask: int = _POSITION_TYPE_MASK) -> None:
+    def send_position_target(
+        self, target: ENU, type_mask: int = _POSITION_TYPE_MASK
+    ) -> None:
         """Encode and send SET_POSITION_TARGET_GLOBAL_INT for a local ENU target."""
         gra_wp = self.origin.to_abs(target)
         msg = self.conn.mav.set_position_target_global_int_encode(

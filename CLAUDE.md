@@ -122,8 +122,8 @@ After cloning: `git submodule update --init --recursive`
 Detailed architecture notes, confirmed behaviors, known bugs and fixes live in [`docs/context/`](docs/context/):
 
 - [`mavlink-routing.md`](docs/context/mavlink-routing.md) — port map, QGC connection model, ArduPilot MissionItemProtocol behavior
-- [`mission-planning.md`](docs/context/mission-planning.md) — AutoPlan order, upload protocol, PushMissionToGCS
-- [`ardupilot-sitl.md`](docs/context/ardupilot-sitl.md) — parm files, Gazebo Zephyr axis alignment, TECS/L1 tuning, plane-zephyr SITL physics model, frame-string routing, JSON model ROMFS gotcha
+- [`mission-planning.md`](docs/context/mission-planning.md) — AutoPlan order, upload protocol, PushMissionToGCS; GuidedPlan ArduPlane (PlaneTakeOff/PlaneGoTo/PlaneLand, AUTOLAND_DIR_OFF, origin_heading threading)
+- [`ardupilot-sitl.md`](docs/context/ardupilot-sitl.md) — parm files, Gazebo Zephyr axis alignment, TECS/L1 tuning, plane-zephyr SITL physics model, frame-string routing, JSON model ROMFS gotcha, AUTOLAND parameters (WP_DIST/WP_ALT/DIR_OFF)
 - [`copter-iris-sitl.md`](docs/context/copter-iris-sitl.md) — copter-iris frame: iris.json physics, copter-iris.parm, ROMFS auto-rebuild, trajectory equivalence vs gazebo-iris
 - [`gazebo-models.md`](docs/context/gazebo-models.md) — color template system (Jinja2), OGRE material scripts, physics/ardupilot/color_template layout, URI replacement pitfall
 - [`known-issues.md`](docs/context/known-issues.md) — fixed bugs and their root causes

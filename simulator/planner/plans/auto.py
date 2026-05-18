@@ -178,7 +178,6 @@ class AutoPlan(Plan):
             relative_home,
             relative_path,
             land,
-            # navigation_speed,
         )
 
         plan = cls(
@@ -208,30 +207,6 @@ class AutoPlan(Plan):
             altitude=0,
             terrain_alt=False,
         )
-        # if speed != 5.0:
-        #     # speed_type = 0 → airspeed, 1 → ground speed, 2 → climb rate
-        #     # speed = target speed (in m/s)
-        #     # throttle = throttle (usually -1 = unchanged)
-        #     speed_type = 1
-        #     throttle = -1
-        #     mission_loader.add(
-        #         ItemMsg(
-        #             sysid,
-        #             0,
-        #             0,
-        #             Frame.GLOBAL_RELATIVE_ALT,
-        #             Cmd.DO_CHANGE_SPEED,
-        #             0,
-        #             0,
-        #             speed_type,
-        #             speed,
-        #             throttle,
-        #             0,
-        #             0,
-        #             0,
-        #             0,
-        #         )
-        #     )
         # takeoff_alt lets the TAKEOFF command finish below cruise altitude so
         # TECS handles the final climb at controlled speed — prevents the abrupt
         # full-throttle → cruise transition that causes phugoid oscillation.

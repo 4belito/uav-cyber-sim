@@ -150,14 +150,12 @@ class Action(MissionElement, Generic[T]):
         super().reset()
 
     def bind(
-        self,
-        origin: GRA,
-        mav_manager: MAVLinkManager,
+        self, origin: GRA, mav_manager: MAVLinkManager, home_heading: float = 0.0
     ) -> None:
         """Bind the action to the MAVLink connection."""
         for step in self.steps:
-            step.bind(origin, mav_manager)
-        super().bind(origin, mav_manager)
+            step.bind(origin, mav_manager, home_heading)
+        super().bind(origin, mav_manager, home_heading)
         logging.debug(
             f"🔗 Vehicle {self.sysid}: {self.class_name} '{self.name}' is now connected"
         )

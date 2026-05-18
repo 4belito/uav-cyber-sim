@@ -224,6 +224,34 @@ c_lift_a = cla       =  3.7
 
 ---
 
+## AUTOLAND Mode Parameters (Zephyr-Specific)
+
+`AUTOLAND_WP_DIST` and `AUTOLAND_WP_ALT` are firmware defaults sized for full-size aircraft (400 m / 55 m). Both parm files override these for the Zephyr:
+
+```
+AUTOLAND_WP_DIST 100   # final approach starts 100 m before HOME
+AUTOLAND_WP_ALT  14    # ≈ 8° glide slope (tan(8°) × 100 m ≈ 14 m)
+```
+
+**Derivation:**
+- Minimum approach distance: TECS settling time ≈ 3 s × 11 m/s = 33 m + turn radius margin (~12 m at 45° bank) → hard floor ~50 m, comfortable at 75–100 m.
+- Glide slope must stay within `PTCH_LIM_MIN_DEG = -10°`; 8° is within limits.
+- Base leg (traffic pattern) is at `AUTOLAND_WP_DIST / 3 = 33 m` perpendicular — manageable.
+
+**These appear in both `gazebo-zephyr.parm` and `plane-zephyr.parm`** — they are model-specific and must be kept in sync.
+
+**Runtime override:** can be sent as `PARAM_SET` messages before AUTOLAND mode switch. In `PlaneLand`, `approach_alt` overrides `AUTOLAND_WP_ALT` and `autoland_wp_dist` overrides `AUTOLAND_WP_DIST`. Both default to `None` (use parm file).
+
+**`AUTOLAND_DIR_OFF`:** offset added to the GPS ground course captured during TAKEOFF mode to set the approach heading. Must be set **before** takeoff (before ground speed exceeds 5 m/s in TAKEOFF mode). Set in `PlaneTakeOff.exec_fn()` as `(approach_heading - origin_heading) % 360`. After takeoff, this parameter has no effect on the stored `initial_direction`.
+
+**Traffic pattern:** AUTOLAND always generates a base leg (90° turn before final). Cannot be removed without AUTO mode. With 100 m, the base leg is 33 m perpendicular — minimum viable footprint for this mode.
+
+**`DO_SET_HOME` yaw has no effect on AUTOLAND approach direction.** AUTOLAND uses `takeoff_state.initial_direction` (frozen at takeoff), not home yaw. Only `AUTOLAND_DIR_OFF` (set pre-takeoff) changes the approach bearing.
+
+> **Confidence:** Confirmed from ArduPilot source (`mode_autoland.cpp`, `check_takeoff_direction()`) and ArduPilot Discourse AUTOLAND thread.
+
+---
+
 ## `eeprom.bin` Parameter Caching
 
 ArduPilot SITL persists parameters to `simulator/ardupilot_logs/veh_N/eeprom.bin` between runs. If you change `.parm` files but SITL still uses old values, delete `eeprom.bin`:

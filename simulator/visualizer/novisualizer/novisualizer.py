@@ -20,7 +20,7 @@ class NoVisualizer(Visualizer[NovisVehicle]):
 
     def __init__(self, gra_origin: GRAPose, model: str = "quad"):
         super().__init__(gra_origin)
-        self.moddel = model
+        self.model = model
 
     @property
     def name(self) -> str:
@@ -31,9 +31,9 @@ class NoVisualizer(Visualizer[NovisVehicle]):
         """Convert a Vehicle to a NovisVehicle with GRA home position."""
         return NovisVehicle(model=vehicle.model, home=vehicle.home)
 
-    def home_str(self, vehicle: SimVehicle) -> str:
-        """Add GRA location to the vehicle command."""
-        return self.gra_origin.to_abs(vehicle.home).to_str()
+    def gra_home(self, vehicle: SimVehicle) -> GRAPose:
+        """Return the home position for a given Vehicle."""
+        return self.gra_origin.to_abs(vehicle.home)
 
     def launch(self, port_offsets: dict[int, int]):
         """Print a message indicating that no visualizer will be launched."""

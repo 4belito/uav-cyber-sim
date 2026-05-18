@@ -81,9 +81,9 @@ class Gazebo(Visualizer[GazVehicle]):
         """Name of the visualizer."""
         return "Gazebo"
 
-    def home_str(self, vehicle: SimVehicle) -> str:
-        """Return the home position of the vehicle as a string for Gazebo commands."""
-        return self.gra_origin.to_str()
+    def gra_home(self, vehicle: SimVehicle) -> GRAPose:
+        """Return the home position for a given Vehicle."""
+        return self.gra_origin.unpose().pose(vehicle.home.heading)
 
     def launch(self, port_offsets: dict[int, int]):
         """Launch the Gazebo simulator with the specified Vehicle and waypoints."""

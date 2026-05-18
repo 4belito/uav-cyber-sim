@@ -30,8 +30,8 @@ class Visualizer(ABC, Generic[VehT]):
         pass
 
     @abstractmethod
-    def home_str(self, vehicle: SimVehicle) -> str:
-        """Provide home position of the vehicle in the visualizer corredinates."""
+    def gra_home(self, vehicle: SimVehicle) -> GRAPose:
+        """Return the home position for a given Vehicle."""
         pass
 
     @abstractmethod
@@ -41,7 +41,7 @@ class Visualizer(ABC, Generic[VehT]):
 
     @abstractmethod
     def show(self) -> None:
-        """Show a stathic preview visualization."""
+        """Show a static preview visualization."""
         pass
 
     # ===================================

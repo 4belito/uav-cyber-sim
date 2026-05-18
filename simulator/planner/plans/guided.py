@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Any, Literal, Self
+from typing import Any, Self
 
+from simulator.config import Firmware
 from simulator.helpers.coordinates import ENU, ENUPose, ENUs
-from simulator.planner.actions import make_hold, make_land, make_path, make_takeoff
+from simulator.helpers.math import enu_bearing
+from simulator.planner.actions import (
+    make_hold,
+    make_land,
+    make_path,
+    make_takeoff,
+)
 from simulator.planner.plan import Plan, PlanSpec
 
 
@@ -17,26 +24,45 @@ class GuidedPlan(Plan):
         self,
         name: str,
         wps: ENUs,
-        wp_margin: float = 0.5,
+        firmware: Firmware,
+        wp_margin: float | None = None,
         navigation_speed: float = 5,
         takeoff_alt: float = 1.0,
+        land_bearing: float | None = None,
+        autoland_alt: float | None = None,
+        autoland_wp_dist: float | None = None,
         land: bool = True,
-        firmware: Literal["ArduPlane", "ArduCopter"] = "ArduCopter",
     ):
         super().__init__(name=name)
-        self.extend(
-            Plan.arm(
-                navigation_speed=navigation_speed,
+        # Skip home (first) and last WP for navigation — matches AutoPlan's
+        # save_basic_mission which uses wps[1:-1] for nav waypoints.
+        nav_wps = wps[1:-1] if len(wps) > 2 else wps
+        # Raw world-bearing; home_heading subtraction deferred to PlaneTakeOff.exec_fn.
+        if land_bearing is None and firmware == "ArduPlane" and len(wps) >= 2:
+            land_bearing = enu_bearing(wps[-2], wps[-1])
+        self.extend(Plan.arm(navigation_speed=navigation_speed, firmware=firmware))
+        self.add(
+            make_takeoff(
+                altitude=takeoff_alt,
                 firmware=firmware,
+                land_bearing=land_bearing,
             )
         )
-        self.add(make_takeoff(altitude=takeoff_alt))
-        self.add(make_path(wps=wps, wp_margin=wp_margin))
-        land_wp = ENU(wps[-1].x, wps[-1].y, 0)
-        if land:
-            self.add(make_land(final_wp=land_wp))
-        else:
+        self.add(make_path(wps=nav_wps, wp_margin=wp_margin, firmware=firmware))
+        if not land:
             self.add(make_hold())
+        elif firmware == "ArduPlane":
+            land_wp = ENUPose(wps[-1].x, wps[-1].y, 0, land_bearing or 0.0)
+            self.add(
+                make_land(
+                    land_wp=land_wp,
+                    firmware=firmware,
+                    autoland_alt=autoland_alt,
+                    autoland_wp_dist=autoland_wp_dist,
+                )
+            )
+        else:
+            self.add(make_land(firmware=firmware))
 
         self._spec = PlanSpec(
             plan_class="GuidedPlan",
@@ -46,6 +72,9 @@ class GuidedPlan(Plan):
                 "wp_margin": wp_margin,
                 "navigation_speed": navigation_speed,
                 "takeoff_alt": takeoff_alt,
+                "land_bearing": land_bearing,
+                "autoland_alt": autoland_alt,
+                "autoland_wp_dist": autoland_wp_dist,
                 "land": land,
                 "firmware": firmware,
             },
@@ -54,7 +83,7 @@ class GuidedPlan(Plan):
     @classmethod
     def from_spec(cls, **kwargs: Any) -> GuidedPlan:
         """Create GuidedPlan from specification dictionary."""
-        missing = {"name", "wps"} - kwargs.keys()
+        missing = {"name", "wps", "firmware"} - kwargs.keys()
         if missing:
             raise ValueError(f"Missing spec fields: {sorted(missing)}")
 
@@ -63,11 +92,14 @@ class GuidedPlan(Plan):
         return cls(
             name=kwargs["name"],
             wps=enu_wps,
-            wp_margin=kwargs.get("wp_margin", 0.5),
+            wp_margin=kwargs.get("wp_margin"),
             navigation_speed=kwargs.get("navigation_speed", 5),
             takeoff_alt=kwargs.get("takeoff_alt", 1.0),
+            land_bearing=kwargs.get("land_bearing"),
+            autoland_alt=kwargs.get("autoland_alt"),
+            autoland_wp_dist=kwargs.get("autoland_wp_dist"),
             land=kwargs.get("land", True),
-            firmware=kwargs.get("firmware", "ArduCopter"),
+            firmware=kwargs["firmware"],
         )
 
     @classmethod
@@ -76,12 +108,16 @@ class GuidedPlan(Plan):
         xlen: float,
         ylen: float,
         alt: float,
+        firmware: Firmware,
         name: str = "guided_rectangle_plan",
         enu_origin: ENUPose | None = None,
         relative_home: ENUPose | None = None,
         clockwise: bool = True,
-        wp_margin: float = 0.5,
+        wp_margin: float | None = None,
         navigation_speed: float = 5,
+        land_bearing: float | None = None,
+        autoland_alt: float | None = None,
+        autoland_wp_dist: float | None = None,
         land: bool = True,
     ) -> Self:
         """Create a rectangular guided plan."""
@@ -94,11 +130,15 @@ class GuidedPlan(Plan):
         )
         return cls.from_relative_path(
             relative_path=rel_wps,
+            firmware=firmware,
             enu_origin=enu_origin,
             relative_home=relative_home,
             name=name,
             wp_margin=wp_margin,
             navigation_speed=navigation_speed,
+            land_bearing=land_bearing,
+            autoland_alt=autoland_alt,
+            autoland_wp_dist=autoland_wp_dist,
             land=land,
         )
 
@@ -106,13 +146,16 @@ class GuidedPlan(Plan):
     def from_relative_path(
         cls,
         relative_path: ENUs,
+        firmware: Firmware,
         enu_origin: ENUPose | None = None,
         relative_home: ENUPose | None = None,
         name: str = "guided_plan",
-        wp_margin: float = 0.5,
+        wp_margin: float | None = None,
         navigation_speed: float = 5,
+        land_bearing: float | None = None,
+        autoland_alt: float | None = None,
+        autoland_wp_dist: float | None = None,
         land: bool = True,
-        firmware: Literal["ArduPlane", "ArduCopter"] = "ArduCopter",
     ) -> Self:
         """Create GuidedPlan from relative path."""
         if enu_origin is None:
@@ -125,6 +168,9 @@ class GuidedPlan(Plan):
             wps=wps,
             wp_margin=wp_margin,
             navigation_speed=navigation_speed,
+            land_bearing=land_bearing,
+            autoland_alt=autoland_alt,
+            autoland_wp_dist=autoland_wp_dist,
             land=land,
             firmware=firmware,
         )
@@ -134,14 +180,17 @@ class GuidedPlan(Plan):
         cls,
         side_len: float,
         alt: float,
+        firmware: Firmware,
         name: str = "guided_square_plan",
         enu_origin: ENUPose | None = None,
         relative_home: ENUPose | None = None,
         clockwise: bool = True,
-        wp_margin: float = 0.5,
+        wp_margin: float | None = None,
         navigation_speed: float = 5,
+        land_bearing: float | None = None,
+        autoland_alt: float | None = None,
+        autoland_wp_dist: float | None = None,
         land: bool = True,
-        firmware: Literal["ArduPlane", "ArduCopter"] = "ArduCopter",
     ) -> Self:
         """Create a square guided plan."""
         if enu_origin is None:
@@ -158,5 +207,9 @@ class GuidedPlan(Plan):
             name=name,
             wp_margin=wp_margin,
             navigation_speed=navigation_speed,
+            land_bearing=land_bearing,
+            autoland_alt=autoland_alt,
+            autoland_wp_dist=autoland_wp_dist,
             land=land,
+            firmware=firmware,
         )

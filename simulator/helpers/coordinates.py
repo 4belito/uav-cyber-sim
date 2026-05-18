@@ -138,6 +138,14 @@ class LLA(NamedTuple):
         """Convert this LLA point into an LLAPose with the given heading."""
         return LLAPose(self.lat, self.lon, self.alt, heading)
 
+    def to_global_int(self) -> tuple[int, int, int]:
+        """MAVLink GLOBAL_POSITION_INT fields: lat_e7, lon_e7, alt_mm."""
+        return int(self.lat * 1e7), int(self.lon * 1e7), int(self.alt * 1e3)
+
+    def to_global_int_alt_in_meters(self) -> tuple[int, int, float]:
+        """MAVLink fields with altitude in meters instead of mm."""
+        return int(self.lat * 1e7), int(self.lon * 1e7), self.alt
+
     @classmethod
     def distance(cls, a: Self, b: Self) -> float:
         """
@@ -206,6 +214,14 @@ class LLAPose(NamedTuple):
     def unpose(self) -> LLA:
         """Drop heading and return the LLA point."""
         return LLA(self.lat, self.lon, self.alt)
+
+    def to_global_int(self) -> tuple[int, int, int]:
+        """MAVLink GLOBAL_POSITION_INT fields: lat_e7, lon_e7, alt_mm."""
+        return int(self.lat * 1e7), int(self.lon * 1e7), int(self.alt * 1e3)
+
+    def to_global_int_alt_in_meters(self) -> tuple[int, int, float]:
+        """MAVLink fields with altitude in meters instead of mm."""
+        return int(self.lat * 1e7), int(self.lon * 1e7), self.alt
 
     @classmethod
     def nan(cls) -> Self:
@@ -355,26 +371,6 @@ class GRA(LLA):
         lon = lon_e7 / 1e7
         alt = alt_mm / 1e3
         return GRA(lat, lon, alt)
-
-    def to_global_int(self) -> tuple[int, int, int]:
-        """
-        Convert a GRA to MAVLink GLOBAL_POSITION_INT message fields.
-        with alt in mm (it agrees with relative altitude).
-        """
-        lat = int(self.lat * 1e7)
-        lon = int(self.lon * 1e7)
-        alt = int(self.alt * 1e3)
-        return lat, lon, alt
-
-    def to_global_int_alt_in_meters(self) -> tuple[int, int, float]:
-        """
-        Convert a GRA to MAVLink GLOBAL_POSITION_INT message fields
-        with alt in meters (it agrees with absolute altitude).
-        """
-        lat = int(self.lat * 1e7)
-        lon = int(self.lon * 1e7)
-        alt = self.alt  # Altitude in meters
-        return lat, lon, alt
 
     @staticmethod
     def from_msn_item_int(lat_e7: int, lon_e7: int, alt_mm: int) -> GRA:
@@ -586,7 +582,10 @@ class GRAPose(LLAPose):
         relative_home: ENUPose,
         relative_path: list[ENU],
     ) -> GRAs:
-        """Absolute GRA waypoints from a GRAPose origin, relative home, and relative path."""
+        """
+        Absolute GRA waypoints from a GRAPose origin, relative home,
+        and relative path.
+        """
         gra_home = origin.to_abs(relative_home)
         return GRAPose.unpose_all(gra_home.to_abs_all(relative_path))
 

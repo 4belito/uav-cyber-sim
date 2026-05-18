@@ -69,10 +69,10 @@ class QGC(Visualizer[QGCVehicle]):
         """Add QGroundControl telematry serial port."""
         return ["--serial6", f"udpclient:127.0.0.1:{BasePort.QGC}"]
 
-    def home_str(self, vehicle: SimVehicle) -> str:
-        """Add GRA location to the vehicle command."""
+    def gra_home(self, vehicle: SimVehicle) -> GRAPose:
+        """Return the home position for a given Vehicle."""
         visveh = self.vehicles[vehicle.sysid]
-        return visveh.home.to_str()
+        return visveh.home
 
     def launch(self, port_offsets: dict[int, int]):
         """Launch the Gazebo."""

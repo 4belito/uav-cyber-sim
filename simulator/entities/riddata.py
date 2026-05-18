@@ -40,21 +40,9 @@ class RIDData:
         """Convert RIDData into a serializable dictionary."""
         return {
             "sysid": self.sysid,
-            "gra_pos": {
-                "lat": self.gra_pos.lat,
-                "lon": self.gra_pos.lon,
-                "alt": self.gra_pos.alt,
-            },
-            "enu_pos": {
-                "x": self.enu_pos.x,
-                "y": self.enu_pos.y,
-                "z": self.enu_pos.z,
-            },
-            "enu_vel": {
-                "x": self.enu_vel.x,
-                "y": self.enu_vel.y,
-                "z": self.enu_vel.z,
-            },
+            "gra_pos": self.gra_pos._asdict(),
+            "enu_pos": self.enu_pos._asdict(),
+            "enu_vel": self.enu_vel._asdict(),
             "speed": self.speed,
             "cog": self.cog,
             "ele": self.ele,

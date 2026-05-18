@@ -8,10 +8,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from typing import Any, ClassVar, Literal, TypeVar
+from typing import Any, ClassVar, TypeVar
 
+from simulator.config import Firmware
 from simulator.helpers.ardupilot.firmware import guided_mode
-from simulator.helpers.connections.mavlink.enums import CopterMode, PlaneMode
 from simulator.helpers.coordinates import ENU, XY, ENUs, XYs
 from simulator.planner.action import Action
 from simulator.planner.actions import (
@@ -119,9 +119,9 @@ class Plan(ActionSequence, ABC):
     @classmethod
     def arm(
         cls,
+        firmware: Firmware,
         name: str = "ARM",
         navigation_speed: float = 5,
-        firmware: Literal["ArduPlane", "ArduCopter"] = "ArduCopter",
     ) -> ActionSequence:
         """Create a plan to execute a mission in auto mode."""
         actions = ActionSequence(name, emoji="🔐")
