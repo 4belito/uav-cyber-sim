@@ -1,5 +1,6 @@
 # Declared globally so it can be used in a FROM instruction (Dockerfile spec requirement).
 # Override with --build-arg NETSIM_IMAGE=uli-net-sim:latest to include the net-sim layer.
+ARG NETSIM_IMAGE=ubuntu:22.04
 FROM ubuntu:22.04 AS main
 
 SHELL ["/bin/bash", "--login", "-c"]
@@ -16,6 +17,7 @@ RUN apt-get update && apt-get install --yes --no-install-recommends \
     git \
     gnome-terminal \
     locales \
+    psmisc \
     sudo \
     socat \
     xterm \
@@ -134,7 +136,6 @@ ENV PATH="/home/ubuntu/.local/bin:${PATH}"
 # =========================
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/home/ubuntu/.local/bin:${PATH}"
-RUN uv sync --project /home/ubuntu/uav-cyber-sim
 
 # =========================
 # BUILD ARDUPILOT GAZEBO PLUGIN
@@ -158,7 +159,7 @@ ENV GAZEBO_MODEL_PATH="/home/ubuntu/uav-cyber-sim/ardupilot_gazebo/models:${GAZE
 # Pass --build-arg NETSIM_IMAGE=uli-net-sim:latest to enable.
 # Defaults to a plain ubuntu image so the build works without the local image.
 # =========================
-FROM uli-net-sim:latest AS netsim
+FROM ${NETSIM_IMAGE:-ubuntu:22.04} AS netsim
 USER root
 RUN mkdir -p /deps /usr/uli-net-sim && \
     if [ -d /usr/uli-net-sim-real ]; then \
