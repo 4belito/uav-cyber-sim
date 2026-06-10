@@ -13,6 +13,7 @@ class VehicleRuntime:
 
     sysid: int
     conn: MAVConnection
+    cmd_conn: MAVConnection
     processes: dict[SimProcess, Popen[bytes]] = field(
         default_factory=dict[SimProcess, Popen[bytes]]
     )

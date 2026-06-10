@@ -64,6 +64,7 @@ class GCS:
         oracle_port_offset: int,
         terminals: list[SimProcess],
         suppress: list[SimProcess],
+        intervention: dict[str, float] | None = None,
     ) -> None:
         # Configure logging for this GCS process
         self.name = name
@@ -83,6 +84,8 @@ class GCS:
             timeout=-1,
             identity=f"gcs-{self.name}".encode(),
         )
+
+        self.intervention = intervention
 
         # Data structures for trajectory logging
         self.paths: dict[int, GRAs] = {sysid: [] for sysid in self.sysids}
@@ -210,19 +213,74 @@ class GCS:
             src_sysid=255,  # estándar GCS sysid
             src_compid=190,  # estándar GCS commponent ID
         )
+        cmd_conn = create_udp_conn(
+            base_port=BasePort.GCS_CMD,
+            offset=veh_config["veh_port_offset"],
+            mode="sender",
+            src_sysid=255,
+            src_compid=190,
+        )
         logging.info(f"Vehicle {sysid} connected")
-        return VehicleRuntime(sysid=sysid, conn=conn, processes=procs)
+        return VehicleRuntime(sysid=sysid, conn=conn, cmd_conn=cmd_conn, processes=procs)
 
     def _monitor_vehicle(self, sysid: int):
         logging.info(f"Monitoring Vehicle {sysid}")
+        intervention_sent = False
+        trigger_seq = int(self.intervention.get("trigger_seq", 1)) if self.intervention else 0
+        conn = self.conns[sysid]
         try:
-            while not self._is_vehicle_plan_done(sysid):
-                # self._get_global_pos(sysid)
-                # self._save_pos()
-                pass
+            while True:
+                msg = conn.recv_match(blocking=True, timeout=1.0)
+                if msg is None:
+                    continue
+                msg_type = msg.get_type()
+
+                if msg_type == "STATUSTEXT" and msg.text == "LOGIC_DONE":
+                    conn.mav.command_ack_send(
+                        command=CustomCmd.LOGIC_DONE,
+                        result=mavlink.MAV_RESULT_ACCEPTED,
+                    )
+                    logging.info(f"✅ Vehicle {sysid} completed its mission")
+                    break
+
+                if (
+                    msg_type == "MISSION_CURRENT"
+                    and self.intervention
+                    and not intervention_sent
+                    and msg.seq >= trigger_seq
+                ):
+                    self._send_intervention(sysid)
+                    intervention_sent = True
         finally:
             self._remove_vehicle(sysid)
             logging.debug(f"Monitor thread finished for Vehicle {sysid}")
+
+    def _send_intervention(self, sysid: int) -> None:
+        iv = self.intervention
+        if iv is None:
+            return
+        cmd_conn = self.vehruntimes[sysid].cmd_conn
+        logging.info(f"GCS intervention: switching vehicle {sysid} to GUIDED and repositioning")
+        cmd_conn.mav.set_mode_send(
+            target_system=sysid,
+            base_mode=mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
+            custom_mode=4,  # GUIDED for ArduCopter
+        )
+        cmd_conn.mav.command_int_send(
+            target_system=sysid,
+            target_component=1,
+            frame=mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT,
+            command=192,  # MAV_CMD_DO_REPOSITION
+            current=0,
+            autocontinue=0,
+            param1=-1.0,  # speed: no change
+            param2=1.0,   # MAV_DO_REPOSITION_FLAGS_CHANGE_MODE
+            param3=0.0,
+            param4=float("nan"),
+            x=int(iv["target_lat"] * 1e7),
+            y=int(iv["target_lon"] * 1e7),
+            z=float(iv["target_alt"]),
+        )
 
     def _save_pos(self):
         """Save the current global position of each Vehicle to their trajectory path."""
@@ -245,27 +303,6 @@ class GCS:
             if time.time() - t0 > timeout:
                 raise RuntimeError(f"PTY not created: {path}")
             time.sleep(0.05)
-
-    def _is_vehicle_plan_done(self, sysid: int) -> bool:
-        """
-        Listen for a STATUSTEXT('LOGIC_DONE') message and respond with a
-        COMMAND_ACK mavlink message.
-        """
-        conn = self.conns[sysid]
-        msg = conn.recv_match(type="STATUSTEXT", blocking=False)
-
-        if not msg:
-            return False
-
-        if msg.text == "LOGIC_DONE":
-            conn.mav.command_ack_send(
-                command=CustomCmd.LOGIC_DONE,
-                result=mavlink.MAV_RESULT_ACCEPTED,
-            )
-            logging.info(f"✅ Vehicle {sysid} completed its mission")
-            return True
-
-        return False
 
     def _terminate_veh_processes(self, sysid: int) -> None:
         runtime = self.vehruntimes.get(sysid)

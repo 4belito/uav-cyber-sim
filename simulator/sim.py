@@ -62,6 +62,7 @@ class Simulator(Generic[VehT]):
         self.verbose = verbose
         self.n_instances = 0
         self.parms: dict[int, str] = {}
+        self.intervention: dict[str, float] | None = None
         # TODO: This is actually cell size and is more an oracle property(check design)
         self.transmission_range = transmission_range  # meters
         setup_logging(
@@ -79,6 +80,7 @@ class Simulator(Generic[VehT]):
                 BasePort.RID_UP,
                 BasePort.RID_DOWN,
                 BasePort.GCS,
+                BasePort.GCS_CMD,
             ],
             len(self.vehicles),
         )
@@ -171,6 +173,7 @@ class Simulator(Generic[VehT]):
                 "vehicles": [self._build_veh_config(sysid) for sysid in gcs.sysids],
                 "terminals": list(self.terminals),
                 "suppress": list(self.suppress),
+                "intervention": self.intervention,
             }
 
             config_path = self.gcs_folder / f"gcs_config_{gcs_name}.json"

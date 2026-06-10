@@ -19,6 +19,19 @@ from simulator.helpers.connections.mavlink.streams import (
 from simulator.helpers.logging.data_logger import DataLogger
 from simulator.runtime.vehicle.state import VehicleState
 
+# SITL messages forwarded to the GCS telemetry channel.
+_GCS_TELEMETRY_TYPES: frozenset[str] = frozenset(
+    {
+        "HEARTBEAT",
+        "GLOBAL_POSITION_INT",
+        "MISSION_CURRENT",
+        "STATUSTEXT",
+        "VFR_HUD",
+        "ATTITUDE",
+        "SYS_STATUS",
+    }
+)
+
 
 class MAVLinkManager(threading.Thread):
     """
@@ -27,18 +40,21 @@ class MAVLinkManager(threading.Thread):
     - Receives MAVLink messages (RX)
     - Sends MAVLink messages (TX)
     - Logs all traffic
+    - Optionally forwards telemetry to a GCS connection
     """
 
     def __init__(
         self,
         conn: MAVConnection,
         data_logger: DataLogger,
+        gcs_conn: MAVConnection | None = None,
     ) -> None:
         super().__init__(daemon=True)
         self.conn = conn
         self.state = VehicleState.create()
         self._stop_event = threading.Event()
         self.data_logger = data_logger
+        self.gcs_conn = gcs_conn
 
     def run(self) -> None:
         """Continuously read messages and update state until stopped."""
@@ -59,6 +75,12 @@ class MAVLinkManager(threading.Thread):
                     continue
 
                 self.state.update(msg)
+
+                if self.gcs_conn is not None and msg.get_type() in _GCS_TELEMETRY_TYPES:
+                    try:
+                        self.gcs_conn.mav.send(msg)
+                    except Exception as fwd_exc:
+                        logging.debug("GCS telemetry forward error: %s", fwd_exc)
 
                 # Log all received MAVLink messages with their type and timestamp
                 self.data_logger.write(

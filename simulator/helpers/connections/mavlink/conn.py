@@ -52,12 +52,18 @@ def create_udp_conn(
     mode: Literal["receiver", "sender"],
     src_sysid: int,
     src_compid: int,
+    wait_hb: bool = True,
 ) -> MAVConnection:
-    """Create a MAVLink-over-UDP connection."""
+    """Create a MAVLink-over-UDP connection.
+
+    Pass wait_hb=False for receiver sockets where no initial heartbeat is
+    expected (e.g. command-channel listeners that only receive on demand).
+    """
     port = base_port + offset
     if mode == "receiver":
-        conn = connect(f"udp:127.0.0.1:{port}", src_sysid, src_compid)  # recv+send
-        conn.wait_heartbeat()
+        conn = connect(f"udp:127.0.0.1:{port}", src_sysid, src_compid)
+        if wait_hb:
+            conn.wait_heartbeat()
     else:  # mode == "sender"
         conn = connect(f"udpout:127.0.0.1:{port}", src_sysid, src_compid)  # send-only
     return conn

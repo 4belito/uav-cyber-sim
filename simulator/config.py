@@ -58,6 +58,7 @@ class BasePort(IntEnum):
     RID_UP = 5764  # Remote ID (LOGIC->ORC)
     RID_DOWN = 5765  # Remote ID (ORC->LOGIC)
     GCS = 5766  # Ground Control Station (UDP: LOGIC->GCS)
+    GCS_CMD = 5768  # GCS command channel (UDP: GCS->LOGIC)
 
     # Universal Ports (fixed, not per UAV or GCS)
     ORC_DONE = 5767  # ZMQ ROUTER/DEALER (->ORC)

@@ -35,6 +35,7 @@ from simulator.params.simulation import (
     REMOTE_ID_FREQUENCY,
 )
 from simulator.planner import Action, Plan, PlanSpec, State, Step
+from simulator.runtime.vehicle.gcs_cmd_forwarder import GCSCommandForwarder
 from simulator.runtime.vehicle.mav_manager import MAVLinkManager
 from simulator.runtime.vehicle.rid_manager import RIDManager
 from simulator.runtime.vehicle.state import VehicleStateP
@@ -104,6 +105,15 @@ def start_logic(config: LogicConfig):
         src_compid=140,
     )
     logging.debug(f"Vehicle {sysid}: GCS connection established")
+    gcs_cmd_conn = create_udp_conn(
+        base_port=BasePort.GCS_CMD,
+        offset=veh_port_offset,
+        mode="receiver",
+        src_sysid=connection_id(sysid),
+        src_compid=140,
+        wait_hb=False,
+    )
+    logging.debug(f"Vehicle {sysid}: GCS command channel open")
 
     # Shared telemetry state
     data_logger = DataLogger(path=DATA_PATH / "msgs", sysid=sysid)
@@ -118,6 +128,7 @@ def start_logic(config: LogicConfig):
     mav_mng = MAVLinkManager(
         conn=ap_conn,
         data_logger=data_logger,
+        gcs_conn=cs_conn,
     )
 
     ap_conn.wait_heartbeat()
@@ -136,6 +147,9 @@ def start_logic(config: LogicConfig):
 
     mav_mng.start()
     logging.debug(f"Vehicle {sysid}: MAVLink router started")
+    gcs_cmd_fwd = GCSCommandForwarder(src_conn=gcs_cmd_conn, dst_conn=ap_conn)
+    gcs_cmd_fwd.start()
+    logging.debug(f"Vehicle {sysid}: GCS command forwarder started")
     hb = wait_for_vehicle_link(mav_mng.state, timeout=10.0)
     logging.debug(
         "Vehicle %s: first heartbeat received from system=%s component=%s",
@@ -186,6 +200,7 @@ def start_logic(config: LogicConfig):
         # 1. stop producers
         mav_mng.stop()
         rid_mng.stop()
+        gcs_cmd_fwd.stop()
 
         # 2. close connections
         cs_conn.close()
