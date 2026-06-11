@@ -17,6 +17,7 @@ class SimProcess(StrEnum):
     GCS = "gcs"
     ADSB_SOCAT = "adsb_socat"
     ADSB_INJECTOR = "adsb_injector"
+    MITM = "mitm"
 
 
 def create_process(

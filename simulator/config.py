@@ -59,6 +59,11 @@ class BasePort(IntEnum):
     RID_DOWN = 5765  # Remote ID (ORC->LOGIC)
     GCS = 5766  # Ground Control Station (UDP: LOGIC->GCS)
     GCS_CMD = 5768  # GCS command channel (UDP: GCS->LOGIC)
+    # Man-in-the-middle interposition ports (only used when a MITM is enabled).
+    # Placed well above the per-UAV comms cluster so they never collide with
+    # another vehicle's block (safe up to a few hundred UAVs at +10 stride).
+    MITM_TELEM = 9000  # MITM telemetry listener (UDP: LOGIC->MITM->GCS)
+    MITM_CMD = 9001  # MITM command listener (UDP: GCS->MITM->LOGIC)
 
     # Universal Ports (fixed, not per UAV or GCS)
     ORC_DONE = 5767  # ZMQ ROUTER/DEALER (->ORC)

@@ -14,6 +14,8 @@ class VehicleConfig(TypedDict):
     logic_cmd: str
     socat_cmd: str
     adsb_cmd: str
+    mitm: bool
+    mitm_cmd: str
 
 
 # Note: This is a simple configuration schema for the GCS.

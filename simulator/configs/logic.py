@@ -12,3 +12,4 @@ class LogicConfig(TypedDict):
     gra_origin_dict: dict[str, float]
     plan_spec: dict[str, Any]
     home_heading: NotRequired[float]
+    mitm: NotRequired[bool]

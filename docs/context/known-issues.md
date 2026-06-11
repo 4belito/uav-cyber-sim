@@ -159,6 +159,27 @@ StrEnum value (`"zephyr"`) is used instead of the resolved Gazebo name (`"gazebo
 
 ---
 
+## [FIXED] GCS Intervention Never Triggered — `recv_match` Drain Bug
+
+**Symptom:** `GCS._monitor_vehicle` never fired the intervention even though MISSION_CURRENT
+messages were flowing from SITL. No "GCS intervention" log line appeared.
+
+**Root cause (two-part):**
+
+1. **Message drain:** `_is_vehicle_plan_done` called `conn.recv_match(type="STATUSTEXT", blocking=False)`. pymavlink's `recv_match` loops internally, reading and **discarding** all non-matching messages until it either finds a match or exhausts the socket buffer. Every loop iteration consumed and dropped all pending `MISSION_CURRENT` messages before the intervention check ever ran.
+
+2. **Missing SITL→GCS telemetry forwarding:** Even after fixing (1), the GCS could never see `MISSION_CURRENT` because `MAVLinkManager` read all SITL messages into its internal state but never forwarded them to `cs_conn` (the UDP channel to the GCS). The GCS only received heartbeats and `LOGIC_DONE` from Logic.
+
+**Fixes applied:**
+
+1. `simulator/gcs.py` `_monitor_vehicle`: replaced the two competing `recv_match` calls with a **single blocking `recv_match` loop** that dispatches on message type — one branch handles `STATUSTEXT/LOGIC_DONE`, another handles `MISSION_CURRENT` for the intervention trigger. `_is_vehicle_plan_done` was deleted.
+
+2. `simulator/runtime/vehicle/mav_manager.py` `MAVLinkManager`: added optional `gcs_conn: MAVConnection | None` parameter. In `run()`, messages whose type is in `_GCS_TELEMETRY_TYPES` are forwarded to `gcs_conn` after updating internal state. `logic.py` passes `cs_conn` as `gcs_conn`.
+
+> **Confidence:** Confirmed from GCS log showing "GCS intervention" line appearing after both fixes applied.
+
+---
+
 ## [KNOWN] `mypy` / `ruff` Not in Primary `.venv`
 
 `ruff` and `mypy` are not installed in the main `.venv` (only in `.venv_broken`). Use `uv run python -c "..."` for quick import checks. For linting, use the tools via their full path in `.venv_broken/bin/` if needed, or run `uv sync` to reinstall dev dependencies.

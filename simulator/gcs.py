@@ -142,6 +142,25 @@ class GCS:
         sysid = veh_config["sysid"]
 
         procs: dict[SimProcess, Popen[bytes]] = {}
+        mitm_enabled = veh_config.get("mitm", False)
+        # -----------------------
+        # 0. MITM proxy (interposed on GCS<->Logic links)
+        # -----------------------
+        # Launched first so its UDP listeners are bound before Logic/GCS begin
+        # sending. When enabled, Logic and the GCS retarget their senders at the
+        # MITM (see logic.py / cmd_conn below) and the MITM relays onward.
+        if mitm_enabled and veh_config["mitm_cmd"]:
+            p_mitm = create_process(
+                veh_config["mitm_cmd"],
+                after="exec bash",
+                visible=SimProcess.MITM in self.terminals,
+                suppress_output=SimProcess.MITM in self.suppress,
+                title=f"MITM: Vehicle {sysid}",
+                env_cmd=ENV_CMD_PYT,
+                new_process_group=True,
+            )
+            logging.debug(f"MITM proxy for vehicle {sysid} launched (PID {p_mitm.pid})")
+            procs[SimProcess.MITM] = p_mitm
         # -----------------------
         # 1. ADS-B virtual cable
         # -----------------------
@@ -213,8 +232,11 @@ class GCS:
             src_sysid=255,  # estándar GCS sysid
             src_compid=190,  # estándar GCS commponent ID
         )
+        # When a MITM is interposed, send commands to its listener instead of
+        # directly to Logic; the MITM relays them onward to BasePort.GCS_CMD.
+        cmd_base = BasePort.MITM_CMD if mitm_enabled else BasePort.GCS_CMD
         cmd_conn = create_udp_conn(
-            base_port=BasePort.GCS_CMD,
+            base_port=cmd_base,
             offset=veh_config["veh_port_offset"],
             mode="sender",
             src_sysid=255,

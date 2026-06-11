@@ -17,6 +17,7 @@ from simulator.config import (
     BasePort,
 )
 from simulator.configs.gcs import VehicleConfig
+from simulator.configs.mitm import MITMConfig
 from simulator.entities import SimGCS, SimVehicle, VehT
 from simulator.external.sitl import resolve_sitl_build
 from simulator.helpers.logging.setup_log import setup_logging
@@ -63,6 +64,7 @@ class Simulator(Generic[VehT]):
         self.n_instances = 0
         self.parms: dict[int, str] = {}
         self.intervention: dict[str, float] | None = None
+        self.mitm: MITMConfig | None = None
         # TODO: This is actually cell size and is more an oracle property(check design)
         self.transmission_range = transmission_range  # meters
         setup_logging(
@@ -81,6 +83,8 @@ class Simulator(Generic[VehT]):
                 BasePort.RID_DOWN,
                 BasePort.GCS,
                 BasePort.GCS_CMD,
+                BasePort.MITM_TELEM,
+                BasePort.MITM_CMD,
             ],
             len(self.vehicles),
         )
@@ -159,6 +163,7 @@ class Simulator(Generic[VehT]):
                 "veh_port_offset": veh.port_offset,
                 "oracle_port_offset": self.orc_port_offset,
                 "plan_spec": veh.plan.get_spec().to_dict(),
+                "mitm": self.mitm is not None,
             }
             config_path = self.logic_folder / f"logic_config_{sysid}.json"
             with config_path.open("w") as f:
@@ -237,6 +242,21 @@ class Simulator(Generic[VehT]):
 
         arp_cmd.extend(self.visualizer.add_sitl_args(veh))
         logic_config_path = str(self.logic_folder / f"logic_config_{sysid}.json")
+        mitm_enabled = self.mitm is not None
+        strategy = self.mitm["strategy"] if self.mitm is not None else "passthrough"
+        mitm_params = self.mitm.get("params", {}) if self.mitm is not None else {}
+        mitm_cmd = (
+            (
+                f"python3 -m simulator.mitm"
+                f" --sysid {sysid}"
+                f" --port-offset {port_offset}"
+                f" --strategy {strategy}"
+                f" --params '{json.dumps(mitm_params)}'"
+                f" --verbose {self.verbose}"
+            )
+            if mitm_enabled
+            else ""
+        )
         veh_config: VehicleConfig = {
             "sysid": sysid,
             "veh_port_offset": port_offset,
@@ -257,5 +277,7 @@ class Simulator(Generic[VehT]):
                 f" --port-offset {port_offset}"
                 f" --verbose {self.verbose}"
             ),
+            "mitm": mitm_enabled,
+            "mitm_cmd": mitm_cmd,
         }
         return veh_config

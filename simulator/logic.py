@@ -97,14 +97,20 @@ def start_logic(config: LogicConfig):
         src_compid=140,
     )
     logging.debug(f"Vehicle {sysid}: Logic connection established")
+    # When a MITM is interposed, send telemetry to its listener instead of
+    # directly to the GCS; the MITM relays it onward to BasePort.GCS.
+    mitm_enabled = bool(config.get("mitm", False))
+    telem_base = BasePort.MITM_TELEM if mitm_enabled else BasePort.GCS
     cs_conn = create_udp_conn(
-        base_port=BasePort.GCS,
+        base_port=telem_base,
         offset=veh_port_offset,
         mode="sender",
         src_sysid=1,
         src_compid=140,
     )
-    logging.debug(f"Vehicle {sysid}: GCS connection established")
+    logging.debug(
+        f"Vehicle {sysid}: GCS connection established (mitm={mitm_enabled})"
+    )
     gcs_cmd_conn = create_udp_conn(
         base_port=BasePort.GCS_CMD,
         offset=veh_port_offset,
