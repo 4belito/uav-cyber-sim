@@ -16,6 +16,7 @@ class VehicleConfig(TypedDict):
     adsb_cmd: str
     mitm: bool
     mitm_cmd: str
+    intervention: dict[str, float] | None
 
 
 # Note: This is a simple configuration schema for the GCS.

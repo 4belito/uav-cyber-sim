@@ -63,8 +63,8 @@ class Simulator(Generic[VehT]):
         self.verbose = verbose
         self.n_instances = 0
         self.parms: dict[int, str] = {}
-        self.intervention: dict[str, float] | None = None
-        self.mitm: MITMConfig | None = None
+        self.intervention: dict[int, dict[str, float]] = {}
+        self.mitm: dict[int, MITMConfig] = {}
         # TODO: This is actually cell size and is more an oracle property(check design)
         self.transmission_range = transmission_range  # meters
         setup_logging(
@@ -163,7 +163,7 @@ class Simulator(Generic[VehT]):
                 "veh_port_offset": veh.port_offset,
                 "oracle_port_offset": self.orc_port_offset,
                 "plan_spec": veh.plan.get_spec().to_dict(),
-                "mitm": self.mitm is not None,
+                "mitm": sysid in self.mitm,
             }
             config_path = self.logic_folder / f"logic_config_{sysid}.json"
             with config_path.open("w") as f:
@@ -178,7 +178,6 @@ class Simulator(Generic[VehT]):
                 "vehicles": [self._build_veh_config(sysid) for sysid in gcs.sysids],
                 "terminals": list(self.terminals),
                 "suppress": list(self.suppress),
-                "intervention": self.intervention,
             }
 
             config_path = self.gcs_folder / f"gcs_config_{gcs_name}.json"
@@ -242,9 +241,10 @@ class Simulator(Generic[VehT]):
 
         arp_cmd.extend(self.visualizer.add_sitl_args(veh))
         logic_config_path = str(self.logic_folder / f"logic_config_{sysid}.json")
-        mitm_enabled = self.mitm is not None
-        strategy = self.mitm["strategy"] if self.mitm is not None else "passthrough"
-        mitm_params = self.mitm.get("params", {}) if self.mitm is not None else {}
+        mitm_config = self.mitm.get(sysid)
+        mitm_enabled = mitm_config is not None
+        strategy = mitm_config["strategy"] if mitm_config is not None else "passthrough"
+        mitm_params = mitm_config.get("params", {}) if mitm_config is not None else {}
         mitm_cmd = (
             (
                 f"python3 -m simulator.mitm"
@@ -279,5 +279,6 @@ class Simulator(Generic[VehT]):
             ),
             "mitm": mitm_enabled,
             "mitm_cmd": mitm_cmd,
+            "intervention": self.intervention.get(sysid),
         }
         return veh_config
