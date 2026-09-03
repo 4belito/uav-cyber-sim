@@ -56,7 +56,16 @@ def create_process(
             raise RuntimeError("DISPLAY not set. X11 forwarding may not be active.")
 
         env["DISPLAY"] = display_env
-        if "SSH_CONNECTION" in env or "REMOTE_CONTAINERS" in env:
+        # Prefer xterm for SSH/container/snap sessions. Inside a snap-confined
+        # launcher (e.g. the VS Code snap that hosts the Jupyter kernel) the
+        # env carries a snap library path, and gnome-terminal then dies with
+        # "libpthread.so.0: undefined symbol __libc_pthread_init"; xterm is
+        # immune, so route to it whenever SNAP is present.
+        if (
+            "SSH_CONNECTION" in env
+            or "REMOTE_CONTAINERS" in env
+            or "SNAP" in env
+        ):
             terminal_cmd = [
                 "xterm",
                 "-T",

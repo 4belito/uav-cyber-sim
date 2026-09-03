@@ -76,15 +76,22 @@ def _close_oracles() -> None:
         oracle.close()
 
 
-def _kill_stale_sim_sockets(base: int = 5760, span: int = 20) -> None:
+def _kill_stale_sim_sockets(
+    base: int = 5760, span: int = 20, extra_ports: tuple[int, ...] = (11345,)
+) -> None:
     """Kill any process holding a TCP port in the simulation range.
 
     SITL binds sequential ports starting at base (SERIAL0–SERIAL9). If a
     previous Oracle ZMQ socket in another kernel holds e.g. port base+5
     (RID_DOWN / SERIAL5), SITL will fail to bind it and exit.  `fuser -k`
     works without root on processes owned by the same user.
+
+    ``extra_ports`` covers non-contiguous ports outside that range. The Gazebo
+    master binds 11345; a stale ``gzserver`` left there makes the next Gazebo
+    launch abort with "Address already in use", so it is freed here too.
     """
     ports = [f"{port}/tcp" for port in range(base, base + span)]
+    ports += [f"{port}/tcp" for port in extra_ports]
     subprocess.run(["fuser", "-k", "-KILL", *ports], capture_output=True)
     time.sleep(0.5)
 

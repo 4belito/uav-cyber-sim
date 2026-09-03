@@ -19,6 +19,7 @@ QGroundControl/QGroundControl.AppImage
 
 # experimental code
 test.*
+hacks/
 
 # Ignore personal Claude settings and local state
 .claude/
