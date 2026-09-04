@@ -68,6 +68,11 @@ def create_process(
         ):
             terminal_cmd = [
                 "xterm",
+                "-fa",
+                "DejaVu Sans Mono",
+                "-fs",
+                "10",
+                "-u8",
                 "-T",
                 title,
                 "-geometry",
