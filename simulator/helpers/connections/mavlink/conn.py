@@ -54,7 +54,8 @@ def create_udp_conn(
     src_compid: int,
     wait_hb: bool = True,
 ) -> MAVConnection:
-    """Create a MAVLink-over-UDP connection.
+    """
+    Create a MAVLink-over-UDP connection.
 
     Pass wait_hb=False for receiver sockets where no initial heartbeat is
     expected (e.g. command-channel listeners that only receive on demand).

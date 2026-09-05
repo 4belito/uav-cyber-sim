@@ -87,7 +87,7 @@ class QGC(Visualizer[QGCVehicle]):
             "by ArduPilot SITL."
         )
 
-    def show(self):
+    def preview(self):
         """Display the vehicles trajectories and origin in GRA coordinates."""
         lat0, lon0, *_ = self.gra_origin
         m = folium.Map(location=[lat0, lon0], zoom_start=18)

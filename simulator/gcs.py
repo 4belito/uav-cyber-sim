@@ -57,7 +57,7 @@ def main():
 
 
 class GCS:
-    """Ground Control Station class extending Oracle with trajectory logging."""
+    """Ground Control Station for monitoring vehicles and logging trajectories."""
 
     def __init__(
         self,
@@ -87,8 +87,7 @@ class GCS:
         )
 
         self.interventions: dict[int, dict[str, float] | None] = {
-            vehconfig["sysid"]: vehconfig.get("intervention")
-            for vehconfig in vehicles
+            vehconfig["sysid"]: vehconfig.get("intervention") for vehconfig in vehicles
         }
 
         # Data structures for trajectory logging
@@ -247,7 +246,9 @@ class GCS:
             src_compid=190,
         )
         logging.info(f"Vehicle {sysid} connected")
-        return VehicleRuntime(sysid=sysid, conn=conn, cmd_conn=cmd_conn, processes=procs)
+        return VehicleRuntime(
+            sysid=sysid, conn=conn, cmd_conn=cmd_conn, processes=procs
+        )
 
     def _monitor_vehicle(self, sysid: int):
         logging.info(f"Monitoring Vehicle {sysid}")
@@ -300,7 +301,9 @@ class GCS:
         if iv is None:
             return
         cmd_conn = self.vehruntimes[sysid].cmd_conn
-        logging.info(f"GCS intervention: switching vehicle {sysid} to GUIDED and repositioning")
+        logging.info(
+            f"GCS intervention: switching vehicle {sysid} to GUIDED and repositioning"
+        )
         cmd_conn.mav.set_mode_send(
             target_system=sysid,
             base_mode=mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
@@ -314,7 +317,7 @@ class GCS:
             current=0,
             autocontinue=0,
             param1=-1.0,  # speed: no change
-            param2=1.0,   # MAV_DO_REPOSITION_FLAGS_CHANGE_MODE
+            param2=1.0,  # MAV_DO_REPOSITION_FLAGS_CHANGE_MODE
             param3=0.0,
             param4=float("nan"),
             x=int(iv["target_lat"] * 1e7),

@@ -4,7 +4,8 @@ from typing import NotRequired, TypedDict
 
 
 class MITMConfig(TypedDict):
-    """Man-in-the-middle proxy configuration.
+    """
+    Man-in-the-middle proxy configuration.
 
     ``strategy`` selects a registered
     :class:`~simulator.runtime.mitm.strategies.MITMStrategy` by name.

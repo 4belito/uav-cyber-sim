@@ -39,6 +39,6 @@ class NoVisualizer(Visualizer[NovisVehicle]):
         """Print a message indicating that no visualizer will be launched."""
         logging.info("🙈 Running without visualization.")
 
-    def show(self):
+    def preview(self):
         """Print the vehicles."""
         print(self.vehicles)

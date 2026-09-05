@@ -106,7 +106,7 @@ class Gazebo(Visualizer[GazVehicle]):
             "🖥️  Gazebo launched for realistic simulation and 3D visualization."
         )
 
-    def show(
+    def preview(
         self,
         title: str = "Trajectories",
         frames: tuple[float, float, float] = (0.2, 0.2, 0.2),

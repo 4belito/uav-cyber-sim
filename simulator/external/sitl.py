@@ -20,7 +20,8 @@ _opts = SimpleNamespace(model=None, build_target=None)
 
 
 def _romfs_json_newer_than(binary_path: Path) -> bool:
-    """Return True if any ROMFS JSON model file is newer than the binary.
+    """
+    Return True if any ROMFS JSON model file is newer than the binary.
 
     ROMFS data is compiled into the binary at build time. A newer JSON file
     means the binary must be rebuilt so the updated model is embedded.
@@ -68,6 +69,7 @@ def get_default_params(info: FrameOptions) -> list[str]:
 
 
 def resolve_sitl_build(frame: str, firmware: Firmware) -> tuple[Path, str, list[str]]:
+    """Resolve the SITL build for the given frame and firmware."""
     binary = ensure_sitl_built(frame, firmware)
     frame_info = get_frame_info(frame, firmware)
     return binary, frame_info["model"], get_default_params(frame_info)

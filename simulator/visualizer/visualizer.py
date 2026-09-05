@@ -40,7 +40,7 @@ class Visualizer(ABC, Generic[VehT]):
         pass
 
     @abstractmethod
-    def show(self) -> None:
+    def preview(self) -> None:
         """Show a static preview visualization."""
         pass
 

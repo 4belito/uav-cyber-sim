@@ -37,8 +37,8 @@ class Simulator(Generic[VehT]):
     """
 
     oracle_name: str = "Oracle ⚪"
-    logic_folder = DATA_PATH / "logic"
-    gcs_folder = DATA_PATH / "gcs"
+    logic_dir = DATA_PATH / "logic"
+    gcs_dir = DATA_PATH / "gcs"
     port_step = 10
 
     def __init__(
@@ -55,14 +55,14 @@ class Simulator(Generic[VehT]):
             suppress_output = [SimProcess.ARDUPILOT, SimProcess.ADSB_SOCAT]
         self.visualizer = visualizer
         self.gra_origin = self.visualizer.gra_origin
-        self.terminals = set(terminals)
-        self.suppress = set(suppress_output)
+        self.terminals = terminals
+        self.suppress = suppress_output
         self.vehicles: dict[int, SimVehicle] = {}
         self.gcs: dict[str, SimGCS] = {}
         self.orc_port_offset: int | None = None
         self.verbose = verbose
         self.n_instances = 0
-        self.parms: dict[int, str] = {}
+        self.veh_parms: dict[int, str] = {}
         self.intervention: dict[int, dict[str, float]] = {}
         self.mitm: dict[int, MITMConfig] = {}
         # TODO: This is actually cell size and is more an oracle property(check design)
@@ -114,29 +114,19 @@ class Simulator(Generic[VehT]):
         self.n_instances += 1
         self.gcs[vehicle.gcs_name].sysids.append(vehicle.sysid)
         self.visualizer.add_vehicle(vehicle)
+        self.veh_parms[vehicle.sysid] = parm
 
-        # DEBUG
-        self.parms[vehicle.sysid] = parm
-
-    def remove_vehicle(self, sysid: int) -> bool:
-        """Remove a vehicle by system ID."""
-        if sysid in self.vehicles:
-            del self.vehicles[sysid]
-            self.visualizer.remove_vehicle(sysid)
-            return True
-        return False
-
-    def show(self):
+    def preview(self):
         """
         Render a static preview of the configured simulation
         before launch.
         """
-        self.visualizer.show()
+        self.visualizer.preview()
 
     def _launch_gcses(self):
         """Launch each GCS process and create an Oracle instance."""
         for gcs_name in self.gcs:
-            gcs_config_path = self.gcs_folder / f"gcs_config_{gcs_name}.json"
+            gcs_config_path = self.gcs_dir / f"gcs_config_{gcs_name}.json"
             gcs_cmd = (
                 f'python3 -m simulator.gcs --config-path "{gcs_config_path}"'
                 f" --verbose {self.verbose}"
@@ -153,7 +143,7 @@ class Simulator(Generic[VehT]):
 
     def _save_logic_configs(self):
         """Save the logic configurations for each Vehicle."""
-        self.logic_folder.mkdir(parents=True, exist_ok=True)
+        self.logic_dir.mkdir(parents=True, exist_ok=True)
         for sysid, veh in self.vehicles.items():
             home_heading = self.visualizer.gra_home(veh).heading
             logic_config = {
@@ -165,22 +155,22 @@ class Simulator(Generic[VehT]):
                 "plan_spec": veh.plan.get_spec().to_dict(),
                 "mitm": sysid in self.mitm,
             }
-            config_path = self.logic_folder / f"logic_config_{sysid}.json"
+            config_path = self.logic_dir / f"logic_config_{sysid}.json"
             with config_path.open("w") as f:
                 json.dump(logic_config, f, indent=2)
 
     def _save_gcs_configs(self):
-        self.gcs_folder.mkdir(parents=True, exist_ok=True)
+        self.gcs_dir.mkdir(parents=True, exist_ok=True)
         for gcs_name, gcs in self.gcs.items():
             gcs_config = {
                 "name": gcs_name,
                 "oracle_port_offset": self.orc_port_offset,
                 "vehicles": [self._build_veh_config(sysid) for sysid in gcs.sysids],
-                "terminals": list(self.terminals),
-                "suppress": list(self.suppress),
+                "terminals": self.terminals,
+                "suppress": self.suppress,
             }
 
-            config_path = self.gcs_folder / f"gcs_config_{gcs_name}.json"
+            config_path = self.gcs_dir / f"gcs_config_{gcs_name}.json"
             with config_path.open("w") as f:
                 json.dump(gcs_config, f, indent=2)
 
@@ -211,7 +201,7 @@ class Simulator(Generic[VehT]):
         veh = self.vehicles[sysid]
 
         port_offset = veh.port_offset_required
-        veh_parms = self.parms[veh.sysid]
+        veh_parms = self.veh_parms[veh.sysid]
         eeprom_path = ARDU_LOGS_PATH / f"veh_{sysid}" / "eeprom.bin"
         if eeprom_path.exists():
             eeprom_path.unlink()
@@ -240,7 +230,7 @@ class Simulator(Generic[VehT]):
         ]
 
         arp_cmd.extend(self.visualizer.add_sitl_args(veh))
-        logic_config_path = str(self.logic_folder / f"logic_config_{sysid}.json")
+        logic_config_path = str(self.logic_dir / f"logic_config_{sysid}.json")
         mitm_config = self.mitm.get(sysid)
         mitm_enabled = mitm_config is not None
         strategy = mitm_config["strategy"] if mitm_config is not None else "passthrough"
