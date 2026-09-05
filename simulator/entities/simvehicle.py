@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from simulator.config import Color, Model
+from simulator.entities.simgcs import SimGCS
 from simulator.entities.vehicle import Vehicle
 from simulator.helpers.coordinates import ENUPose, ENUs
 from simulator.planner.plan import Plan
@@ -16,7 +17,7 @@ class SimVehicle(Vehicle):
 
     model: Model
     sysid: int
-    gcs_name: str
+    gcs: SimGCS
     home: ENUPose
     color: Color
     plan: Plan
@@ -33,7 +34,7 @@ class SimVehicle(Vehicle):
         cls,
         model: Model,
         sysid: int,
-        gcs_name: str,
+        gcs: SimGCS,
         color: Color,
         plan: Plan,
         enu_origin: ENUPose,
@@ -44,7 +45,7 @@ class SimVehicle(Vehicle):
         enu_home = enu_origin.to_abs(relative_home)
         return cls(
             sysid=sysid,
-            gcs_name=gcs_name,
+            gcs=gcs,
             home=enu_home,
             color=color,
             plan=plan,

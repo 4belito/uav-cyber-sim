@@ -19,6 +19,7 @@ import matplotlib.pyplot as plt
 import zmq
 
 from simulator.config import DATA_PATH, BasePort, Color
+from simulator.configs.oracle import OracleConfig
 from simulator.entities import SimGCS, SimVehicle
 from simulator.entities.riddata import RIDData
 from simulator.helpers.connections import create_zmq_socket, create_zmq_sockets
@@ -47,14 +48,15 @@ class Oracle:
         vehs: dict[int, SimVehicle],
         gcss: dict[str, SimGCS],
         port_offset: int,
-        transmission_range: float = 40.0,
+        config: OracleConfig | None = None,
     ) -> None:
+        config = config or OracleConfig()
         # Narrow types for the type checker now that we've asserted no None values
         self.gra_origin = gra_origin.unpose()
 
         self.gcss = gcss
         self.sysids = list(vehs.keys())
-        self.grid = Grid(cell_size=transmission_range * 1.01)
+        self.grid = Grid(cell_size=config.transmission_range * 1.01)
         self._seen_in_grid: set[int] = set()
         veh_port_offsets = {
             sysid: veh.port_offset_required for sysid, veh in vehs.items()

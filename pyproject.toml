@@ -43,4 +43,5 @@ ignore_missing_imports = true
 [dependency-groups]
 dev = [
     "nbstripout>=0.8.1",
+    "ruff>=0.14.13",
 ]

@@ -23,7 +23,6 @@ from simulator.external.sitl import resolve_sitl_build
 from simulator.helpers.logging.setup_log import setup_logging
 from simulator.helpers.math import connection_id
 from simulator.helpers.processes import SimProcess, create_process
-from simulator.oracle import Oracle
 from simulator.params.simulation import SIM_SPEEDUP
 from simulator.visualizer import Visualizer
 
@@ -47,7 +46,6 @@ class Simulator(Generic[VehT]):
         terminals: list[SimProcess] | None = None,
         suppress_output: list[SimProcess] | None = None,
         verbose: int = 1,
-        transmission_range: int = 100,  # meters for inter-Vehicle communication
     ):
         if terminals is None:
             terminals = []
@@ -59,20 +57,20 @@ class Simulator(Generic[VehT]):
         self.suppress = suppress_output
         self.vehicles: dict[int, SimVehicle] = {}
         self.gcs: dict[str, SimGCS] = {}
-        self.orc_port_offset: int | None = None
+        self.orc_port_offset: int
         self.verbose = verbose
         self.n_instances = 0
         self.veh_parms: dict[int, str] = {}
         self.intervention: dict[int, dict[str, float]] = {}
         self.mitm: dict[int, MITMConfig] = {}
-        # TODO: This is actually cell size and is more an oracle property(check design)
-        self.transmission_range = transmission_range  # meters
         setup_logging(
             LOGS_PATH / f"{self.oracle_name}.log", verbose=verbose, console_output=True
         )
 
-    def launch(self) -> Oracle:
+    def launch(self) -> None:
         """Launch vehicle instances and visualizer."""
+        # After this returns, gra_origin/vehicles/gcs/orc_port_offset are ready
+        # to construct an Oracle for the run.
         port_offsets = self._find_port_offsets(
             [
                 BasePort.ARP,
@@ -97,22 +95,21 @@ class Simulator(Generic[VehT]):
         self._save_gcs_configs()
         self.visualizer.launch(port_offsets_dict)
         self._launch_gcses()
-        return Oracle(
-            self.gra_origin,
-            self.vehicles,
-            self.gcs,
-            transmission_range=self.transmission_range,
-            port_offset=self.orc_port_offset,
-        )
 
     def add_vehicle(self, vehicle: SimVehicle, parm: str = str(VEH_PARAMS_PATH)):
         """Add a vehicle to the simulation."""
         self.vehicles[vehicle.sysid] = vehicle
-        if vehicle.gcs_name not in self.gcs:
-            self.gcs[vehicle.gcs_name] = SimGCS(name=vehicle.gcs_name)
+        registered_gcs = self.gcs.get(vehicle.gcs.name)
+        if registered_gcs is None:
+            self.gcs[vehicle.gcs.name] = vehicle.gcs
+        elif registered_gcs is not vehicle.gcs:
+            raise ValueError(
+                f"A different GCS instance named '{vehicle.gcs.name}' is "
+                "already registered; share one SimGCS across its vehicles."
+            )
         self.vehicles[vehicle.sysid].instance = self.n_instances
         self.n_instances += 1
-        self.gcs[vehicle.gcs_name].sysids.append(vehicle.sysid)
+        vehicle.gcs.sysids.append(vehicle.sysid)
         self.visualizer.add_vehicle(vehicle)
         self.veh_parms[vehicle.sysid] = parm
 
@@ -125,17 +122,20 @@ class Simulator(Generic[VehT]):
 
     def _launch_gcses(self):
         """Launch each GCS process and create an Oracle instance."""
-        for gcs_name in self.gcs:
+        for gcs_name, gcs in self.gcs.items():
+            terminals = self.terminals if gcs.terminals is None else gcs.terminals
+            suppress = self.suppress if gcs.suppress is None else gcs.suppress
+            verbose = self.verbose if gcs.verbose is None else gcs.verbose
             gcs_config_path = self.gcs_dir / f"gcs_config_{gcs_name}.json"
             gcs_cmd = (
                 f'python3 -m simulator.gcs --config-path "{gcs_config_path}"'
-                f" --verbose {self.verbose}"
+                f" --verbose {verbose}"
             )
             p = create_process(
                 gcs_cmd,
                 after="exec bash",
-                visible=SimProcess.GCS in self.terminals,
-                suppress_output=SimProcess.GCS in self.suppress,
+                visible=SimProcess.GCS in terminals,
+                suppress_output=SimProcess.GCS in suppress,
                 title=f"GCS: {gcs_name}",
                 env_cmd=ENV_CMD_PYT,
             )  # "exit"
@@ -162,12 +162,14 @@ class Simulator(Generic[VehT]):
     def _save_gcs_configs(self):
         self.gcs_dir.mkdir(parents=True, exist_ok=True)
         for gcs_name, gcs in self.gcs.items():
+            terminals = self.terminals if gcs.terminals is None else gcs.terminals
+            suppress = self.suppress if gcs.suppress is None else gcs.suppress
             gcs_config = {
                 "name": gcs_name,
                 "oracle_port_offset": self.orc_port_offset,
                 "vehicles": [self._build_veh_config(sysid) for sysid in gcs.sysids],
-                "terminals": self.terminals,
-                "suppress": self.suppress,
+                "terminals": terminals,
+                "suppress": suppress,
             }
 
             config_path = self.gcs_dir / f"gcs_config_{gcs_name}.json"
