@@ -159,7 +159,8 @@ class Gazebo(Visualizer[GazVehicle]):
 
     @staticmethod
     def _render_color_model(model_name: str, color: Color) -> None:
-        """Render all color_template/*.j2 files into runtime_models/{model}/{color}/.
+        """
+        Render all color_template/*.j2 files into runtime_models/{model}/{color}/.
 
         Preserves subdirectory structure; strips the .j2 suffix from output names.
         Non-template files (e.g. model.config) are copied as-is.
