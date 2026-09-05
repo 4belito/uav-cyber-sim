@@ -39,3 +39,8 @@ quote-style = "double"
 
 [tool.mypy]
 ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "nbstripout>=0.8.1",
+]
