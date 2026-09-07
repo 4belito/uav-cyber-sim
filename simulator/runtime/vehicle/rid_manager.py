@@ -13,7 +13,7 @@ from typing import cast
 
 import zmq
 
-from simulator.config import DATA_PATH, BasePort
+from simulator.config import DATA_PATH, SimPort, VehPort
 from simulator.entities.riddata import RIDData
 from simulator.helpers.connections import create_zmq_socket
 from simulator.helpers.connections.mavlink.streams import make_json_safe
@@ -62,23 +62,23 @@ class RIDManager:
         # ZMQ setup
         self._ctx = zmq.Context()
         self._in_sock = create_zmq_socket(
-            self._ctx, zmq.SUB, BasePort.RID_DOWN, port_offset
+            self._ctx, zmq.SUB, VehPort.RID_DOWN, port_offset
         )
         self._out_sock = create_zmq_socket(
-            self._ctx, zmq.PUB, BasePort.RID_UP, port_offset
+            self._ctx, zmq.PUB, VehPort.RID_UP, port_offset
         )
 
         self._adsb_out_sock = create_zmq_socket(
             self._ctx,
             zmq.PUB,
-            BasePort.ADSB,
+            VehPort.ADSB,
             port_offset,
         )
 
         self._done_sock = create_zmq_socket(
             self._ctx,
             zmq.DEALER,
-            BasePort.ORC_DONE,
+            SimPort.ORC_DONE,
             offset=orc_port_offset,
             timeout=-1,
             identity=f"log-{self.sysid}".encode(),

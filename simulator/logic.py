@@ -6,11 +6,12 @@ import argparse
 import json
 import logging
 import time
+from collections.abc import Sequence
 
 from pymavlink import mavutil
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
-from simulator.config import DATA_PATH, LOGS_PATH, BasePort
+from simulator.config import DATA_PATH, LOGS_PATH, VehPort
 from simulator.configs import LogicConfig
 from simulator.entities.riddata import RIDData
 from simulator.helpers.connections import (
@@ -90,29 +91,46 @@ def start_logic(config: LogicConfig):
     plan_spec = PlanSpec(**config["plan_spec"])
 
     ap_conn = create_tcp_conn(
-        base_port=BasePort.ARP,
+        base_port=VehPort.ARP,
         offset=veh_port_offset,
         role="client",
         src_sysid=connection_id(sysid),
         src_compid=140,
     )
     logging.debug(f"Vehicle {sysid}: Logic connection established")
-    # When a MITM is interposed, send telemetry to its listener instead of
-    # directly to the GCS; the MITM relays it onward to BasePort.GCS.
+    # One telemetry link per GCS monitoring this vehicle. The list is empty for
+    # an unmonitored vehicle, which then emits no telemetry and waits for no ack.
+    # When a MITM is interposed there is a single link to its listener instead;
+    # the MITM fans the stream out to every GCS port on the vehicle's behalf.
     mitm_enabled = bool(config.get("mitm", False))
-    telem_base = BasePort.MITM_TELEM if mitm_enabled else BasePort.GCS
-    cs_conn = create_udp_conn(
-        base_port=telem_base,
-        offset=veh_port_offset,
-        mode="sender",
-        src_sysid=1,
-        src_compid=140,
-    )
+    gcs_telem_ports = list(config.get("gcs_telem_ports", []))
+    if mitm_enabled:
+        cs_conns = [
+            create_udp_conn(
+                base_port=VehPort.MITM_TELEM,
+                offset=veh_port_offset,
+                mode="sender",
+                src_sysid=1,
+                src_compid=140,
+            )
+        ]
+    else:
+        cs_conns = [
+            create_udp_conn(
+                base_port=port,
+                offset=0,
+                mode="sender",
+                src_sysid=1,
+                src_compid=140,
+            )
+            for port in gcs_telem_ports
+        ]
     logging.debug(
-        f"Vehicle {sysid}: GCS connection established (mitm={mitm_enabled})"
+        f"Vehicle {sysid}: {len(gcs_telem_ports)} GCS connection(s) established "
+        f"(mitm={mitm_enabled})"
     )
     gcs_cmd_conn = create_udp_conn(
-        base_port=BasePort.GCS_CMD,
+        base_port=VehPort.GCS_CMD,
         offset=veh_port_offset,
         mode="receiver",
         src_sysid=connection_id(sysid),
@@ -134,7 +152,7 @@ def start_logic(config: LogicConfig):
     mav_mng = MAVLinkManager(
         conn=ap_conn,
         data_logger=data_logger,
-        gcs_conn=cs_conn,
+        gcs_conns=cs_conns,
     )
 
     ap_conn.wait_heartbeat()
@@ -180,7 +198,8 @@ def start_logic(config: LogicConfig):
         while True:
             if heartbeat_event.trigger():
                 send_heartbeat(ap_conn)
-                send_heartbeat(cs_conn)
+                for cs_conn in cs_conns:
+                    send_heartbeat(cs_conn)
             if rid_event.trigger():
                 pos = mav_mng.state.get("GLOBAL_POSITION_INT")
                 if pos:
@@ -193,7 +212,9 @@ def start_logic(config: LogicConfig):
                         logging.error(f"Error sending RID data: {e}")
                         pass
             if logic.plan.state == State.DONE:
-                logic.send_done_msgs(cs_conn)
+                # Skipped for an unmonitored vehicle: nobody would ever ack.
+                if gcs_telem_ports:
+                    logic.send_done_msgs(cs_conns)
                 break
 
             logic.act()
@@ -209,7 +230,8 @@ def start_logic(config: LogicConfig):
         gcs_cmd_fwd.stop()
 
         # 2. close connections
-        cs_conn.close()
+        for cs_conn in cs_conns:
+            cs_conn.close()
 
         logging.info(f"Vehicle {sysid} logic stopped")
 
@@ -245,11 +267,17 @@ class VehicleLogic:
         self.plan.act()
         time.sleep(0.01)  # Avoid busy loop if plan.act() returns immediately
 
-    def send_done_msgs(self, cs_conn: MAVConnection) -> None:
-        """Notify the GCS that the mission is done."""
+    def send_done_msgs(self, cs_conns: Sequence[MAVConnection]) -> None:
+        """
+        Notify every monitoring GCS that the mission is done.
+
+        Each link is acked independently, so a vehicle watched by several GCSs
+        only finishes once they have all seen ``LOGIC_DONE``.
+        """
         done_msg = mavlink.MAVLink_statustext_message(severity=6, text=b"LOGIC_DONE")
         logging.info(f"GCS ← Logic {self.sysid}: Sending LOGIC_DONE")
-        self.send_msg_until_ack(cs_conn, done_msg, CustomCmd.LOGIC_DONE)
+        for cs_conn in cs_conns:
+            self.send_msg_until_ack(cs_conn, done_msg, CustomCmd.LOGIC_DONE)
 
     def send_msg_until_ack(
         self,

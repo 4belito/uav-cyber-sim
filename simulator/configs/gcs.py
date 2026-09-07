@@ -10,6 +10,12 @@ class VehicleConfig(TypedDict):
 
     sysid: int
     veh_port_offset: int
+    # UDP port this GCS listens on for the vehicle's telemetry. Each GCS
+    # monitoring the same vehicle gets its own port (a port has one binder).
+    telem_port: int
+    # Whether this GCS owns the vehicle's OS processes (launch + terminate).
+    # Only the vehicle's first GCS does; the others just monitor.
+    launch: bool
     ardupilot_cmd: str
     logic_cmd: str
     socat_cmd: str
@@ -27,5 +33,6 @@ class GCSConfig(TypedDict):
     name: str
     vehicles: list[VehicleConfig]
     oracle_port_offset: int
+    record_positions: bool
     terminals: list[SimProcess]
     suppress: list[SimProcess]

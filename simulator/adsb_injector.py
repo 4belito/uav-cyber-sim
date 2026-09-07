@@ -18,7 +18,7 @@ import time
 
 import zmq
 
-from simulator.config import LOGS_PATH, BasePort
+from simulator.config import LOGS_PATH, VehPort
 from simulator.entities.adsb import ADSBBeacon
 from simulator.helpers.connections import create_zmq_socket
 from simulator.helpers.connections.mavlink.conn import connect, send_heartbeat
@@ -63,7 +63,7 @@ class ADSBInjector:
         self.sub = create_zmq_socket(
             self.ctx,
             zmq.SUB,
-            BasePort.ADSB,
+            VehPort.ADSB,
             port_offset,
         )
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from collections.abc import Sequence
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 
@@ -40,21 +41,21 @@ class MAVLinkManager(threading.Thread):
     - Receives MAVLink messages (RX)
     - Sends MAVLink messages (TX)
     - Logs all traffic
-    - Optionally forwards telemetry to a GCS connection
+    - Forwards telemetry to every GCS connection it was given (possibly none)
     """
 
     def __init__(
         self,
         conn: MAVConnection,
         data_logger: DataLogger,
-        gcs_conn: MAVConnection | None = None,
+        gcs_conns: Sequence[MAVConnection] = (),
     ) -> None:
         super().__init__(daemon=True)
         self.conn = conn
         self.state = VehicleState.create()
         self._stop_event = threading.Event()
         self.data_logger = data_logger
-        self.gcs_conn = gcs_conn
+        self.gcs_conns = list(gcs_conns)
 
     def run(self) -> None:
         """Continuously read messages and update state until stopped."""
@@ -76,11 +77,12 @@ class MAVLinkManager(threading.Thread):
 
                 self.state.update(msg)
 
-                if self.gcs_conn is not None and msg.get_type() in _GCS_TELEMETRY_TYPES:
-                    try:
-                        self.gcs_conn.mav.send(msg)
-                    except Exception as fwd_exc:
-                        logging.debug("GCS telemetry forward error: %s", fwd_exc)
+                if msg.get_type() in _GCS_TELEMETRY_TYPES:
+                    for gcs_conn in self.gcs_conns:
+                        try:
+                            gcs_conn.mav.send(msg)
+                        except Exception as fwd_exc:
+                            logging.debug("GCS telemetry forward error: %s", fwd_exc)
 
                 # Log all received MAVLink messages with their type and timestamp
                 self.data_logger.write(

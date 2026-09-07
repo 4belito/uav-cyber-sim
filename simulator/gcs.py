@@ -6,7 +6,6 @@ instances.
 import argparse
 import json
 import logging
-import os
 import pickle
 import time
 from concurrent import futures
@@ -17,12 +16,10 @@ import zmq
 from pymavlink import mavutil
 
 from simulator.config import (
-    ARDU_LOGS_PATH,
     DATA_PATH,
-    ENV_CMD_ARP,
-    ENV_CMD_PYT,
     LOGS_PATH,
-    BasePort,
+    SimPort,
+    VehPort,
 )
 from simulator.configs import VehicleConfig
 from simulator.helpers.connections import create_udp_conn, create_zmq_socket
@@ -31,13 +28,10 @@ from simulator.helpers.connections.mavlink.streams import make_json_safe
 from simulator.helpers.coordinates import GRA, GRAs
 from simulator.helpers.logging.data_logger import DataLogger
 from simulator.helpers.logging.setup_log import setup_logging
-from simulator.helpers.processes import (
-    SimProcess,
-    create_process,
-    terminate_process_group,
-)
+from simulator.helpers.processes import SimProcess, terminate_process_group
 from simulator.params.simulation import HEARTBEAT_FREQUENCY
 from simulator.runtime.gcs_runtime import VehicleRuntime
+from simulator.runtime.vehicle_launcher import launch_vehicle
 
 heartbeat_event = mavutil.periodic_event(HEARTBEAT_FREQUENCY)
 
@@ -66,6 +60,7 @@ class GCS:
         oracle_port_offset: int,
         terminals: list[SimProcess],
         suppress: list[SimProcess],
+        record_positions: bool = True,
     ) -> None:
         # Configure logging for this GCS process
         self.name = name
@@ -80,7 +75,7 @@ class GCS:
         self._done_sock = create_zmq_socket(
             self._ctx,
             zmq.DEALER,
-            BasePort.ORC_DONE,
+            SimPort.ORC_DONE,
             offset=oracle_port_offset,
             timeout=-1,
             identity=f"gcs-{self.name}".encode(),
@@ -90,9 +85,10 @@ class GCS:
             vehconfig["sysid"]: vehconfig.get("intervention") for vehconfig in vehicles
         }
 
-        # Data structures for trajectory logging
+        # Trajectory logging: filled straight from the monitor loop's own
+        # GLOBAL_POSITION_INT messages, so nothing competes for the socket.
+        self.record_positions = record_positions
         self.paths: dict[int, GRAs] = {sysid: [] for sysid in self.sysids}
-        self.pos: dict[int, GRA] = {sysid: GRA.nan() for sysid in self.sysids}
         logging.info(f" GCS {self.name} started with {self.n_vehicles} Vehicles")
 
     ###
@@ -100,23 +96,30 @@ class GCS:
         """Run the GCS monitoring loop until all Vehicles complete their missions."""
         sysids_snapshot = tuple(self.sysids)
 
-        with futures.ThreadPoolExecutor(max_workers=len(sysids_snapshot)) as executor:
-            futures_list = [
-                executor.submit(self._monitor_vehicle, sysid)
-                for sysid in sysids_snapshot
-            ]
+        # A GCS may legitimately monitor no vehicle at all; it then has nothing
+        # to wait for and reports DONE straight away.
+        if sysids_snapshot:
+            with futures.ThreadPoolExecutor(
+                max_workers=len(sysids_snapshot)
+            ) as executor:
+                futures_list = [
+                    executor.submit(self._monitor_vehicle, sysid)
+                    for sysid in sysids_snapshot
+                ]
 
-            for f in futures.as_completed(futures_list):
-                f.result()
+                for f in futures.as_completed(futures_list):
+                    f.result()
         logging.info("All Vehicles assigned have completed their missions")
         self._done_sock.send_string("DONE")  # type: ignore
         logging.info("DONE message sent to Oracle")
         self._wait_until_ack()
 
-        trajectory_file = DATA_PATH / f"trajectories_{self.name}.pkl"
-        with open(trajectory_file, "wb") as file:
-            pickle.dump(self.paths, file)
-        logging.info(f"Trajectories saved to '{trajectory_file}'")
+        if self.record_positions:
+            trajectory_file = DATA_PATH / f"trajectories_{self.name}.pkl"
+            with open(trajectory_file, "wb") as file:
+                pickle.dump(self.paths, file)
+            n = sum(len(p) for p in self.paths.values())
+            logging.info(f"{n} positions saved to '{trajectory_file}'")
 
         self._done_sock.close(linger=0)
         self._ctx.term()
@@ -141,103 +144,33 @@ class GCS:
         return vehruns
 
     def _launch_vehicle(self, i: int) -> VehicleRuntime:
+        """Bring up one monitored vehicle and open its telemetry/command links."""
         veh_config = self.vehicles[i]
         sysid = veh_config["sysid"]
 
+        # Only the vehicle's owning GCS spawns its processes; the other GCSs
+        # monitoring the same vehicle attach to the already-running one.
         procs: dict[SimProcess, Popen[bytes]] = {}
-        mitm_enabled = veh_config.get("mitm", False)
-        # -----------------------
-        # 0. MITM proxy (interposed on GCS<->Logic links)
-        # -----------------------
-        # Launched first so its UDP listeners are bound before Logic/GCS begin
-        # sending. When enabled, Logic and the GCS retarget their senders at the
-        # MITM (see logic.py / cmd_conn below) and the MITM relays onward.
-        if mitm_enabled and veh_config["mitm_cmd"]:
-            p_mitm = create_process(
-                veh_config["mitm_cmd"],
-                after="exec bash",
-                visible=SimProcess.MITM in self.terminals,
-                suppress_output=SimProcess.MITM in self.suppress,
-                title=f"MITM: Vehicle {sysid}",
-                env_cmd=ENV_CMD_PYT,
-                new_process_group=True,
+        if veh_config["launch"]:
+            procs = launch_vehicle(veh_config, self.terminals, self.suppress)
+        else:
+            logging.debug(
+                f"Vehicle {sysid} processes owned by another GCS; monitoring only"
             )
-            logging.debug(f"MITM proxy for vehicle {sysid} launched (PID {p_mitm.pid})")
-            procs[SimProcess.MITM] = p_mitm
-        # -----------------------
-        # 1. ADS-B virtual cable
-        # -----------------------
-        p_socat = create_process(
-            veh_config["socat_cmd"],
-            after="exec bash",
-            visible=SimProcess.ADSB_SOCAT in self.terminals,
-            suppress_output=SimProcess.ADSB_SOCAT in self.suppress,
-            title=f"ADSB socat: Vehicle {sysid}",
-            new_process_group=True,
-        )
-        logging.debug(f"ADSB socat for vehicle {sysid} launched (PID {p_socat.pid})")
-        procs[SimProcess.ADSB_SOCAT] = p_socat
-        self._wait_for_pty(f"/tmp/adsb_{sysid}_injector")
-
-        # -----------------------
-        # 2. ADS-B injector
-        # -----------------------
-
-        p_adsb = create_process(
-            veh_config["adsb_cmd"],
-            after="exec bash",
-            visible=SimProcess.ADSB_INJECTOR in self.terminals,
-            suppress_output=SimProcess.ADSB_INJECTOR in self.suppress,
-            title=f"ADSB injector: Vehicle {sysid}",
-            env_cmd=ENV_CMD_PYT,
-            new_process_group=True,
-        )
-        logging.debug(f"ADSB injector for vehicle {sysid} launched (PID {p_adsb.pid})")
-        procs[SimProcess.ADSB_INJECTOR] = p_adsb
-        # -----------
-        # 3. Logic
-        # -----------
-        p_logic = create_process(
-            veh_config["logic_cmd"],
-            after="exec bash",
-            visible=SimProcess.LOGIC in self.terminals,
-            suppress_output=SimProcess.LOGIC in self.suppress,
-            title=f"Vehicle logic: Vehicle {sysid}",
-            env_cmd=ENV_CMD_PYT,
-            new_process_group=True,
-        )  # "exit"
-        logging.debug(f"Vehicle logic for vehicle {sysid} launched (PID {p_logic.pid})")
-        procs[SimProcess.LOGIC] = p_logic
-
-        # ----------------
-        # 3. ArduPilot
-        # ----------------
-        ardu_log_folder = ARDU_LOGS_PATH / f"veh_{sysid}"
-        ardu_log_folder.mkdir(parents=True, exist_ok=True)
-        p_ard = create_process(
-            veh_config["ardupilot_cmd"],
-            after="exec bash",
-            visible=SimProcess.ARDUPILOT in self.terminals,
-            suppress_output=SimProcess.ARDUPILOT in self.suppress,
-            title=f"ArduPilot SITL Launcher: Vehicle {sysid}",
-            env_cmd=ENV_CMD_ARP,
-            new_process_group=True,
-            cwd=str(ardu_log_folder),
-        )  # "exit"
-        logging.debug(f"ArduPilot SITL vehicle {sysid} launched (PID {p_ard.pid})")
-        procs[SimProcess.ARDUPILOT] = p_ard
 
         ## create MAVLink connection to the SITL instance for this Vehicle
+        # `telem_port` is this GCS's own slot in the vehicle's telemetry window;
+        # every GCS watching the vehicle gets a distinct one.
         conn = create_udp_conn(
-            base_port=BasePort.GCS,
-            offset=veh_config["veh_port_offset"],
+            base_port=veh_config["telem_port"],
+            offset=0,
             mode="receiver",
             src_sysid=255,  # estándar GCS sysid
             src_compid=190,  # estándar GCS commponent ID
         )
         # When a MITM is interposed, send commands to its listener instead of
-        # directly to Logic; the MITM relays them onward to BasePort.GCS_CMD.
-        cmd_base = BasePort.MITM_CMD if mitm_enabled else BasePort.GCS_CMD
+        # directly to Logic; the MITM relays them onward to VehPort.GCS_CMD.
+        cmd_base = VehPort.MITM_CMD if veh_config["mitm"] else VehPort.GCS_CMD
         cmd_conn = create_udp_conn(
             base_port=cmd_base,
             offset=veh_config["veh_port_offset"],
@@ -275,6 +208,18 @@ class GCS:
                         "time_received": time.time(),
                     }
                 )
+
+                # lat/lon 0,0 means the EKF has not converged yet — a
+                # "no fix" marker rather than a position, and one that plots
+                # ~3000 km from the origin if kept.
+                if (
+                    self.record_positions
+                    and msg_type == "GLOBAL_POSITION_INT"
+                    and not (msg.lat == 0 and msg.lon == 0)
+                ):
+                    self.paths[sysid].append(
+                        GRA.from_global_int(msg.lat, msg.lon, msg.relative_alt)
+                    )
 
                 if msg_type == "STATUSTEXT" and msg.text == "LOGIC_DONE":
                     conn.mav.command_ack_send(
@@ -325,11 +270,6 @@ class GCS:
             z=float(iv["target_alt"]),
         )
 
-    def _save_pos(self):
-        """Save the current global position of each Vehicle to their trajectory path."""
-        for sysid, pos in self.pos.items():
-            self.paths[sysid].append(pos)
-
     def _remove_vehicle(self, sysid: int):
         """Remove vehicles from the environment."""
         self.conns[sysid].close()
@@ -340,13 +280,6 @@ class GCS:
         self.n_vehicles -= 1
         logging.info(f"Vehicle {sysid} removed from GCS {self.name}")
 
-    def _wait_for_pty(self, path: str, timeout: float = 3.0):
-        t0 = time.time()
-        while not os.path.exists(path):
-            if time.time() - t0 > timeout:
-                raise RuntimeError(f"PTY not created: {path}")
-            time.sleep(0.05)
-
     def _terminate_veh_processes(self, sysid: int) -> None:
         runtime = self.vehruntimes.get(sysid)
         if runtime is None:
@@ -355,18 +288,6 @@ class GCS:
 
         for name, proc in runtime.processes.items():
             terminate_process_group(proc, f"{name} for Vehicle {sysid}")
-
-    def _get_global_pos(self, sysid: int):
-        """Get the current global position of the specified vehicle."""
-        msg = self.conns[sysid].recv_match(
-            type="GLOBAL_POSITION_INT", blocking=True, timeout=0.001
-        )
-
-        if not msg:
-            return None
-
-        self.pos[sysid] = GRA.from_global_int(msg.lat, msg.lon, msg.relative_alt)
-
 
 def parse_arguments() -> tuple[str, int]:
     """Parse List of GCS system IDs and GCS name."""

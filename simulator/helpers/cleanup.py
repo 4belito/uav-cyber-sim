@@ -16,19 +16,31 @@ from simulator.config import (
     RUNTIME_GAZEBO_WORLDS,
 )
 
+# Patterns matched against the full command line (`pkill -f`), covering every
+# process the simulator spawns. The spawn sites are `create_process` in
+# `runtime/vehicle_launcher.py` (MITM, socat, ADS-B injector, logic, SITL),
+# `sim.py` (GCS) and the visualizers (`gazebo/`, `QGroundControl/`).
+#
+# The `xterm`/`bash -c` wrappers used for visible terminals carry the inner
+# command in their own command line, so matching the inner pattern kills them
+# too — they need no entries of their own.
 ALL_PROCESSES = [
-    "QGroundControl",
+    # Every Python child is launched as `python3 -m simulator.<module>`, so one
+    # pattern covers logic, gcs, adsb_injector and mitm — and anything added
+    # later, which is how `simulator.mitm` came to be missed before.
+    "python3 -m simulator.",
+    # ArduPilot SITL binaries; "arducopter" also matches "arducopter-heli".
     "arduplane",
     "arducopter",
     "ardurover",
     "ardusub",
+    # Visualizers.
     "gazebo",
     "gzserver",
     "gzclient",
+    "QGroundControl",
+    # ADS-B virtual serial cable.
     "socat",
-    "simulator.adsb_injector",
-    "simulator.logic",
-    "simulator.gcs",
 ]
 
 ALL_FOLDERS = [

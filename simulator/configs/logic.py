@@ -13,3 +13,6 @@ class LogicConfig(TypedDict):
     plan_spec: dict[str, Any]
     home_heading: NotRequired[float]
     mitm: NotRequired[bool]
+    # UDP ports of every GCS monitoring this vehicle. Empty when the vehicle is
+    # unmonitored, in which case no telemetry is emitted and no GCS ack awaited.
+    gcs_telem_ports: NotRequired[list[int]]

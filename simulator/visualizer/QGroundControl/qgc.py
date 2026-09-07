@@ -13,7 +13,7 @@ from dataclasses import dataclass
 import folium
 from IPython.display import display  # type: ignore
 
-from simulator.config import QGC_PATH, BasePort, Color
+from simulator.config import QGC_PATH, Color, SimPort
 from simulator.entities import SimVehicle, Vehicle
 from simulator.helpers.coordinates import (
     GRA,
@@ -67,7 +67,7 @@ class QGC(Visualizer[QGCVehicle]):
 
     def add_sitl_args(self, vehicle: SimVehicle) -> list[str]:
         """Add QGroundControl telematry serial port."""
-        return ["--serial6", f"udpclient:127.0.0.1:{BasePort.QGC}"]
+        return ["--serial6", f"udpclient:127.0.0.1:{SimPort.QGC}"]
 
     def gra_home(self, vehicle: SimVehicle) -> GRAPose:
         """Return the home position for a given Vehicle."""

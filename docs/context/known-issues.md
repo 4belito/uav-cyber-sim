@@ -137,7 +137,7 @@ StrEnum value (`"zephyr"`) is used instead of the resolved Gazebo name (`"gazebo
 
 1. **SITL binds multiple sequential TCP ports, not just the base.** With `--base-port 5760`:
    - SERIAL0 = 5760, SERIAL1 = 5762, SERIAL2 = 5763, SERIAL5 = 5765, …
-   - Port 5765 = `BasePort.RID_DOWN`. An Oracle ZMQ `PUB` socket from a previous simulation run in **another Jupyter kernel** holds port 5765. SITL fails: `bind failed on port 5765 - Address already in use` and exits code 1.
+   - Port 5765 = `VehPort.RID_DOWN`. An Oracle ZMQ `PUB` socket from a previous simulation run in **another Jupyter kernel** holds port 5765. SITL fails: `bind failed on port 5765 - Address already in use` and exits code 1.
    - SITL briefly owns port 5760 (detectable by `wait_for_port`), then crashes. Pymavlink connects, gets EOF as SITL dies.
 
 2. **`is_port_open` was killing SITL.** The original helper used a raw socket connect to probe if the port was open. ArduPilot SITL exits when a client connects and immediately drops the connection. This was inadvertently killing SITL during startup polling.

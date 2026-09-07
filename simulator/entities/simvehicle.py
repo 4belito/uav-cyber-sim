@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 
-from simulator.config import Color, Model
+from simulator.config import VEH_PARAMS_PATH, Color, Model
 from simulator.entities.simgcs import SimGCS
 from simulator.entities.vehicle import Vehicle
 from simulator.helpers.coordinates import ENUPose, ENUs
@@ -17,35 +18,67 @@ class SimVehicle(Vehicle):
 
     model: Model
     sysid: int
-    gcs: SimGCS
     home: ENUPose
     color: Color
     plan: Plan
     waypoints: ENUs
+    # A vehicle may be monitored by zero, one or several GCSs. The first entry
+    # owns the vehicle's OS processes; see `SimGCS` for the other side.
+    gcss: list[SimGCS] = field(default_factory=lambda: [])
+    # SITL defaults file appended to the firmware's own, per vehicle.
+    parm: str = str(VEH_PARAMS_PATH)
     port_offset: int | None = None
-    instance: int | None = None
+
+    def __post_init__(self) -> None:
+        # Back-link any GCS passed straight to the constructor.
+        for gcs in list(self.gcss):
+            gcs.add_vehicle(self)
 
     def set_port_offset(self, offset: int):
         """Set the port offset for the vehicle."""
         self.port_offset = offset
+
+    def assign_gcs(self, gcs: SimGCS) -> None:
+        """
+        Have `gcs` monitor this vehicle.
+
+        Updates both sides of the relation and is idempotent.
+        """
+        gcs.add_vehicle(self)
+
+    def unassign_gcs(self, gcs: SimGCS) -> None:
+        """Stop having `gcs` monitor this vehicle, unlinking both sides."""
+        gcs.remove_vehicle(self)
+
+    @property
+    def owner_gcs(self) -> SimGCS | None:
+        """
+        GCS responsible for launching this vehicle's processes.
+
+        The first GCS assigned, or `None` when the vehicle is unmonitored (the
+        Simulator then launches it directly).
+        """
+        return self.gcss[0] if self.gcss else None
 
     @classmethod
     def from_relative(
         cls,
         model: Model,
         sysid: int,
-        gcs: SimGCS,
         color: Color,
         plan: Plan,
         enu_origin: ENUPose,
         relative_home: ENUPose,  # relative to enu_origin
         relative_path: ENUs,  # relative waypoints
+        gcss: Sequence[SimGCS] = (),
+        parm: str = str(VEH_PARAMS_PATH),
     ) -> SimVehicle:
         """Create a SimVehicle from poses given relative to an ENU origin."""
         enu_home = enu_origin.to_abs(relative_home)
         return cls(
             sysid=sysid,
-            gcs=gcs,
+            gcss=list(gcss),
+            parm=parm,
             home=enu_home,
             color=color,
             plan=plan,

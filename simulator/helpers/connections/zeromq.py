@@ -2,12 +2,12 @@
 
 import zmq
 
-from simulator.config import BasePort
+from simulator.config import SimPort, VehPort
 
 
 def create_zmq_sockets(
     zmq_ctx: zmq.Context[zmq.Socket[bytes]],
-    base_port: BasePort,
+    base_port: SimPort | VehPort,
     sockets_type: int,
     offsets: dict[int, int],
     timeout: int = 100,
@@ -28,7 +28,7 @@ def create_zmq_sockets(
 def create_zmq_socket(
     zmq_ctx: zmq.Context[zmq.Socket[bytes]],
     sockets_type: int,
-    base_port: BasePort,
+    base_port: SimPort | VehPort,
     offset: int,
     timeout: int = 100,
     subscribe: bytes = b"",

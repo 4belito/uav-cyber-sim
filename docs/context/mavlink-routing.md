@@ -2,26 +2,97 @@
 
 ## Port Map (from `simulator/config.py`)
 
+Ports are split into two enums so the two kinds never interleave.
+
+### `VehPort` — per-vehicle (`base + the vehicle's offset`)
+
 | Constant | Value | Description |
 |---|---|---|
-| `BasePort.ARP` | `5760 + offset` | ArduPilot SITL TCP port (Logic ↔ SITL) |
-| `BasePort.ADSB` | `5761 + offset` | ADSB injector (Oracle → injector) |
-| `BasePort.ARP2` | `5762 + offset` | ArduPilot SERIAL1 (TCP, auto-opened by SITL) |
-| `BasePort.ARP3` | `5763 + offset` | ArduPilot SERIAL2 (TCP, auto-opened by SITL) |
-| `BasePort.RID_UP` | `5764 + offset` | Remote ID Logic → Oracle |
-| `BasePort.RID_DOWN` | `5765 + offset` | Remote ID Oracle → Logic |
-| `BasePort.GCS` | `5766 + offset` | Telemetry channel: Logic → GCS (UDP) |
-| `BasePort.ORC_DONE` | `5767` | ZMQ ROUTER/DEALER for Oracle done signal |
-| `BasePort.GCS_CMD` | `5768 + offset` | Command channel: GCS → Logic (UDP) |
-| `BasePort.MITM_TELEM` | `9000 + offset` | MITM telemetry listener (Logic → MITM → GCS) — only when MITM enabled |
-| `BasePort.MITM_CMD` | `9001 + offset` | MITM command listener (GCS → MITM → Logic) — only when MITM enabled |
-| `BasePort.QGC` | `14550` | QGroundControl UDP port — **fixed, not per-vehicle** |
+| `VehPort.ARP` | `5760 + offset` | ArduPilot SITL TCP port (Logic ↔ SITL) |
+| `VehPort.ADSB` | `5761 + offset` | ADSB injector (Oracle → injector) |
+| `VehPort.ARP2` | `5762 + offset` | ArduPilot SERIAL1 (TCP, auto-opened by SITL) |
+| `VehPort.ARP3` | `5763 + offset` | ArduPilot SERIAL2 (TCP, auto-opened by SITL) |
+| `VehPort.RID_UP` | `5764 + offset` | Remote ID Logic → Oracle |
+| `VehPort.RID_DOWN` | `5765 + offset` | Remote ID Oracle → Logic |
+| `VehPort.GCS_CMD` | `5766 + offset` | Command channel: any GCS → Logic (UDP) |
+| `VehPort.MITM_TELEM` | `5767 + offset` | MITM telemetry listener — only when MITM enabled |
+| `VehPort.MITM_CMD` | `5768 + offset` | MITM command listener — only when MITM enabled |
+| *(spare)* | `5769 + offset` | Unused slot in the vehicle's block |
 
-> MITM ports sit at 9000/9001 (well above the per-UAV cluster) so a vehicle's
-> block never collides with another vehicle's MITM ports at +10 stride. They are
-> always reserved by the offset search but only bound when a MITM is enabled.
+> Every `VehPort` now sits inside the vehicle's own one-stride-wide block
+> (`5760 + offset` .. `5769 + offset`), MITM included, so one vehicle's ports can
+> never reach another's however many vehicles run. The MITM ports are reserved
+> with the block but only bound when a MITM is enabled.
 
-> **Confidence:** Confirmed from repo (`simulator/config.py`)
+### The block is shared with ArduPilot
+
+SITL listens on `base_port + N` for every serial it leaves as TCP
+(`_serial_path[]`, `AP_HAL_SITL/SITL_State.h`), so the vehicle's block is not
+ours alone. The TCP/UDP split below is **load-bearing**: our TCP users sit only
+on slots SITL leaves free, and the slots SITL does use we take as UDP — a UDP
+bind and a TCP listen on the same number do not conflict.
+
+```text
+slot | ours                  | SITL serial (TCP)
+ +0  | ARP           tcp     | SERIAL0
+ +1  | ADSB/zmq      tcp     | -
+ +2  | ARP2          tcp     | SERIAL1
+ +3  | ARP3          tcp     | SERIAL2
+ +4  | RID_UP/zmq    tcp     | -
+ +5  | RID_DOWN/zmq  tcp     | SERIAL5 -> freed by our --serial5=uart:
+ +6  | GCS_CMD       udp     | SERIAL6
+ +7  | MITM_TELEM    udp     | SERIAL7
+ +8  | MITM_CMD      udp     | SERIAL8
+ +9  | (spare)               | -
+```
+
+Moving a ZMQ port onto a TCP serial slot, or +6/+7/+8 to a TCP transport, would
+collide with SITL. `_ports_available` therefore probes **both** transports.
+
+`SitlPort` holds the ports SITL claims per vehicle entirely on its own — `RCIN`
+5501, `FG_VIEW` 5503, `SIM_OUT`/`SIM_IN` 9002/9003 (Gazebo), `IRLOCK` 9005, all
+UDP. `-I N` adds `10*N` to each while it is at its default
+(`SITL_cmdline.cpp:401-421`) and we override none, so they stride exactly like
+`VehPort` and are reserved with the block even though nothing of ours binds them.
+
+> **Why `SITL_INSTANCE_STRIDE` must be 10.** ArduPilot hardcodes it: `--instance|-I N`
+> *"adds 10\*instance to all port numbers"*. `Simulator` derives the SITL
+> instance as `port_offset // SITL_INSTANCE_STRIDE`, so any other stride desyncs a vehicle
+> from its own SITL. `--base-port` suppresses the instance offset for the serial
+> block (`if (_base_port == BASE_PORT)`), which is why the two do not double up.
+
+### `GCS_TELEM_WINDOW` — a *window* per vehicle
+
+| Constant | Value | Description |
+|---|---|---|
+| `GCS_TELEM_WINDOW` | `20000 + k + offset` | Telemetry: Logic → the vehicle's *k*-th GCS (UDP) |
+
+Not a `VehPort`: every member there is **one** port per vehicle, whereas a
+vehicle takes several ports here — one per GCS monitoring it.
+
+### `SimPort` — one per simulation
+
+| Constant | Value | Description |
+|---|---|---|
+| `SimPort.QGC` | `14550` | QGroundControl UDP port — **fixed**, set by QGC itself |
+| `SimPort.ORC_DONE` | `14560` | ZMQ ROUTER/DEALER for the Oracle done signal |
+
+> Offsets are multiples of `SITL_INSTANCE_STRIDE` (10), so a vehicle's window is
+> exactly wide enough before the next vehicle's begins — which is why
+> `SITL_INSTANCE_STRIDE` = **10 GCSs** is the ceiling on how many may monitor one vehicle
+> (`_assign_telem_ports` raises past it). The window is claimed atomically with
+> the rest of the vehicle's block and every port is derivable from its offset,
+> so there is no separate pool and no privileged "first" listener.
+
+> **The two groups exclude each other, in both directions.** A port search picks
+> by probing but never *holds* what it picks (the probe socket closes at once)
+> and nothing has launched yet, so probing alone cannot see the other group.
+> `launch()` therefore claims the `SimPort`s **first** — there are only two and
+> QGC's is immovable — then passes them as `reserved` to the vehicle search,
+> which rejects any offset whose block would touch one. Without this a vehicle's
+> `MITM_TELEM` reaches QGC's 14550 at ~556 vehicles and silently steals it.
+
+> **Confidence:** Confirmed from repo (`simulator/config.py`, `simulator/sim.py`)
 
 ## Full Communication Diagram
 
@@ -29,10 +100,10 @@
                      TCP 5760+offset
 ArduPilot SITL  ←────────────────────→  Logic
       │                                    │
-      │  (telemetry forwarded by Logic)    │  UDP 5766+offset  (telemetry)
+      │  (telemetry forwarded by Logic)    │  UDP 20000+k+offset (telemetry)
       │                                    ├──────────────────────────────→ GCS
       │                                    │
-      │                                    │  UDP 5768+offset  (commands)
+      │                                    │  UDP 5766+offset  (commands)
       │                                    ←────────────────────────────── GCS
       │
       │  UDP 14550 (udpclient)
@@ -42,13 +113,13 @@ ArduPilot SITL  ←────────────────────�
 ### Telemetry path (SITL → GCS)
 
 `MAVLinkManager` reads every message from SITL on `ap_conn` (TCP 5760). Messages whose
-type is in `_GCS_TELEMETRY_TYPES` are forwarded to `cs_conn` (`udpout:5766`), which the GCS
+type is in `_GCS_TELEMETRY_TYPES` are forwarded to `cs_conn` (`udpout:20000+k`), which the GCS
 receives. Forwarded types: `HEARTBEAT`, `GLOBAL_POSITION_INT`, `MISSION_CURRENT`,
 `STATUSTEXT`, `VFR_HUD`, `ATTITUDE`, `SYS_STATUS`.
 
 ### Command path (GCS → SITL)
 
-The GCS creates a UDP sender on `BasePort.GCS_CMD` (5768 + offset). Logic creates a
+The GCS creates a UDP sender on `VehPort.GCS_CMD` (5766 + offset). Logic creates a
 matching UDP receiver and runs a `GCSCommandForwarder` thread
 (`simulator/runtime/vehicle/gcs_cmd_forwarder.py`) that forwards whitelisted commands
 from the GCS to ArduPilot on `ap_conn`. Whitelisted types: `MISSION_COUNT`,
@@ -66,6 +137,56 @@ independent links — Logic cannot inject messages into the QGC link via ArduPil
 
 > **Confidence:** Confirmed from repo (`simulator/visualizer/QGroundControl/qgc.py`, `simulator/config.py`)
 
+## Vehicles with Zero, One or Many GCSs
+
+A vehicle may be monitored by **any number of GCSs, including none**
+(`SimVehicle.gcss` / `SimGCS.vehicles`, linked through `SimGCS.add_vehicle` or
+`SimVehicle.assign_gcs`). Two consequences fall out of that, both handled by
+`Simulator.launch()`:
+
+### Process ownership
+
+The GCS process is what spawns a vehicle's OS processes (SITL, socat, ADS-B
+injector, Logic, MITM), so exactly one component must own each vehicle:
+
+- **First GCS in `veh.gcss` owns it.** Its `VehicleConfig["launch"]` is `True`;
+  it launches the processes and terminates them when the vehicle finishes.
+- **Every other GCS gets `launch: False`** and only attaches to the running
+  vehicle. Its `VehicleRuntime.processes` is empty, so the teardown path is a
+  natural no-op.
+- **A vehicle with no GCS is launched by the `Simulator` itself**
+  (`_launch_unassigned_vehicles`), keeping its handles in
+  `Simulator.unassigned_procs`.
+
+Both paths call the same `simulator/runtime/vehicle_launcher.py::launch_vehicle`.
+
+### One telemetry listener per (vehicle, GCS)
+
+A UDP port has a single binder, so the vehicle's GCSs cannot share one:
+
+- The vehicle's *k*-th GCS takes `GCS_TELEM_WINDOW + k + offset`
+  (`Simulator._assign_telem_ports`), capped at `Simulator.max_gcss_per_veh`.
+  The list is aligned index-by-index with `veh.gcss` and reaches each GCS as
+  `VehicleConfig["telem_port"]`.
+- Logic receives the whole list as `LogicConfig["gcs_telem_ports"]` and fans the
+  telemetry out to all of them (`MAVLinkManager.gcs_conns`). With a MITM
+  interposed Logic still writes one stream to `MITM_TELEM`, and the **MITM** does
+  the fan-out (`--telem-ports`, one `telem-ack` backflow relay per GCS).
+
+The **command** direction needs no fan-out: every GCS sends to the one
+`GCS_CMD + veh_offset` (or `MITM_CMD`) receiver.
+
+### Mission completion
+
+Logic blocks on a `COMMAND_ACK` for its `LOGIC_DONE` `STATUSTEXT`, so
+`send_done_msgs` walks **every** telemetry link — a vehicle watched by several
+GCSs only finishes once they have all seen it. With **no** GCS the step is
+skipped entirely; the vehicle still reports `DONE` to the Oracle over ZMQ from
+`RIDManager.stop()` (identity `log-<sysid>`), so Oracle shutdown is unaffected.
+
+> **Confidence:** Confirmed from repo (`simulator/sim.py`, `simulator/gcs.py`,
+> `simulator/logic.py`, `simulator/mitm.py`)
+
 ## GCS Intervention API
 
 `Simulator.intervention` accepts a dict that is serialized into the GCS config JSON:
@@ -82,7 +203,7 @@ simulator.intervention = {
 `GCS._monitor_vehicle` polls MISSION_CURRENT in its single recv loop. When the trigger
 fires once, `GCS._send_intervention` sends `SET_MODE(GUIDED, custom_mode=4)` +
 `COMMAND_INT(MAV_CMD_DO_REPOSITION=192)` via `cmd_conn`. Logic's `GCSCommandForwarder`
-picks these up on 5768 and forwards them to ArduPilot.
+picks these up on 5766 and forwards them to ArduPilot.
 
 **MISSION_CURRENT seq mapping (ArduCopter AutoPlan, 3-waypoint example):**
 
@@ -102,16 +223,17 @@ GCS and the vehicle's Logic. Enabled via `simulator.mitm = {"strategy": "..."}`
 (default strategy `passthrough`). When set:
 
 - Sim writes `mitm=True` into the logic config and `mitm` + `mitm_cmd` into each
-  `VehicleConfig`. The MITM process is launched by the GCS in `_launch_vehicle`
-  (first, so its listeners are bound before Logic/GCS start sending) and tracked
-  in `processes[SimProcess.MITM]`, so existing cleanup terminates it.
+  `VehicleConfig`. The MITM process is launched by the vehicle's owner in
+  `simulator/runtime/vehicle_launcher.py::launch_vehicle` (first, so its listeners
+  are bound before Logic/GCS start sending) and tracked in
+  `processes[SimProcess.MITM]`, so existing cleanup terminates it.
 - **Only the two senders are retargeted** — Logic's telemetry sender → `MITM_TELEM`,
-  GCS's command sender → `MITM_CMD`. The receivers (`GCS` 5766, `GCS_CMD` 5768)
+  GCS's command sender → `MITM_CMD`. The receivers (telemetry `20000+k`, `GCS_CMD` 5766)
   are unchanged, so the endpoints are otherwise unaware of the interposition.
 
 ```
-telemetry:  Logic --MITM_TELEM(9000)--> [MITM] --GCS(5766)--> GCS
-commands:   GCS   --MITM_CMD(9001)-->   [MITM] --GCS_CMD(5768)--> Logic
+telemetry:  Logic --MITM_TELEM(5767)--> [MITM] --telem(20000+k)--> GCS
+commands:   GCS   --MITM_CMD(5768)-->   [MITM] --GCS_CMD(5766)--> Logic
 ```
 
 **Each link is proxied bidirectionally.** The telemetry channel is not purely

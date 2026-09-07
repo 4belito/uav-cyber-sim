@@ -11,7 +11,7 @@ ArduPilot SITL with `--base-port N` binds **multiple** sequential TCP ports for 
 | 5763 | SERIAL2 |
 | 5765 | SERIAL5 |
 
-**Port 5765 = `BasePort.RID_DOWN`** — this conflicts with Oracle ZMQ `PUB` sockets if any Oracle has run with the same `port_offset`. SITL exits code 1: `bind failed on port 5765 - Address already in use`.
+**Port 5765 = `VehPort.RID_DOWN`** — this conflicts with Oracle ZMQ `PUB` sockets if any Oracle has run with the same `port_offset`. SITL exits code 1: `bind failed on port 5765 - Address already in use`.
 
 - High offsets (e.g. `port_offset=320`, base_port=6080) avoid this conflict because none of 6080–6089 are claimed by Oracle.
 - `clean()` runs `fuser -k -KILL` on the entire range [5760, 5780) to clear stale sockets before any simulation start.
