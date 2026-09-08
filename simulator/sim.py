@@ -24,6 +24,11 @@ from simulator.config import (
 from simulator.configs.gcs import VehicleConfig
 from simulator.entities import VehT
 from simulator.external.sitl import resolve_sitl_build
+from simulator.helpers.cleanup import (
+    ALL_PROCESSES,
+    clean_adsb_ptys,
+    kill_processes,
+)
 from simulator.helpers.logging.setup_log import setup_logging
 from simulator.helpers.math import connection_id
 from simulator.helpers.processes import SimProcess, create_process
@@ -174,16 +179,53 @@ class Simulator(Generic[VehT]):
             )  # "exit"
             logging.info(f"🚀 GCS {gcs_name} launched (PID {p.pid})")
 
-    def run(self) -> None:
+    def run(self, timeout: float | None = None) -> bool:
         """
         Launch the simulation and block until every mission completes.
 
         Convenience for the usual `launch()` then `oracle.run()` pairing. Call
         the two separately when you need to do something in between — inspect
         the spawned processes, or watch the visualizer come up before flying.
+
+        `timeout` is a wall-clock cap in seconds on the flying, and the way to
+        run a scenario that has no ending of its own — a pursuit where nobody is
+        caught, or a plan that wedges. When it expires the run is torn down by
+        `stop()` rather than left hanging, and so it is on Ctrl-C or any error;
+        a run that finishes on its own is left up, as before, so the visualizer
+        stays on screen. The default `None` waits forever, the old behaviour.
+
+        Returns True when every mission completed, False when the timeout
+        stopped the run first.
         """
         self.launch()
-        self.oracle.run()
+        try:
+            completed = self.oracle.run(timeout=timeout)
+        except BaseException:
+            # Interrupting the cell lands here too, and is the common case: a
+            # half-stopped run leaves ports held and the next launch fails.
+            self.stop()
+            raise
+        if not completed:
+            self.stop()
+        return completed
+
+    def stop(self) -> None:
+        """
+        Stop the simulation, in whatever state it is in.
+
+        Winds down the Oracle's threads, closes its sockets, then kills every
+        process the run spawned — SITL, logic, MITM, ADS-B, the GCSs and the
+        visualizer — and removes the ADS-B PTY links. Data and log folders are
+        left untouched, so trajectories recorded so far stay plottable; `clean()`
+        is the one that wipes those, and is still what you want before a *new*
+        run in the same kernel.
+        """
+        # The Oracle's own sockets sit on simulation ports inside this process,
+        # so they are released before anything goes hunting for what holds them.
+        self.oracle.close()
+        kill_processes(ALL_PROCESSES)
+        clean_adsb_ptys()
+        logging.info("🛑 Simulation stopped")
 
     def _launch_unassigned_vehicles(self) -> None:
         """

@@ -55,6 +55,10 @@ COLOR_EMOJI_LABELS = {
 
 TX_LOOP_SLEEP = 0.01
 RX_LOOP_SLEEP = 0.10
+# How long `stop()` waits on each worker thread. They only ever sleep for a
+# loop tick, so anything longer means the thread is wedged and is not worth
+# waiting for — the run is being torn down either way.
+THREAD_JOIN_TIMEOUT = 2.0
 
 # Module-level registry so clean() can reach active Oracle instances
 _active: set["Oracle"] = set()
@@ -128,6 +132,8 @@ class Oracle:
         self.grid = Grid(cell_size=transmission_range * 1.01)
         self._seen_in_grid: set[int] = set()
         self._bound = False
+        # Set by `stop()` to release the workers when a run is cut short.
+        self._shutdown = threading.Event()
 
         # --- the scenario: what is being simulated -------------------------
         # Owned here rather than by the Simulator, which only decides how the
@@ -265,7 +271,7 @@ class Oracle:
         """Wait for DONE messages from all Vehicles, then ACK and exit."""
         seen_done: set[str] = set()
 
-        while len(seen_done) < self.n_entities:
+        while len(seen_done) < self.n_entities and not self._shutdown.is_set():
             try:
                 frames = self.done_sock.recv_multipart()
                 identity = frames[0]
@@ -296,8 +302,20 @@ class Oracle:
             except Exception as e:
                 logging.error(f"Error receiving DONE: {e}")
 
-    def run(self):
-        """Run the Oracle to manage Vehicle connections and communication."""
+    def run(self, timeout: float | None = None) -> bool:
+        """
+        Run the Oracle to manage Vehicle connections and communication.
+
+        Blocks until every vehicle and every GCS has reported DONE. `timeout`
+        caps that wait in seconds: a scenario that never finishes on its own —
+        a pursuit with no capture, a vehicle stuck mid-plan — would otherwise
+        block forever. The default `None` waits indefinitely, as before.
+
+        Returns True when everything completed, False when the timeout ended
+        the wait. Either way the Oracle's own threads are wound down before
+        returning, so nothing is left spinning; the simulation's *processes*
+        outlive this call, and `Simulator.stop()` is what ends those.
+        """
         if not self._bound:
             raise RuntimeError(
                 "Oracle.run() called before the Oracle was bound to a "
@@ -314,19 +332,67 @@ class Oracle:
             thread.start()
         self.done_thread.start()
 
-        while any(not event.is_set() for event in self.stop_sys.values()):
-            time.sleep(0.1)
-        logging.info("✅ All Vehicle threads completed")
-        while any(not event.is_set() for event in self.stop_gcs.values()):
-            time.sleep(0.1)
-        logging.info("✅ All GCS threads completed")
+        # One deadline for both waits, not one each: `timeout` is how long the
+        # whole run may take, so vehicles finishing late leave the GCSs less.
+        deadline = None if timeout is None else time.monotonic() + timeout
+        completed = self._wait_for(self.stop_sys.values(), deadline)
+        if completed:
+            logging.info("✅ All Vehicle threads completed")
+            completed = self._wait_for(self.stop_gcs.values(), deadline)
+            if completed:
+                logging.info("✅ All GCS threads completed")
+        if not completed:
+            pending_veh = [s for s, e in self.stop_sys.items() if not e.is_set()]
+            pending_gcs = [n for n, e in self.stop_gcs.items() if not e.is_set()]
+            logging.warning(
+                f"⏱️ Timed out after {timeout}s — still running: "
+                f"vehicles {pending_veh or 'none'}, GCSs {pending_gcs or 'none'}"
+            )
+        self.stop()
 
         logging.info("🎉 Oracle shutdown complete!")
+        return completed
+
+    @staticmethod
+    def _wait_for(events: Iterable[threading.Event], deadline: float | None) -> bool:
+        """Wait for every event, or until `deadline`. True if all were set."""
+        pending = list(events)
+        while any(not event.is_set() for event in pending):
+            if deadline is not None and time.monotonic() >= deadline:
+                return False
+            time.sleep(0.1)
+        return True
+
+    def stop(self) -> None:
+        """
+        Wind down the Oracle's worker threads, finished or not.
+
+        Releases every waiter — `wait_done` included, which otherwise sits on
+        the DONE socket until each entity reports in — so a timed-out or
+        interrupted run leaves no live thread behind in a notebook kernel.
+        Idempotent, and safe on an Oracle that was never run. The sockets stay
+        open so recorded state is still readable; `close()` frees those.
+        """
+        if not self._bound:
+            return
+        self._shutdown.set()
+        for event in (*self.stop_sys.values(), *self.stop_gcs.values()):
+            event.set()
+        for thread in (
+            *self.rid_in_threads.values(),
+            *self.rid_out_threads.values(),
+            self.done_thread,
+        ):
+            if thread.is_alive():
+                thread.join(timeout=THREAD_JOIN_TIMEOUT)
 
     def close(self) -> None:
         """Close all ZMQ sockets and terminate the context."""
         if not self._bound:
             return  # never opened anything
+        # Threads first: destroying the context under a thread still blocked in
+        # `recv` is what leaves a kernel with wedged workers.
+        self.stop()
         self._zmq_ctx.destroy(linger=0)
         _active.discard(self)
 
