@@ -28,7 +28,6 @@ from simulator.helpers.logging.setup_log import setup_logging
 from simulator.helpers.math import connection_id
 from simulator.helpers.processes import SimProcess, create_process
 from simulator.oracle import Oracle
-from simulator.params.simulation import SIM_SPEEDUP
 from simulator.runtime.vehicle_launcher import launch_vehicle
 from simulator.visualizer import Visualizer
 
@@ -74,6 +73,7 @@ class Simulator(Generic[VehT]):
         terminals: list[SimProcess] | None = None,
         suppress_output: list[SimProcess] | None = None,
         verbose: int = 1,
+        speedup: float = 1.0,
     ):
         if terminals is None:
             terminals = []
@@ -92,6 +92,8 @@ class Simulator(Generic[VehT]):
         self.unassigned_procs: dict[int, dict[SimProcess, Popen[bytes]]] = {}
         self.orc_port_offset: int
         self.verbose = verbose
+        # SITL wall-clock multiplier: how fast the run goes, not what it runs.
+        self.speedup = speedup
         setup_logging(
             LOGS_PATH / f"{self.oracle_name}.log", verbose=verbose, console_output=True
         )
@@ -243,6 +245,7 @@ class Simulator(Generic[VehT]):
                 "plan_spec": veh.plan.get_spec().to_dict(),
                 "mitm": sysid in self.oracle.mitm,
                 "gcs_telem_ports": self.veh_telem_ports[sysid],
+                "rid_frequency": self.oracle.rid_frequency,
             }
             config_path = self.logic_dir / f"logic_config_{sysid}.json"
             with config_path.open("w") as f:
@@ -278,9 +281,7 @@ class Simulator(Generic[VehT]):
             with config_path.open("w") as f:
                 json.dump(gcs_config, f, indent=2)
 
-    def _ports_available(
-        self, ports: Iterable[int], reserved: Container[int]
-    ) -> bool:
+    def _ports_available(self, ports: Iterable[int], reserved: Container[int]) -> bool:
         """
         Whether every one of `ports` is free to bind and unclaimed.
 
@@ -343,7 +344,7 @@ class Simulator(Generic[VehT]):
             sitl_model,
             "-I" + str(inst),
             "--speedup",
-            str(SIM_SPEEDUP),
+            str(self.speedup),
             "--sysid",
             str(connection_id(sysid)),
             "--base-port",

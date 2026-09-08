@@ -30,11 +30,7 @@ from simulator.helpers.coordinates import ENU, GRA
 from simulator.helpers.logging.data_logger import DataLogger
 from simulator.helpers.logging.setup_log import setup_logging
 from simulator.helpers.math import connection_id
-from simulator.params.simulation import (
-    DATA_STREAM_FREQUENCY,
-    HEARTBEAT_FREQUENCY,
-    REMOTE_ID_FREQUENCY,
-)
+from simulator.params.simulation import DATA_STREAM_FREQUENCY, HEARTBEAT_FREQUENCY
 from simulator.planner import Action, Plan, PlanSpec, State, Step
 from simulator.runtime.vehicle.gcs_cmd_forwarder import GCSCommandForwarder
 from simulator.runtime.vehicle.mav_manager import MAVLinkManager
@@ -48,12 +44,8 @@ DATA_STREAM_IDS = [
     DataStream.EXTRA1,  # Required to receive some ArduPilot custom telemetry
     DataStream.EXTRA2,
 ]
-RID_INTERVAL = int(1_000_000 / REMOTE_ID_FREQUENCY)
-
-
 # TODO: Refactor this module
 heartbeat_event = mavutil.periodic_event(HEARTBEAT_FREQUENCY)
-rid_event = mavutil.periodic_event(REMOTE_ID_FREQUENCY)
 
 
 def wait_for_vehicle_link(
@@ -102,6 +94,10 @@ def start_logic(config: LogicConfig):
     # an unmonitored vehicle, which then emits no telemetry and waits for no ack.
     # When a MITM is interposed there is a single link to its listener instead;
     # the MITM fans the stream out to every GCS port on the vehicle's behalf.
+    # Remote ID rate comes from the Oracle, per run, not from a global.
+    rid_frequency = int(config.get("rid_frequency", 5))
+    rid_interval = int(1_000_000 / rid_frequency)
+    rid_event = mavutil.periodic_event(rid_frequency)
     mitm_enabled = bool(config.get("mitm", False))
     gcs_telem_ports = list(config.get("gcs_telem_ports", []))
     if mitm_enabled:
@@ -158,7 +154,7 @@ def start_logic(config: LogicConfig):
     ap_conn.wait_heartbeat()
     logging.debug("MAVLink connection established")
 
-    msg = ask_msg(ap_conn, MsgID.GLOBAL_POSITION_INT, interval=RID_INTERVAL)
+    msg = ask_msg(ap_conn, MsgID.GLOBAL_POSITION_INT, interval=rid_interval)
     mav_mng.send(msg)
 
     stream_msgs = request_sensor_streams(

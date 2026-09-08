@@ -10,11 +10,14 @@ from __future__ import annotations
 import json
 import logging
 import pickle
+import re
 import subprocess
 import threading
 import time
+import unicodedata
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Literal
 
 import matplotlib.pyplot as plt
 import zmq
@@ -27,7 +30,6 @@ from simulator.entities import SimGCS, SimVehicle
 from simulator.entities.riddata import RIDData
 from simulator.helpers.connections import create_zmq_socket, create_zmq_sockets
 from simulator.helpers.coordinates import GRA, ENUs, GRAPose, GRAs
-from simulator.params.simulation import USE_NETWORK_SIM
 from simulator.runtime.grid import Grid
 
 # Smallest ground span a plot is given, so a stationary or straight-line flight
@@ -37,12 +39,43 @@ MIN_PLOT_SPAN = 5.0  # metres
 # 5 m floor would bury a low hop or the centimetre-scale wobble of a landed
 # vehicle. Only a genuinely flat track is padded to this.
 MIN_UP_SPAN = 1.0  # metres
+# One marker per GCS, so two stations watching the same vehicle stay apart on a
+# plot: the colour says which vehicle, the marker says which recorded it.
+# The Oracle's own Remote ID view always uses "o".
+GCS_MARKERS = ("^", "s", "D", "v", "P", "X", "*", "<", ">", "h")
+COLOR_EMOJI_LABELS = {
+    "🟦": "BLUE",
+    "🟩": "GREEN",
+    "🟥": "RED",
+    "🟧": "ORANGE",
+    "🟨": "YELLOW",
+    "⬛": "BLACK",
+    "⬜": "WHITE",
+}
 
 TX_LOOP_SLEEP = 0.01
 RX_LOOP_SLEEP = 0.10
 
 # Module-level registry so clean() can reach active Oracle instances
 _active: set["Oracle"] = set()
+
+
+def _legend_safe(name: str) -> str:
+    """
+    Return a plot-font-safe GCS label without losing color identity.
+
+    GCS names often carry a colour emoji (`GCS_🟩🟦`), and matplotlib's default
+    font has no glyph for those: it warns once per character and draws a
+    placeholder box. Replace supported color emoji with ASCII tags such as
+    `GCS [GREEN] [BLUE]`, then drop any other unsupported characters. The GCS
+    keeps its real name everywhere else, including its trajectory file.
+    """
+    for emoji, color_name in COLOR_EMOJI_LABELS.items():
+        name = re.sub(rf"[_\-\s]*{re.escape(emoji)}", f" [{color_name}]", name)
+    kept = "".join(
+        ch for ch in name if ord(ch) <= 0xFFFF and unicodedata.category(ch) != "So"
+    ).strip(" _-·")
+    return kept or name
 
 
 class Oracle:
@@ -54,18 +87,42 @@ class Oracle:
     """
 
     def __init__(
-        self, transmission_range: float = 100.0, record_positions: bool = True
+        self,
+        transmission_range: float = 100.0,
+        record_positions: bool = True,
+        network_sim: bool = False,
+        rid_frequency: int = 5,
+        rid_enabled: bool = True,
     ) -> None:
         """
         Configure an Oracle. It is not usable until `bind` supplies the
         launch-time wiring, which `Simulator.launch()` does for you.
 
-        `transmission_range` is the inter-vehicle Remote ID range, in metres.
-        `record_positions` keeps each vehicle's Remote ID track for
-        `plot_trajectories`; it covers every vehicle, GCS-monitored or not.
+        Everything the Oracle itself decides is an argument here:
+
+        * `rid_enabled` — relay Remote ID between vehicles at all. Turn it off
+          and no vehicle ever hears another, so nothing avoids anything; the
+          Oracle still receives each vehicle's own beacons, so `record_positions`
+          and the plots keep working.
+        * `transmission_range` — inter-vehicle Remote ID range, in metres.
+        * `rid_frequency` — how often each vehicle broadcasts Remote ID, in Hz.
+          The transmit half of the same model as `transmission_range`; the
+          Simulator passes it to each vehicle's logic process.
+        * `record_positions` — keep each vehicle's Remote ID track for
+          `plot_trajectories`; covers every vehicle, GCS-monitored or not.
+        * `network_sim` — relay Remote ID through the external `uli-net-sim` RF
+          model instead of the plain range check. Needs that tool installed at
+          `/usr/uli-net-sim`; the range check is used when it is off.
+
+        Settings that cross a process boundary (heartbeat and stream rates, SITL
+        speedup) are not here — they live in `simulator.params.simulation`,
+        because the vehicle, GCS and SITL processes read them, not the Oracle.
         """
         self.transmission_range = transmission_range
         self.record_positions = record_positions
+        self.network_sim = network_sim
+        self.rid_frequency = rid_frequency
+        self.rid_enabled = rid_enabled
         # sysid -> ENU track, filled from Remote ID as the run proceeds.
         self.paths: dict[int, ENUs] = {}
         self.grid = Grid(cell_size=transmission_range * 1.01)
@@ -120,13 +177,17 @@ class Oracle:
         The vehicles are the ones already linked to the GCS (through
         `SimGCS(vehicles=...)`, `SimGCS.add_vehicle` or `SimVehicle.assign_gcs`).
         One already in the scenario is left as is, so it simply ends up
-        monitored by several GCSs; a new one is added. Raises if a GCS of this
-        name is already registered.
+        monitored by several GCSs; a new one is added.
+
+        Adding the same GCS twice is a no-op, because a GCS also arrives here
+        indirectly: adding one GCS registers every other GCS of the vehicles it
+        shares. Only a *different* GCS reusing a registered name is an error.
         """
-        if gcs.name in self.gcss:
+        known = self.gcss.get(gcs.name)
+        if known is not None and known is not gcs:
             raise ValueError(
-                f"A GCS named '{gcs.name}' is already in the scenario; "
-                "GCS names must be unique."
+                f"A different GCS named '{gcs.name}' is already in the "
+                "scenario; GCS names must be unique."
             )
         self.gcss[gcs.name] = gcs
         for vehicle in list(gcs.vehicles):
@@ -293,6 +354,11 @@ class Oracle:
 
     def retransmit_rid(self, sysid: int):
         """Retransmit Remote IDs to neighbor Vehicles (one-shot per update)."""
+        if not self.rid_enabled:
+            # Nothing is relayed, so this thread has no work: vehicles still
+            # report to the Oracle, they just never hear each other.
+            logging.info(f"Remote ID relay disabled: vehicle {sysid} sends only")
+            return
         while not self.stop_sys[sysid].is_set():
             if sysid not in self._seen_in_grid:
                 time.sleep(TX_LOOP_SLEEP)
@@ -303,7 +369,7 @@ class Oracle:
                     time.sleep(TX_LOOP_SLEEP)
                     continue
                 # get position and velocity parameters for each drone
-                if USE_NETWORK_SIM:
+                if self.network_sim:
                     pos = rid.enu_pos
                     spd = rid.speed
                     cog = rid.cog
@@ -317,7 +383,7 @@ class Oracle:
                     ]
                     o_sysids: list[int] = []
                     for o_sysid in self.grid.iter_neighbors_within(
-                        sysid, rid.enu_pos, radius=None
+                        sysid, rid.enu_pos, radius=self.transmission_range
                     ):
                         o_rid = self.grid.rid(o_sysid)
                         logging.debug(
@@ -386,7 +452,7 @@ class Oracle:
                                 self.rid_out_socks[o_sysid].send_pyobj(rid)  # type: ignore
                 else:
                     for o_sysid in self.grid.iter_neighbors_within(
-                        sysid, rid.enu_pos, radius=None
+                        sysid, rid.enu_pos, radius=self.transmission_range
                     ):
                         with self.rid_locks[o_sysid]:
                             self.rid_out_socks[o_sysid].send_pyobj(rid)  # type: ignore
@@ -398,8 +464,15 @@ class Oracle:
         self,
         *,
         oracle: bool = True,
-        gcss: bool = False,
+        gcss: Iterable[str] | Literal["all"] = (),
         sysids: Iterable[int] | None = None,
+        legend: bool = True,
+        xlim: tuple[float, float] | None = None,
+        ylim: tuple[float, float] | None = None,
+        zlim: tuple[float, float] | None = None,
+        elev: float | None = None,
+        azim: float | None = None,
+        roll: float | None = None,
         save: str | Path | None = None,
         show: bool = True,
     ) -> Figure | None:
@@ -410,13 +483,27 @@ class Oracle:
 
         * `oracle` — this Oracle's own Remote ID track of **every** vehicle,
           including any that no GCS monitors. Requires `record_positions`.
-        * `gcss` — what each GCS recorded from its telemetry stream, so only its
-          own vehicles, and only where `SimGCS.record_positions` was on. This is
-          the ground-side view: a MITM that drops telemetry shows up as a gap
-          here while the Oracle track stays complete.
+        * `gcss` — what the named GCSs recorded from their telemetry streams, so
+          only their own vehicles, and only where `SimGCS.record_positions` was
+          on. This is the ground-side view: a MITM that drops telemetry shows up
+          as a gap here while the Oracle track stays complete. Stations are
+          chosen by name: `"all"` for every one, a list of names (or a single
+          name) for some, or the default empty for none. Each gets its own
+          marker, so two stations watching one vehicle stay apart.
 
-        `sysids` restricts the plot to those vehicles. Returns the figure, or
-        `None` when there is nothing recorded to draw.
+        `sysids` restricts the plot to those vehicles. Set `legend=False` to drop
+        the key, which crowds the figure once there are many vehicles. Each of
+        `xlim`, `ylim` and `zlim` takes a `(low, high)` pair in metres that
+        replaces the automatic range on that axis, so separate runs can be
+        compared on identical axes; the others still scale to fit.
+
+        `elev`, `azim` and `roll` rotate the camera, in degrees: `elev` above the
+        east/north plane, `azim` around the up axis (counter-clockwise, so `-90`
+        looks along north and `0` along east), and `roll` about the line of
+        sight. Each defaults to matplotlib's own view (30, -60, 0) when left
+        unset. `elev=90, azim=-90` gives a plain top-down ground track.
+
+        Returns the figure, or `None` when there is nothing recorded to draw.
         """
         wanted = set(sysids) if sysids is not None else None
         series: list[tuple[str, ENUs, str, str]] = []
@@ -426,27 +513,43 @@ class Oracle:
                 if (wanted is None or sysid in wanted) and track:
                     series.append((f"Vehicle {sysid}", track, self._color(sysid), "o"))
 
-        if gcss:
-            for name in sorted(self.gcss):
-                file = DATA_PATH / f"trajectories_{name}.pkl"
-                if not file.exists():
-                    logging.warning(
-                        f"GCS {name} recorded no trajectories "
-                        f"(record_positions off, or it never ran)"
-                    )
-                    continue
-                with file.open("rb") as f:
-                    recorded: dict[int, GRAs] = pickle.load(f)
-                for sysid, gra_track in sorted(recorded.items()):
-                    if wanted is not None and sysid not in wanted:
-                        continue
-                    if gra_track:
-                        series.append((
-                            f"Vehicle {sysid} · GCS {name}",
+        # Marker is fixed by the station's position in the scenario, not by
+        # what this call asked for, so a GCS keeps the same symbol between plots.
+        marker_of = {
+            name: GCS_MARKERS[i % len(GCS_MARKERS)]
+            for i, name in enumerate(sorted(self.gcss))
+        }
+        if gcss == "all":
+            names = sorted(self.gcss)
+        else:
+            # A bare string is a single name, not a sequence of characters.
+            names = [gcss] if isinstance(gcss, str) else list(gcss)
+        for name in names:
+            if name not in self.gcss:
+                logging.warning(f"No GCS named '{name}' in this scenario")
+                continue
+            file = DATA_PATH / f"trajectories_{name}.pkl"
+            if not file.exists():
+                logging.warning(
+                    f"GCS {name} recorded no trajectories "
+                    f"(record_positions off, or it never ran)"
+                )
+                continue
+            with file.open("rb") as f:
+                recorded: dict[int, GRAs] = pickle.load(f)
+            for sysid, gra_track in sorted(recorded.items()):
+                if (wanted is None or sysid in wanted) and gra_track:
+                    # Stations are often named "GCS_..." already; do not say it twice.
+                    shown = _legend_safe(name)
+                    prefix = "" if shown.upper().startswith("GCS") else "GCS "
+                    series.append(
+                        (
+                            f"Vehicle {sysid} · {prefix}{shown}",
                             self.gra_origin.to_rel_all(gra_track),
                             self._color(sysid),
-                            "^",
-                        ))
+                            marker_of[name],
+                        )
+                    )
 
         if not series:
             logging.warning("Nothing to plot: no trajectories were recorded")
@@ -454,18 +557,28 @@ class Oracle:
 
         fig = plt.figure(figsize=(8, 8))  # type: ignore
         ax = fig.add_subplot(projection="3d", proj_type="ortho")  # type: ignore
+        # A `None` here is matplotlib's own "use the default angle", so passing
+        # the arguments straight through keeps the untouched view unchanged.
+        ax.view_init(elev=elev, azim=azim, roll=roll)  # type: ignore
         ax.set_title("ENU Trajectories")  # type: ignore
         ax.set_xlabel("East (m)")  # type: ignore
         ax.set_ylabel("North (m)")  # type: ignore
         ax.set_zlabel("Up (m)")  # type: ignore
         for label, track, color, marker in series:
             ax.scatter(  # type: ignore
-                [p.x for p in track], [p.y for p in track], [p.z for p in track],
-                c=[color], s=12, alpha=0.8, marker=marker, label=label,
+                [p.x for p in track],
+                [p.y for p in track],
+                [p.z for p in track],
+                c=[color],
+                s=12,
+                alpha=0.8,
+                marker=marker,
+                label=label,
                 depthshade=True,
             )
-        self._set_axes(ax, series)
-        ax.legend(loc="best", fontsize=8)  # type: ignore
+        self._set_axes(ax, series, xlim=xlim, ylim=ylim, zlim=zlim)
+        if legend:
+            ax.legend(loc="best", fontsize=8)  # type: ignore
         plt.tight_layout()
         if save is not None:
             fig.savefig(save, dpi=150)  # type: ignore
@@ -475,7 +588,14 @@ class Oracle:
         return fig
 
     @staticmethod
-    def _set_axes(ax: Axes3D, series: list[tuple[str, ENUs, str, str]]) -> None:
+    def _set_axes(
+        ax: Axes3D,
+        series: list[tuple[str, ENUs, str, str]],
+        *,
+        xlim: tuple[float, float] | None = None,
+        ylim: tuple[float, float] | None = None,
+        zlim: tuple[float, float] | None = None,
+    ) -> None:
         """
         Scale the axes so the track stays readable whatever its shape.
 
@@ -487,6 +607,9 @@ class Oracle:
           distances, and tying them together buries the climb in empty space.
           It starts at the ground plane, never below, unless the track really
           goes there.
+
+        An explicit `xlim`/`ylim`/`zlim` overrides the computed range on that
+        axis and is used exactly as given, margins included.
         """
         xs = [p.x for _, track, _, _ in series for p in track]
         ys = [p.y for _, track, _, _ in series for p in track]
@@ -494,7 +617,13 @@ class Oracle:
 
         ground = max(max(xs) - min(xs), max(ys) - min(ys), MIN_PLOT_SPAN)
         half = ground / 2 * 1.05  # margin so points are not on the edge
-        for set_lim, vals in ((ax.set_xlim, xs), (ax.set_ylim, ys)):
+        for set_lim, vals, lim in (
+            (ax.set_xlim, xs, xlim),
+            (ax.set_ylim, ys, ylim),
+        ):
+            if lim is not None:
+                set_lim(*lim)  # type: ignore
+                continue
             mid = (max(vals) + min(vals)) / 2
             set_lim(mid - half, mid + half)  # type: ignore
 
@@ -502,9 +631,12 @@ class Oracle:
         # exactly on the lowest sample when the track dips below it. Ground noise
         # puts a landed vehicle a few centimetres under zero, and that stays
         # visible at the bottom of the axis rather than being clipped away.
-        low = min(0.0, min(zs))
-        high = max(max(zs), low + MIN_UP_SPAN)
-        ax.set_zlim(low, high + (high - low) * 0.05)  # type: ignore
+        if zlim is not None:
+            ax.set_zlim(*zlim)  # type: ignore
+        else:
+            low = min(0.0, min(zs))
+            high = max(max(zs), low + MIN_UP_SPAN)
+            ax.set_zlim(low, high + (high - low) * 0.05)  # type: ignore
         ax.set_box_aspect((1, 1, 0.6))  # type: ignore
 
     def _color(self, sysid: int) -> str:

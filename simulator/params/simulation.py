@@ -1,11 +1,13 @@
 """
-Simulation configuration parameters.
+MAVLink link plumbing, shared by the vehicle logic and the GCS.
 
-This module defines global settings used during simulation,
+These are protocol rates that no scenario varies. Anything that *is* a scenario
+or run choice is a constructor argument instead:
+
+* `Oracle(transmission_range=..., rid_frequency=..., record_positions=...,
+  network_sim=...)` — the Remote ID model and what the Oracle records.
+* `Simulator(speedup=...)` — the SITL wall-clock multiplier.
 """
 
-HEARTBEAT_FREQUENCY: int = 1  # Hz
-DATA_STREAM_FREQUENCY: int = 5  # Hz
-REMOTE_ID_FREQUENCY: int = 5  # Hz
-USE_NETWORK_SIM: bool = False
-SIM_SPEEDUP: float = 5.0
+HEARTBEAT_FREQUENCY: int = 1  # Hz - logic and GCS
+DATA_STREAM_FREQUENCY: int = 5  # Hz - logic

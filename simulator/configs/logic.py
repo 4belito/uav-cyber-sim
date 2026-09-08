@@ -16,3 +16,5 @@ class LogicConfig(TypedDict):
     # UDP ports of every GCS monitoring this vehicle. Empty when the vehicle is
     # unmonitored, in which case no telemetry is emitted and no GCS ack awaited.
     gcs_telem_ports: NotRequired[list[int]]
+    # Remote ID broadcast rate in Hz, set on the Oracle.
+    rid_frequency: NotRequired[int]
