@@ -23,7 +23,9 @@ import threading
 
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
+from simulator.entities.riddata import RIDData
 from simulator.helpers.connections import MAVConnection
+from simulator.runtime.mitm.rid_sniffer import RIDSniffer
 
 MAVMsg = mavlink.MAVLink_message
 Params = dict[str, float]
@@ -34,16 +36,20 @@ class MITMContext:
 
     The MITM owns the two outbound connections; a strategy uses this context to
     originate messages (spoofing, command injection) rather than only
-    transforming messages that happen to pass through.
+    transforming messages that happen to pass through. ``port_offset`` is the
+    victim vehicle's per-UAV port offset, letting a strategy locate the victim's
+    ZMQ feeds (e.g. its ``RID_DOWN`` Remote ID stream).
     """
 
     def __init__(
         self,
         sysid: int,
+        port_offset: int,
         to_logic: MAVConnection,
         to_gcs: MAVConnection,
     ) -> None:
         self.sysid = sysid
+        self.port_offset = port_offset
         self._to_logic = to_logic
         self._to_gcs = to_gcs
         # Encoder used to pack injected messages. srcSystem 255 makes injected
@@ -72,6 +78,12 @@ class MITMStrategy:
     def bind(self, ctx: MITMContext) -> None:
         """Receive the injection context once, before relays start."""
         self.ctx = ctx
+
+    def start(self) -> None:
+        """Start any background activity. Called once after relays start."""
+
+    def stop(self) -> None:
+        """Stop background activity and release resources. Called on shutdown."""
 
     def on_downlink(self, msg: MAVMsg) -> MAVMsg | None:
         """Handle a telemetry message travelling Logic -> GCS."""
@@ -181,10 +193,132 @@ class HijackStrategy(MITMStrategy):
         self.ctx.inject_to_logic(reposition)
 
 
+class HijackPursuitStrategy(MITMStrategy):
+    """Attacker-driven pursuit: steer the victim to chase another vehicle.
+
+    Mirrors :class:`~simulator.planner.plans.pursuit.PursuitPlan`, but the guided
+    setpoints originate from the man-in-the-middle rather than a cooperative
+    plan. On trigger the attacker switches the victim to GUIDED and then, in a
+    background loop, streams ``SET_POSITION_TARGET_GLOBAL_INT`` toward the
+    target's most recently overheard Remote ID position. The attacker learns the
+    target's position passively via :class:`RIDSniffer` — it overhears the same
+    Remote ID feed the victim's own logic receives, so the Oracle needs no
+    changes.
+
+    Params: ``target_sysid`` (vehicle to pursue), ``trigger_seq`` (default 1;
+    fires once ``MISSION_CURRENT.seq >= trigger_seq``), ``update_interval``
+    (seconds between setpoints, default 1.0).
+
+    Note: the target's Remote ID only reaches the victim's feed while the two are
+    within the Oracle's transmission range — the same constraint the cooperative
+    pursuit lives under.
+    """
+
+    _GUIDED_CUSTOM_MODE = 4  # ArduCopter GUIDED
+    _POSITION_TYPE_MASK = 0b110111111000  # position only (ignore vel/accel/yaw)
+
+    def __init__(self, params: Params | None = None) -> None:
+        super().__init__(params)
+        self.target_sysid = int(self.params.get("target_sysid", 0))
+        self.trigger_seq = int(self.params.get("trigger_seq", 1))
+        self.update_interval = float(self.params.get("update_interval", 1.0))
+        self._fired = False
+        self._stop = threading.Event()
+        self._sniffer: RIDSniffer | None = None
+        self._pursue_thread: threading.Thread | None = None
+        # Builder used only to construct message objects (packed by the context).
+        self._builder = mavlink.MAVLink(None, srcSystem=255, srcComponent=200)
+
+    def bind(self, ctx: MITMContext) -> None:
+        super().bind(ctx)
+        self._sniffer = RIDSniffer(ctx.port_offset)
+
+    def start(self) -> None:
+        if self._sniffer is not None:
+            self._sniffer.start()
+
+    def on_downlink(self, msg: MAVMsg) -> MAVMsg | None:
+        if (
+            not self._fired
+            and msg.get_type() == "MISSION_CURRENT"
+            and msg.seq >= self.trigger_seq
+        ):
+            self._begin_pursuit()
+            self._fired = True
+        return msg  # visible hijack: telemetry still flows to the GCS
+
+    def _begin_pursuit(self) -> None:
+        if self.ctx is None:
+            logging.error("HijackPursuitStrategy not bound; cannot inject")
+            return
+        logging.info(
+            "MITM hijack-pursuit: vehicle %s → pursuing sysid %s",
+            self.ctx.sysid,
+            self.target_sysid,
+        )
+        set_mode = self._builder.set_mode_encode(
+            self.ctx.sysid,
+            mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
+            self._GUIDED_CUSTOM_MODE,
+        )
+        self.ctx.inject_to_logic(set_mode)
+        self._pursue_thread = threading.Thread(target=self._pursue_loop, daemon=True)
+        self._pursue_thread.start()
+
+    def _pursue_loop(self) -> None:
+        while not self._stop.is_set():
+            if self._sniffer is not None:
+                rid = self._sniffer.latest(self.target_sysid)
+                if rid is not None:
+                    self._inject_target(rid)
+                else:
+                    logging.debug(
+                        "MITM hijack-pursuit: no RID yet for sysid %s",
+                        self.target_sysid,
+                    )
+            self._stop.wait(self.update_interval)
+
+    def _inject_target(self, rid: RIDData) -> None:
+        if self.ctx is None:
+            return
+        lat_e7, lon_e7, alt_m = rid.gra_pos.to_global_int_alt_in_meters()
+        logging.info(
+            "MITM hijack-pursuit: redirecting vehicle %s to target %s at "
+            "(%.7f, %.7f, %.1f)",
+            self.ctx.sysid,
+            self.target_sysid,
+            rid.gra_pos.lat,
+            rid.gra_pos.lon,
+            alt_m,
+        )
+        setpoint = self._builder.set_position_target_global_int_encode(
+            10,  # time_boot_ms
+            self.ctx.sysid,  # target_system
+            1,  # target_component (autopilot)
+            mavlink.MAV_FRAME_GLOBAL_INT,
+            self._POSITION_TYPE_MASK,
+            lat_e7,
+            lon_e7,
+            alt_m,
+            0, 0, 0,  # vx, vy, vz
+            0, 0, 0,  # afx, afy, afz
+            0, 0,  # yaw, yaw_rate
+        )
+        self.ctx.inject_to_logic(setpoint)
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._pursue_thread is not None:
+            self._pursue_thread.join(timeout=1.0)
+        if self._sniffer is not None:
+            self._sniffer.stop()
+
+
 _STRATEGIES: dict[str, type[MITMStrategy]] = {
     "passthrough": PassthroughStrategy,
     "blackout": BlackoutStrategy,
     "hijack": HijackStrategy,
+    "hijack_pursuit": HijackPursuitStrategy,
 }
 
 

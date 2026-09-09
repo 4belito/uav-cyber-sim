@@ -20,6 +20,11 @@ GCS_FORWARD_TYPES: frozenset[str] = frozenset(
         "COMMAND_LONG",
         "COMMAND_INT",
         "SET_MODE",
+        # Guided-mode position setpoints: a real GCS (or offboard companion)
+        # streams these to steer a vehicle in GUIDED. Needed for MITM/GCS-driven
+        # guided control (e.g. the hijack-pursuit strategy).
+        "SET_POSITION_TARGET_GLOBAL_INT",
+        "SET_POSITION_TARGET_LOCAL_NED",
     }
 )
 

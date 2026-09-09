@@ -91,6 +91,7 @@ class MITMProxy:
 
     def __init__(self, sysid: int, port_offset: int, strategy: MITMStrategy) -> None:
         self.sysid = sysid
+        self.port_offset = port_offset
         self.strategy = strategy
         veh_sysid = connection_id(sysid)
 
@@ -134,7 +135,12 @@ class MITMProxy:
 
         # Let the strategy inject its own traffic (command injection, spoofing).
         strategy.bind(
-            MITMContext(sysid=sysid, to_logic=self.logic_cmd, to_gcs=self.gcs_telem)
+            MITMContext(
+                sysid=sysid,
+                port_offset=port_offset,
+                to_logic=self.logic_cmd,
+                to_gcs=self.gcs_telem,
+            )
         )
 
         self.relays: list[_Relay] = [
@@ -156,6 +162,7 @@ class MITMProxy:
         """Start all relays and block until interrupted/terminated."""
         for relay in self.relays:
             relay.start()
+        self.strategy.start()
         logging.info(
             "MITM proxy active for vehicle %s (strategy=%s)",
             self.sysid,
@@ -169,7 +176,8 @@ class MITMProxy:
             self.stop()
 
     def stop(self) -> None:
-        """Stop all relays and close connections."""
+        """Stop the strategy, all relays, and close connections."""
+        self.strategy.stop()
         for relay in self.relays:
             relay.stop()
         # Join before closing so no relay touches a socket after it is closed.
