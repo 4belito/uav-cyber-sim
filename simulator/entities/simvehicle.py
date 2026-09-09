@@ -25,14 +25,21 @@ class SimVehicle(Vehicle):
     # A vehicle may be monitored by zero, one or several GCSs. The first entry
     # owns the vehicle's OS processes; see `SimGCS` for the other side.
     gcss: list[SimGCS] = field(default_factory=lambda: [])
-    # SITL defaults file appended to the firmware's own, per vehicle.
-    parm: str = str(VEH_PARAMS_PATH)
+    # SITL defaults appended to the firmware's own, per vehicle. Either one file
+    # or several stacked in order (later files override earlier parameters), so a
+    # small overlay like `no_avoidance.parm` can sit on top of the shared base.
+    parm: str | Sequence[str] = str(VEH_PARAMS_PATH)
     port_offset: int | None = None
 
     def __post_init__(self) -> None:
         # Back-link any GCS passed straight to the constructor.
         for gcs in list(self.gcss):
             gcs.add_vehicle(self)
+
+    @property
+    def parms(self) -> list[str]:
+        """SITL defaults for this vehicle, normalized to an ordered list."""
+        return [self.parm] if isinstance(self.parm, str) else list(self.parm)
 
     def set_port_offset(self, offset: int):
         """Set the port offset for the vehicle."""
@@ -71,7 +78,7 @@ class SimVehicle(Vehicle):
         relative_home: ENUPose,  # relative to enu_origin
         relative_path: ENUs,  # relative waypoints
         gcss: Sequence[SimGCS] = (),
-        parm: str = str(VEH_PARAMS_PATH),
+        parm: str | Sequence[str] = str(VEH_PARAMS_PATH),
     ) -> SimVehicle:
         """Create a SimVehicle from poses given relative to an ENU origin."""
         enu_home = enu_origin.to_abs(relative_home)

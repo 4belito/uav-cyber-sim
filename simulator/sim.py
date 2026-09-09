@@ -397,7 +397,7 @@ class Simulator(Generic[VehT]):
             self.visualizer.gra_home(veh).to_str(),
             f"--serial5=uart:/tmp/adsb_{sysid}_ardupilot:57600",
             "--defaults",
-            ",".join(default_params + [veh.parm]),
+            ",".join(default_params + veh.parms),
         ]
 
         arp_cmd.extend(self.visualizer.add_sitl_args(veh))

@@ -22,6 +22,8 @@ ARDU_LOGS_PATH = ROOT / "ardupilot_logs"
 LOGS_PATH = ROOT / "logs"
 PARAMS_PATH = ROOT / "params"
 VEH_PARAMS_PATH = PARAMS_PATH / "vehicle.parm"
+# Overlay that disables ADS-B avoidance; stack after VEH_PARAMS_PATH.
+NO_AVOID_PARAMS_PATH = PARAMS_PATH / "no_avoidance.parm"
 SIM_PARAMS_PATH = PARAMS_PATH / "simulation.py"
 DATA_PATH = ROOT / "data"
 RUNTIME_GAZEBO_MODELS = ROOT / "visualizer" / "gazebo" / "runtime_models"
