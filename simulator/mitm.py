@@ -1,4 +1,5 @@
-"""Man-in-the-middle proxy interposed on a vehicle's GCS<->Logic MAVLink links.
+"""
+Man-in-the-middle proxy interposed on a vehicle's GCS<->Logic MAVLink links.
 
 ```text
 telemetry (downlink primary):  Logic --MITM_TELEM--> [MITM] --GCS--> GCS
@@ -29,6 +30,7 @@ import json
 import logging
 import threading
 from collections.abc import Callable, Sequence
+from typing import TypeAlias
 
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
@@ -38,12 +40,13 @@ from simulator.helpers.logging.setup_log import setup_logging
 from simulator.helpers.math import connection_id
 from simulator.runtime.mitm.strategies import MITMContext, MITMStrategy, get_strategy
 
-MAVMsg = mavlink.MAVLink_message
-Hook = Callable[[MAVMsg], "MAVMsg | None"]
+MAVMsg: TypeAlias = mavlink.MAVLink_message
+Hook: TypeAlias = Callable[[MAVMsg], MAVMsg | None]
 
 
 class _Relay(threading.Thread):
-    """Forward MAVLink messages from ``src`` to every ``dsts`` in one direction.
+    """
+    Forward MAVLink messages from ``src`` to every ``dsts`` in one direction.
 
     An optional ``hook`` may transform or drop each message. Messages are
     forwarded as raw bytes when possible (transparent passthrough); a hook that
@@ -76,8 +79,9 @@ class _Relay(threading.Thread):
                 msg = self._src.recv_match(blocking=True, timeout=0.2)
                 if msg is None or msg.get_type() == "BAD_DATA":
                     continue
-                if self._hook is not None:
-                    hooked = self._hook(msg)
+                hook = self._hook
+                if hook is not None:
+                    hooked = hook(msg)
                     if hooked is None:
                         logging.info("MITM %s: dropped %s", self._name, msg.get_type())
                         continue
@@ -86,7 +90,7 @@ class _Relay(threading.Thread):
                 if not buf:
                     buf = msg.pack(self._encoder)
                 for dst in self._dsts:
-                    dst.write(buf)
+                    dst.write(bytes(buf))
             except Exception as exc:
                 logging.error("MITM relay %s error: %s", self._name, exc)
 
@@ -155,26 +159,32 @@ class MITMProxy:
         # Let the strategy inject its own traffic (command injection, spoofing).
         # Injected traffic goes to the first GCS, the one owning the vehicle.
         strategy.bind(
-            MITMContext(
-                sysid=sysid, to_logic=self.logic_cmd, to_gcs=self.gcs_telems[0]
-            )
+            MITMContext(sysid=sysid, to_logic=self.logic_cmd, to_gcs=self.gcs_telems[0])
         )
 
         self.relays: list[_Relay] = [
             # Primary directions carry the strategy hooks.
             _Relay(
-                "downlink", self.logic_telem, self.gcs_telems,
-                src_sysid=veh_sysid, hook=strategy.on_downlink,
+                "downlink",
+                self.logic_telem,
+                self.gcs_telems,
+                src_sysid=veh_sysid,
+                hook=strategy.on_downlink,
             ),
             _Relay(
-                "uplink", self.gcs_cmd, [self.logic_cmd],
-                src_sysid=255, hook=strategy.on_uplink,
+                "uplink",
+                self.gcs_cmd,
+                [self.logic_cmd],
+                src_sysid=255,
+                hook=strategy.on_uplink,
             ),
             # Backflow directions are transparent (acks, replies). Each GCS acks
             # on its own telemetry link, so each needs its own backflow relay.
             *(
                 _Relay(
-                    f"telem-ack-{i}", gcs_telem, [self.logic_telem],
+                    f"telem-ack-{i}",
+                    gcs_telem,
+                    [self.logic_telem],
                     src_sysid=veh_sysid,
                 )
                 for i, gcs_telem in enumerate(self.gcs_telems)

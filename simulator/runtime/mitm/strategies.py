@@ -1,4 +1,5 @@
-"""Pluggable man-in-the-middle strategies.
+"""
+Pluggable man-in-the-middle strategies.
 
 A strategy decides what happens to each message the MITM intercepts on the two
 primary directions of the GCS<->vehicle link:
@@ -20,17 +21,19 @@ from __future__ import annotations
 import logging
 import math
 import threading
+from typing import TypeAlias, cast
 
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
 from simulator.helpers.connections import MAVConnection
 
-MAVMsg = mavlink.MAVLink_message
+MAVMsg: TypeAlias = mavlink.MAVLink_message
 Params = dict[str, float]
 
 
 class MITMContext:
-    """Handle that lets a strategy inject MAVLink into the proxied links.
+    """
+    Handle that lets a strategy inject MAVLink into the proxied links.
 
     The MITM owns the two outbound connections; a strategy uses this context to
     originate messages (spoofing, command injection) rather than only
@@ -87,7 +90,8 @@ class PassthroughStrategy(MITMStrategy):
 
 
 class BlackoutStrategy(MITMStrategy):
-    """Blind the GCS: drop all commands and all telemetry.
+    """
+    Blind the GCS: drop all commands and all telemetry.
 
     To avoid deadlocking the simulation, the attacker keeps the link *looking*
     alive: ``HEARTBEAT`` (the GCS blocks on ``wait_heartbeat`` at startup) and
@@ -99,6 +103,7 @@ class BlackoutStrategy(MITMStrategy):
     _ALLOW_DOWNLINK: frozenset[str] = frozenset({"HEARTBEAT", "STATUSTEXT"})
 
     def on_downlink(self, msg: MAVMsg) -> MAVMsg | None:
+        """Drop all telemetry except the keep-alive heartbeat and completion signal."""
         msg_type = msg.get_type()
         if msg_type == "HEARTBEAT":
             return msg
@@ -108,11 +113,13 @@ class BlackoutStrategy(MITMStrategy):
         return None
 
     def on_uplink(self, msg: MAVMsg) -> MAVMsg | None:
-        return None  # the GCS cannot reach the vehicle
+        """Drop every command; the GCS cannot reach the vehicle."""
+        return None
 
 
 class HijackStrategy(MITMStrategy):
-    """Attacker-driven intervention.
+    """
+    Attacker-driven intervention.
 
     Watches ``MISSION_CURRENT`` on the relayed telemetry and, once
     ``seq >= trigger_seq``, injects ``SET_MODE(GUIDED)`` + ``DO_REPOSITION``
@@ -136,13 +143,12 @@ class HijackStrategy(MITMStrategy):
         self._builder = mavlink.MAVLink(None, srcSystem=255, srcComponent=200)
 
     def on_downlink(self, msg: MAVMsg) -> MAVMsg | None:
-        if (
-            not self._fired
-            and msg.get_type() == "MISSION_CURRENT"
-            and msg.seq >= self.trigger_seq
-        ):
-            self._inject_reposition()
-            self._fired = True
+        """Fire the reposition injection once the mission reaches the trigger seq."""
+        if not self._fired and msg.get_type() == "MISSION_CURRENT":
+            mission_current = cast(mavlink.MAVLink_mission_current_message, msg)
+            if mission_current.seq >= self.trigger_seq:
+                self._inject_reposition()
+                self._fired = True
         return msg  # visible hijack: telemetry still flows to the GCS
 
     def _inject_reposition(self) -> None:
@@ -194,7 +200,7 @@ def register_strategy(name: str, strategy: type[MITMStrategy]) -> None:
 
 
 def get_strategy(name: str, params: Params | None = None) -> MITMStrategy:
-    """Instantiate the strategy registered under ``name`` (falls back to passthrough)."""
+    """Instantiate the strategy registered under ``name`` (default: passthrough)."""
     strategy_cls = _STRATEGIES.get(name)
     if strategy_cls is None:
         logging.warning("Unknown MITM strategy %r; falling back to passthrough", name)
