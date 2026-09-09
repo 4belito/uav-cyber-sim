@@ -1,6 +1,6 @@
 """TypedDict schemas for GCS runtime configuration."""
 
-from typing import TypedDict
+from typing import Any, TypedDict
 
 from simulator.helpers.processes import SimProcess
 
@@ -22,7 +22,8 @@ class VehicleConfig(TypedDict):
     adsb_cmd: str
     mitm: bool
     mitm_cmd: str
-    intervention: dict[str, float] | None
+    # Serialized `Intervention` ({trigger, plan_spec}); None for no intervention.
+    intervention: dict[str, Any] | None
 
 
 # Note: This is a simple configuration schema for the GCS.

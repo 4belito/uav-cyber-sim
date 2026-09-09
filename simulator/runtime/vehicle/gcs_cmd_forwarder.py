@@ -20,6 +20,8 @@ GCS_FORWARD_TYPES: frozenset[str] = frozenset(
         "COMMAND_LONG",
         "COMMAND_INT",
         "SET_MODE",
+        # Copter guided go-to (GCS interventions) sends position targets.
+        "SET_POSITION_TARGET_GLOBAL_INT",
     }
 )
 

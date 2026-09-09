@@ -22,7 +22,7 @@ from simulator.config import (
     VehPort,
 )
 from simulator.configs.gcs import VehicleConfig
-from simulator.entities import VehT
+from simulator.entities import Intervention, VehT
 from simulator.external.sitl import resolve_sitl_build
 from simulator.helpers.cleanup import (
     ALL_PROCESSES,
@@ -309,6 +309,7 @@ class Simulator(Generic[VehT]):
                         veh.sysid,
                         telem_port=self.veh_telem_ports[veh.sysid][idx],
                         launch=idx == 0,
+                        intervention=gcs.interventions.get(veh.sysid),
                     )
                 )
             gcs_config = {
@@ -318,6 +319,9 @@ class Simulator(Generic[VehT]):
                 "vehicles": veh_configs,
                 "terminals": terminals,
                 "suppress": suppress,
+                # Origin the GCS needs to turn an intervention's ENU waypoints
+                # into geodetic go-to targets.
+                "gra_origin": self.gra_origin.unpose()._asdict(),
             }
 
             config_path = self.gcs_dir / f"gcs_config_{gcs_name}.json"
@@ -369,7 +373,11 @@ class Simulator(Generic[VehT]):
         return offsets
 
     def _build_veh_config(
-        self, sysid: int, telem_port: int, launch: bool
+        self,
+        sysid: int,
+        telem_port: int,
+        launch: bool,
+        intervention: Intervention | None = None,
     ) -> VehicleConfig:
         veh = self.oracle.vehicles[sysid]
 
@@ -449,6 +457,8 @@ class Simulator(Generic[VehT]):
             ),
             "mitm": mitm_enabled,
             "mitm_cmd": mitm_cmd,
-            "intervention": self.oracle.intervention.get(sysid),
+            "intervention": (
+                intervention.to_dict() if intervention is not None else None
+            ),
         }
         return veh_config

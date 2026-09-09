@@ -1,5 +1,6 @@
 """Entities for the simulator module."""
 
+from .intervention import Intervention, Trigger
 from .riddata import RIDData
 from .simgcs import SimGCS
 from .simvehicle import SimVehicle
@@ -15,4 +16,6 @@ __all__ = [
     "Vehicle",
     "VehT",
     "RIDData",
+    "Intervention",
+    "Trigger",
 ]

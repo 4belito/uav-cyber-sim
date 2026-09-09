@@ -146,7 +146,6 @@ class Oracle:
         # scenario is executed (ports, processes, visualizer).
         self.vehicles: dict[int, SimVehicle] = {}
         self.gcss: dict[str, SimGCS] = {}
-        self.intervention: dict[int, dict[str, float]] = {}
         self.mitm: dict[int, MITMConfig] = {}
 
         # Filled in by `bind`; every one of these depends on state that only

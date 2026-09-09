@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
+from simulator.entities.intervention import Intervention
 from simulator.helpers.processes import SimProcess
 
 if TYPE_CHECKING:
@@ -40,6 +41,11 @@ class SimGCS:
     verbose: int | None = None
     terminals: list[SimProcess] | None = None
     suppress: list[SimProcess] | None = None
+    # Interventions this GCS applies, keyed by the monitored vehicle's sysid: when
+    # each trigger fires, the GCS takes over that vehicle with its guided plan.
+    interventions: dict[int, Intervention] = field(
+        default_factory=dict[int, Intervention], repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
         # Back-link any vehicle passed straight to the constructor, mirroring
@@ -69,3 +75,21 @@ class SimGCS:
         """Stop monitoring `vehicle`, unlinking both sides of the relation."""
         self.vehicles = [veh for veh in self.vehicles if veh is not vehicle]
         vehicle.gcss = [gcs for gcs in vehicle.gcss if gcs is not self]
+
+    def intervene(self, vehicle: SimVehicle, intervention: Intervention) -> None:
+        """
+        Have this GCS intervene on a vehicle it monitors.
+
+        When the intervention's trigger fires, this GCS takes over `vehicle` with
+        the intervention's guided plan. Raises if `vehicle` is not monitored here
+        (`add_vehicle` it first) — turning a silent no-op into an early error.
+        Interventions are per-GCS, so several GCSs may each intervene on the same
+        vehicle independently; a repeat call for the same vehicle replaces the
+        previous one.
+        """
+        if not any(veh is vehicle for veh in self.vehicles):
+            raise ValueError(
+                f"GCS {self.name} does not monitor vehicle {vehicle.sysid}; "
+                "add_vehicle() it before setting an intervention."
+            )
+        self.interventions[vehicle.sysid] = intervention

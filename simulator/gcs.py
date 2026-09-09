@@ -10,6 +10,7 @@ import pickle
 import time
 from concurrent import futures
 from subprocess import Popen
+from typing import cast
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 import zmq
@@ -22,6 +23,7 @@ from simulator.config import (
     VehPort,
 )
 from simulator.configs import VehicleConfig
+from simulator.entities.intervention import Intervention
 from simulator.helpers.connections import create_udp_conn, create_zmq_socket
 from simulator.helpers.connections.mavlink.customenums.customcmd import CustomCmd
 from simulator.helpers.connections.mavlink.streams import make_json_safe
@@ -30,6 +32,7 @@ from simulator.helpers.logging.data_logger import DataLogger
 from simulator.helpers.logging.setup_log import setup_logging
 from simulator.helpers.processes import SimProcess, terminate_process_group
 from simulator.params.simulation import HEARTBEAT_FREQUENCY
+from simulator.runtime.gcs_intervention import InterventionRunner
 from simulator.runtime.gcs_runtime import VehicleRuntime
 from simulator.runtime.vehicle_launcher import launch_vehicle
 
@@ -60,10 +63,13 @@ class GCS:
         oracle_port_offset: int,
         terminals: list[SimProcess],
         suppress: list[SimProcess],
+        gra_origin: dict[str, float],
         record_positions: bool = True,
     ) -> None:
         # Configure logging for this GCS process
         self.name = name
+        # Origin for turning an intervention's ENU waypoints into geodetic targets.
+        self.gra_origin = GRA(**gra_origin)
         self.vehicles = vehicles
         self.sysids = [vehconfig["sysid"] for vehconfig in vehicles]
         self.n_vehicles = len(self.sysids)
@@ -81,8 +87,13 @@ class GCS:
             identity=f"gcs-{self.name}".encode(),
         )
 
-        self.interventions: dict[int, dict[str, float] | None] = {
-            vehconfig["sysid"]: vehconfig.get("intervention") for vehconfig in vehicles
+        self.interventions: dict[int, Intervention | None] = {
+            vehconfig["sysid"]: (
+                Intervention.from_dict(iv)
+                if (iv := vehconfig.get("intervention")) is not None
+                else None
+            )
+            for vehconfig in vehicles
         }
 
         # Trajectory logging: filled straight from the monitor loop's own
@@ -185,90 +196,68 @@ class GCS:
 
     def _monitor_vehicle(self, sysid: int):
         logging.info(f"Monitoring Vehicle {sysid}")
-        intervention_sent = False
         intervention = self.interventions[sysid]
-        trigger_seq = int(intervention.get("trigger_seq", 1)) if intervention else 0
+        # When an intervention is configured, run it as a guided plan driven from
+        # this monitor loop against the vehicle's command channel.
+        runner = (
+            InterventionRunner(
+                sysid,
+                intervention,
+                self.vehruntimes[sysid].cmd_conn,
+                self.gra_origin,
+            )
+            if intervention is not None
+            else None
+        )
         conn = self.conns[sysid]
+        # A short timeout keeps the plan ticking even when telemetry is quiet.
+        timeout = 0.1 if runner is not None else 1.0
         # This is a per-vehicle channel (self.conns[sysid] is its own UDP socket),
         # so every message read here belongs to this drone. Log them all to one
         # JSONL file per sysid — the GCS's ground-side view of the vehicle.
         telem_logger = DataLogger(path=DATA_PATH / "gcs_msgs", sysid=sysid)
         try:
             while True:
-                msg = conn.recv_match(blocking=True, timeout=1.0)
-                if msg is None:
-                    continue
-                msg_type = msg.get_type()
+                msg = conn.recv_match(blocking=True, timeout=timeout)
+                if msg is not None:
+                    msg_type = msg.get_type()
 
-                telem_logger.write(
-                    {
-                        "type": "mavlink_in",
-                        "msg_type": msg_type,
-                        "data": make_json_safe(msg.to_dict()),
-                        "time_received": time.time(),
-                    }
-                )
-
-                # lat/lon 0,0 means the EKF has not converged yet — a
-                # "no fix" marker rather than a position, and one that plots
-                # ~3000 km from the origin if kept.
-                if (
-                    self.record_positions
-                    and msg_type == "GLOBAL_POSITION_INT"
-                    and not (msg.lat == 0 and msg.lon == 0)
-                ):
-                    self.paths[sysid].append(
-                        GRA.from_global_int(msg.lat, msg.lon, msg.relative_alt)
+                    telem_logger.write(
+                        {
+                            "type": "mavlink_in",
+                            "msg_type": msg_type,
+                            "data": make_json_safe(msg.to_dict()),
+                            "time_received": time.time(),
+                        }
                     )
+                    if runner is not None:
+                        runner.feed(msg)
 
-                if msg_type == "STATUSTEXT" and msg.text == "LOGIC_DONE":
-                    conn.mav.command_ack_send(
-                        command=CustomCmd.LOGIC_DONE,
-                        result=mavlink.MAV_RESULT_ACCEPTED,
-                    )
-                    logging.info(f"✅ Vehicle {sysid} completed its mission")
-                    break
+                    if self.record_positions and msg_type == "GLOBAL_POSITION_INT":
+                        pos = cast(mavlink.MAVLink_global_position_int_message, msg)
+                        # lat/lon 0,0 means the EKF has not converged yet — a
+                        # "no fix" marker rather than a position, and one that
+                        # plots ~3000 km from the origin if kept.
+                        if not (pos.lat == 0 and pos.lon == 0):
+                            self.paths[sysid].append(
+                                GRA.from_global_int(pos.lat, pos.lon, pos.relative_alt)
+                            )
 
-                if (
-                    msg_type == "MISSION_CURRENT"
-                    and intervention
-                    and not intervention_sent
-                    and msg.seq >= trigger_seq
-                ):
-                    self._send_intervention(sysid)
-                    intervention_sent = True
+                    if msg_type == "STATUSTEXT":
+                        statustext = cast(mavlink.MAVLink_statustext_message, msg)
+                        if statustext.text == "LOGIC_DONE":
+                            conn.mav.command_ack_send(
+                                command=CustomCmd.LOGIC_DONE,
+                                result=mavlink.MAV_RESULT_ACCEPTED,
+                            )
+                            logging.info(f"✅ Vehicle {sysid} completed its mission")
+                            break
+
+                if runner is not None:
+                    runner.tick()
         finally:
             self._remove_vehicle(sysid)
             logging.debug(f"Monitor thread finished for Vehicle {sysid}")
-
-    def _send_intervention(self, sysid: int) -> None:
-        iv = self.interventions[sysid]
-        if iv is None:
-            return
-        cmd_conn = self.vehruntimes[sysid].cmd_conn
-        logging.info(
-            f"GCS intervention: switching vehicle {sysid} to GUIDED and repositioning"
-        )
-        cmd_conn.mav.set_mode_send(
-            target_system=sysid,
-            base_mode=mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
-            custom_mode=4,  # GUIDED for ArduCopter
-        )
-        cmd_conn.mav.command_int_send(
-            target_system=sysid,
-            target_component=1,
-            frame=mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT,
-            command=192,  # MAV_CMD_DO_REPOSITION
-            current=0,
-            autocontinue=0,
-            param1=-1.0,  # speed: no change
-            param2=1.0,  # MAV_DO_REPOSITION_FLAGS_CHANGE_MODE
-            param3=0.0,
-            param4=float("nan"),
-            x=int(iv["target_lat"] * 1e7),
-            y=int(iv["target_lon"] * 1e7),
-            z=float(iv["target_alt"]),
-        )
 
     def _remove_vehicle(self, sysid: int):
         """Remove vehicles from the environment."""
@@ -288,6 +277,7 @@ class GCS:
 
         for name, proc in runtime.processes.items():
             terminate_process_group(proc, f"{name} for Vehicle {sysid}")
+
 
 def parse_arguments() -> tuple[str, int]:
     """Parse List of GCS system IDs and GCS name."""
