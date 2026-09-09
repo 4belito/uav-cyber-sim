@@ -142,6 +142,10 @@ class RIDManager:
                 if self.fake_pos and self.sysid == 255:
                     send_data = copy.copy(self.data)
                     send_data.enu_pos = self.fake_pos
+                    # Neighbors convert RID -> ADS-B from gra_pos (lat/lon/alt),
+                    # not enu_pos, so the geodetic position must be spoofed too or
+                    # the victim keeps avoiding our true location.
+                    send_data.gra_pos = self.gra_origin.to_abs(self.fake_pos)
                     logging.debug(f"SEND FAKE DATA RID({self.sysid}): {send_data}")
                 else:
                     send_data = self.data

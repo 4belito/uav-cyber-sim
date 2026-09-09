@@ -3,6 +3,7 @@
 from .cleanup import ALL_PROCESSES, clean, kill_processes
 from .codegen import write_init_file
 from .logging.data_logger import DataLogger
+from .logging.log_reader import read_true_track
 from .logging.setup_log import setup_logging
 from .processes import SimProcess, create_process, terminate_process_group
 
@@ -16,4 +17,5 @@ __all__ = [
     "SimProcess",
     "terminate_process_group",
     "DataLogger",
+    "read_true_track",
 ]

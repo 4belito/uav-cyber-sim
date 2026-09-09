@@ -30,6 +30,7 @@ from simulator.entities import SimGCS, SimVehicle
 from simulator.entities.riddata import RIDData
 from simulator.helpers.connections import create_zmq_socket, create_zmq_sockets
 from simulator.helpers.coordinates import GRA, ENUs, GRAPose, GRAs
+from simulator.helpers.logging.log_reader import read_true_track
 from simulator.runtime.grid import Grid
 
 # Smallest ground span a plot is given, so a stationary or straight-line flight
@@ -127,8 +128,13 @@ class Oracle:
         self.network_sim = network_sim
         self.rid_frequency = rid_frequency
         self.rid_enabled = rid_enabled
-        # sysid -> ENU track, filled from Remote ID as the run proceeds.
+        # sysid -> transmitted ENU track, filled from Remote ID as the run
+        # proceeds. This is what each vehicle broadcast, so it is the *spoofed*
+        # position for an attacker, not necessarily where the drone really was.
         self.paths: dict[int, ENUs] = {}
+        # sysid -> real ENU track, reconstructed on demand from the ground-truth
+        # logs (see `load_true_paths`). Empty until asked for.
+        self.true_paths: dict[int, ENUs] = {}
         self.grid = Grid(cell_size=transmission_range * 1.01)
         self._seen_in_grid: set[int] = set()
         self._bound = False
@@ -526,10 +532,34 @@ class Oracle:
                 logging.error(f"Retransmit error for {sysid} of type {type(e)}: {e}")
             time.sleep(TX_LOOP_SLEEP)
 
+    def load_true_paths(self) -> dict[int, ENUs]:
+        """
+        Reconstruct every vehicle's **real** trajectory from the ground-truth logs.
+
+        The Oracle's live `self.paths` are the *transmitted* Remote ID positions,
+        so an attacker appears at its spoofed location. The real flight is
+        recorded independently as `GLOBAL_POSITION_INT` in each vehicle's MAVLink
+        log; this reads those back into `self.true_paths` (keyed by sysid) and
+        returns it. A vehicle whose log is missing or empty is skipped with a
+        warning. Requires `bind` to have run (it needs `self.gra_origin`).
+        """
+        msgs_dir = DATA_PATH / "msgs"
+        for sysid in sorted(self.vehicles):
+            track = read_true_track(msgs_dir, sysid, self.gra_origin)
+            if track:
+                self.true_paths[sysid] = track
+            else:
+                logging.warning(
+                    f"No ground-truth track for vehicle {sysid} "
+                    f"(no log at {msgs_dir / f'veh_{sysid}.jsonl'}, or no fix)"
+                )
+        return self.true_paths
+
     def plot_trajectories(
         self,
         *,
         oracle: bool = True,
+        truth: bool | Iterable[int] = False,
         gcss: Iterable[str] | Literal["all"] = (),
         sysids: Iterable[int] | None = None,
         legend: bool = True,
@@ -548,7 +578,17 @@ class Oracle:
         Two different views are available, and they are worth comparing:
 
         * `oracle` — this Oracle's own Remote ID track of **every** vehicle,
-          including any that no GCS monitors. Requires `record_positions`.
+          including any that no GCS monitors. Requires `record_positions`. This
+          is the *transmitted* view, so an attacker shows up at the position it
+          spoofs, drawn as dots.
+        * `truth` — the **real** trajectory reconstructed from the ground-truth
+          logs (`load_true_paths`), drawn as a line so it reads apart from the
+          transmitted dots. `False` (default) omits it; `True` overlays every
+          vehicle; an iterable of sysids overlays only those (e.g. `[255]` for
+          just the attacker). Overlaying makes an RID spoof obvious — the real
+          line diverges from the spoofed dot — while an honest vehicle's line
+          sits on its own dots. When the overlay is on, the two are tagged
+          `(RID)` and `(real)` in the legend.
         * `gcss` — what the named GCSs recorded from their telemetry streams, so
           only their own vehicles, and only where `SimGCS.record_positions` was
           on. This is the ground-side view: a MITM that drops telemetry shows up
@@ -574,10 +614,42 @@ class Oracle:
         wanted = set(sysids) if sysids is not None else None
         series: list[tuple[str, ENUs, str, str]] = []
 
+        # `truth` selects which vehicles get a real-trajectory overlay: none,
+        # all (`True`), or an explicit set of sysids.
+        if truth is True:
+            truth_wanted: set[int] | None = None  # every vehicle
+        elif truth is False:
+            truth_wanted = set()  # no overlay
+        else:
+            truth_wanted = set(truth)
+        overlay = truth is True or bool(truth_wanted)
+        # Only distinguish the two in the legend when both are actually shown;
+        # a plain call keeps its original labels.
+        rid_suffix = " (RID)" if overlay else ""
+
         if oracle:
             for sysid, track in sorted(self.paths.items()):
                 if (wanted is None or sysid in wanted) and track:
-                    series.append((f"Vehicle {sysid}", track, self._color(sysid), "o"))
+                    series.append(
+                        (
+                            f"Vehicle {sysid}{rid_suffix}",
+                            track,
+                            self._color(sysid),
+                            "o",
+                        )
+                    )
+
+        truth_series: list[tuple[str, ENUs, str]] = []
+        if overlay:
+            if not self.true_paths:
+                self.load_true_paths()
+            for sysid, track in sorted(self.true_paths.items()):
+                in_view = wanted is None or sysid in wanted
+                in_truth = truth_wanted is None or sysid in truth_wanted
+                if in_view and in_truth and track:
+                    truth_series.append(
+                        (f"Vehicle {sysid} (real)", track, self._color(sysid))
+                    )
 
         # Marker is fixed by the station's position in the scenario, not by
         # what this call asked for, so a GCS keeps the same symbol between plots.
@@ -617,7 +689,7 @@ class Oracle:
                         )
                     )
 
-        if not series:
+        if not series and not truth_series:
             logging.warning("Nothing to plot: no trajectories were recorded")
             return None
 
@@ -634,7 +706,7 @@ class Oracle:
             ax.scatter(  # type: ignore
                 [p.x for p in track],
                 [p.y for p in track],
-                [p.z for p in track],
+                [p.z for p in track],  # type: ignore
                 c=[color],
                 s=12,
                 alpha=0.8,
@@ -642,7 +714,21 @@ class Oracle:
                 label=label,
                 depthshade=True,
             )
-        self._set_axes(ax, series, xlim=xlim, ylim=ylim, zlim=zlim)
+        # Real trajectories are drawn as lines so they read as a continuous path
+        # against the transmitted dots, even sharing a vehicle's colour.
+        for label, track, color in truth_series:
+            ax.plot(  # type: ignore
+                [p.x for p in track],
+                [p.y for p in track],
+                [p.z for p in track],
+                color=color,
+                linewidth=1.5,
+                alpha=0.9,
+                label=label,
+            )
+        # `_set_axes` only reads track points, so the marker slot is a filler.
+        axis_series = series + [(lbl, trk, col, "o") for lbl, trk, col in truth_series]
+        self._set_axes(ax, axis_series, xlim=xlim, ylim=ylim, zlim=zlim)
         if legend:
             ax.legend(loc="best", fontsize=8)  # type: ignore
         plt.tight_layout()
@@ -683,9 +769,9 @@ class Oracle:
 
         ground = max(max(xs) - min(xs), max(ys) - min(ys), MIN_PLOT_SPAN)
         half = ground / 2 * 1.05  # margin so points are not on the edge
-        for set_lim, vals, lim in (
-            (ax.set_xlim, xs, xlim),
-            (ax.set_ylim, ys, ylim),
+        for set_lim, vals, lim in (  # type: ignore
+            (ax.set_xlim, xs, xlim),  # type: ignore
+            (ax.set_ylim, ys, ylim),  # type: ignore
         ):
             if lim is not None:
                 set_lim(*lim)  # type: ignore
