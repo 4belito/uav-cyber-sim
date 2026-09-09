@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Self
+from typing import TYPE_CHECKING, Any, Self
 
 from simulator.config import VEH_PARAMS_PATH, Color, Model
 from simulator.entities.simgcs import SimGCS
 from simulator.entities.vehicle import Vehicle
 from simulator.helpers.coordinates import ENUPose, ENUs
 from simulator.planner.plan import Plan
+
+if TYPE_CHECKING:
+    from simulator.runtime.mitm.strategies import MITMStrategy
 
 
 @dataclass(kw_only=True)
@@ -31,6 +34,9 @@ class SimVehicle(Vehicle):
     # small overlay like `no_avoidance.parm` can sit on top of the shared base.
     parm: str | Sequence[str] = str(VEH_PARAMS_PATH)
     port_offset: int | None = None
+    # Man-in-the-middle interposed on this vehicle's GCS<->Logic links. `None`
+    # (the default) means no MITM. See `simulator.runtime.mitm.strategies`.
+    mitm: MITMStrategy | None = None
 
     def __post_init__(self) -> None:
         # Back-link any GCS passed straight to the constructor.
@@ -87,6 +93,7 @@ class SimVehicle(Vehicle):
         relative_home: ENUPose,  # relative to enu_origin
         relative_path: ENUs,  # relative waypoints
         gcss: Sequence[SimGCS] = (),
+        mitm: MITMStrategy | None = None,
         parm: str | Sequence[str] = str(VEH_PARAMS_PATH),
     ) -> Self:
         """Create a SimVehicle from poses given relative to an ENU origin."""
@@ -100,6 +107,7 @@ class SimVehicle(Vehicle):
             plan=plan,
             waypoints=ENUPose.unpose_all(enu_home.to_abs_all(relative_path)),
             model=model,
+            mitm=mitm,
         )
 
     @property

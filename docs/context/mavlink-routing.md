@@ -219,8 +219,8 @@ picks these up on 5766 and forwards them to ArduPilot.
 ## Man-in-the-Middle (MITM) Interposition
 
 `simulator/mitm.py` runs a per-vehicle proxy that sits transparently between the
-GCS and the vehicle's Logic. Enabled via `simulator.mitm = {"strategy": "..."}`
-(default strategy `passthrough`). When set:
+GCS and the vehicle's Logic. Enabled via `vehicle.mitm = HijackStrategy(...)`
+(a typed `MITMStrategy`, `None` by default). When set:
 
 - Sim writes `mitm=True` into the logic config and `mitm` + `mitm_cmd` into each
   `VehicleConfig`. The MITM process is launched by the vehicle's owner in
@@ -249,11 +249,16 @@ touched from two threads.
 **Strategy seam:** `simulator/runtime/mitm/strategies.py` defines `MITMStrategy`
 with `on_downlink(msg)` / `on_uplink(msg)` → return msg (forward), modified msg,
 or `None` (drop), plus `bind(ctx)` which hands the strategy a `MITMContext` for
-**originating** traffic (`inject_to_logic` / `inject_to_gcs`, packed with
-srcSystem 255 to spoof the GCS). Strategies receive params via the `params`
-field of `MITMConfig`, serialized into the proxy's `--params '<json>'` arg.
-New attacks subclass and `register_strategy(name, cls)`; the notebook selects by
-name and supplies params.
+**originating** traffic (`inject_to_logic` / `inject_to_gcs`). This mirrors
+`Plan`/`PlanSpec` (`simulator/planner/plan.py`): each concrete strategy takes
+**typed constructor kwargs** and builds its own `self._spec = MITMSpec(
+strategy_class=..., kwargs={...})`; `Simulator._build_veh_config` serializes
+`vehicle.mitm.get_spec().to_dict()` into the proxy's `--spec '<json>'` arg, and
+`MITMStrategy.build(spec)` reconstructs the strategy object subprocess-side via
+a `_REGISTRY` keyed by `strategy_class` — falling back to `passthrough` with a
+warning on an unknown name. New attacks subclass `MITMStrategy` and decorate
+with `@MITMStrategy.register("name")`; a notebook constructs one directly
+(`HijackStrategy(trigger_seq=3, ...)`) and assigns it to `vehicle.mitm`.
 
 **Built-in strategies:**
 
@@ -262,16 +267,28 @@ name and supplies params.
 | `passthrough` | Forward everything unmodified (default). |
 | `blackout` | Drop all uplink commands and all downlink telemetry **except** `HEARTBEAT` (GCS blocks on `wait_heartbeat` at startup) and the `LOGIC_DONE` STATUSTEXT (GCS completion). Attacker keeps the link looking alive while blinding the operator. |
 | `hijack` | Watch `MISSION_CURRENT` on the relayed downlink; once `seq >= trigger_seq`, inject `SET_MODE(GUIDED)` + `DO_REPOSITION` toward `target_lat/lon/alt` — the GCS intervention, but attacker-driven and GCS-spoofed. Telemetry still passes through (visible hijack). |
+| `spoof_gcs` | Watch `MISSION_CURRENT` on the relayed downlink; once `seq >= trigger_seq`, inject one fabricated `GLOBAL_POSITION_INT` (`spoof_lat/lon/alt`), spoofed with `srcSystem = sysid` (looks vehicle-origin), toward the GCS connections selected by `target_mask` (bit *i* = GCS at position *i* in `veh.gcss`; bit 0 is the owner). Real telemetry still reaches every GCS unmodified — the downlink relay fans one message out to all of them, so this can't suppress it per-target, only add a spoofed report alongside it. |
+| `spoof_owner_gcs` | Same as `spoof_gcs` but always targets index 0 (the owner) regardless of `target_mask`. |
 
 > **Why blackout must keep HEARTBEAT/LOGIC_DONE:** the GCS's `_launch_vehicle`
 > calls `conn.wait_heartbeat()` (blocks at startup) and `_monitor_vehicle` only
 > exits on `LOGIC_DONE`. Dropping either deadlocks the run.
 
+> **`MITMContext.to_gcs` carries every monitoring GCS**, index-aligned with
+> `veh.gcss` (see "Vehicles with Zero, One or Many GCSs" above), not just the
+> owner. `inject_to_gcs(msg, indices)` writes only to the given positions, and
+> uses a `srcSystem=sysid` encoder (distinct from `inject_to_logic`'s
+> `srcSystem=255`) since spoofed telemetry should look vehicle-origin, not
+> GCS-origin.
+
 > **Confidence:** Confirmed — passthrough, blackout, and hijack all verified
 > end-to-end against the real proxy (downlink/uplink/backflow forwarding, blackout
 > suppression with heartbeat+LOGIC_DONE passthrough, hijack injection of
 > SET_MODE+DO_REPOSITION at the trigger seq). Notebooks `8-mitm_passthrough`,
-> `9-mitm_blackout`, `10-mitm_hijack`.
+> `9-mitm_blackout`, `10-mitm_hijack`. `spoof_gcs`/`spoof_owner_gcs` are verified
+> at the unit level (target-index selection, srcSystem, message content via a
+> fake-connection harness) but not yet run end-to-end through a full SITL
+> simulation — see `13-mitm_spoof_gcs.ipynb` / `14-mitm_spoof_owner.ipynb`.
 
 ## QGC InitialConnectStateMachine Timing
 

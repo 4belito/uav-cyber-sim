@@ -4,18 +4,20 @@ from simulator.runtime.mitm.strategies import (
     BlackoutStrategy,
     HijackStrategy,
     MITMContext,
+    MITMSpec,
     MITMStrategy,
     PassthroughStrategy,
-    get_strategy,
-    register_strategy,
+    SpoofGCSStrategy,
+    SpoofOwnerGCSStrategy,
 )
 
 __all__ = [
     "MITMContext",
+    "MITMSpec",
     "MITMStrategy",
     "PassthroughStrategy",
     "BlackoutStrategy",
     "HijackStrategy",
-    "get_strategy",
-    "register_strategy",
+    "SpoofGCSStrategy",
+    "SpoofOwnerGCSStrategy",
 ]

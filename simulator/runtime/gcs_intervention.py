@@ -72,6 +72,8 @@ class InterventionRunner:
         )
         self._t0 = time.monotonic()
         self._current_seq: int | None = None
+        # `MISSION_CURRENT.total` — the last item's sequence, for `final=True`.
+        self._total: int | None = None
         # When the trigger's seq point was first reached (for `dwell`).
         self._seq_reached_at: float | None = None
         self._engaged = False
@@ -82,6 +84,10 @@ class InterventionRunner:
         if msg.get_type() == "MISSION_CURRENT":
             mission_current = cast(mavlink.MAVLink_mission_current_message, msg)
             self._current_seq = int(mission_current.seq)
+            # `total` is absent on older dialects; keep the last known value.
+            total = getattr(mission_current, "total", 0)
+            if total:
+                self._total = int(total)
 
     def tick(self) -> None:
         """Engage, drive, or release the intervention based on the trigger."""
@@ -103,15 +109,23 @@ class InterventionRunner:
     def _holds(self) -> bool:
         """Whether the trigger says the GCS should be in control right now."""
         now = time.monotonic()
-        # Stamp when the seq point is first reached, so `dwell` can measure from
-        # there rather than from the start of monitoring.
+        # Stamp when the trigger's seq / final point is first reached, so `dwell`
+        # can measure from there rather than from the start of monitoring.
         trigger_seq = getattr(self.trigger, "seq", None)
-        if (
-            self._seq_reached_at is None
-            and trigger_seq is not None
+        is_final = getattr(self.trigger, "final", False)
+        seq_reached = (
+            trigger_seq is not None
             and self._current_seq is not None
             and self._current_seq >= trigger_seq
-        ):
+        )
+        final_reached = (
+            is_final
+            and self._current_seq is not None
+            and self._total is not None
+            and self._total >= 1
+            and self._current_seq >= self._total
+        )
+        if self._seq_reached_at is None and (seq_reached or final_reached):
             self._seq_reached_at = now
         seq_elapsed = (
             None if self._seq_reached_at is None else now - self._seq_reached_at
@@ -123,6 +137,7 @@ class InterventionRunner:
                 seq_elapsed=seq_elapsed,
                 position=self._position(),
                 engaged=self._engaged,
+                total=self._total,
             )
         )
 

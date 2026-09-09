@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from simulator.helpers.coordinates import ENU
@@ -24,7 +24,8 @@ class TriggerContext:
     `elapsed` is seconds since the GCS started monitoring the vehicle;
     `seq_elapsed` is seconds since the mission reached the trigger's `seq` (None
     until then); `engaged` says whether the GCS already holds control, which is
-    what lets a guard apply hysteresis.
+    what lets a guard apply hysteresis. `total` is `MISSION_CURRENT.total` — the
+    sequence of the last mission item — used by `MissionTrigger(final=True)`.
     """
 
     current_seq: int | None = None
@@ -32,6 +33,7 @@ class TriggerContext:
     seq_elapsed: float | None = None
     position: ENU | None = None
     engaged: bool = False
+    total: int | None = None
 
 
 class Trigger(Protocol):
@@ -61,12 +63,28 @@ class MissionTrigger:
     * `seq` — a mission-sequence point: satisfied once the vehicle's
       `MISSION_CURRENT.seq` reaches it. `dwell` optionally delays it by that many
       seconds *after* the seq point is reached (so `seq=3, dwell=10` = "10 s after
-      waypoint 3"); `dwell` requires `seq`.
+      waypoint 3").
     * `after` — a delay in seconds measured from **when the GCS starts monitoring
       the vehicle** (the beginning), not from the seq point.
+    * `final` — satisfied once the vehicle reaches its **last** mission item,
+      whatever its sequence number. For an `AutoPlan` that item is the `NAV_LAND`,
+      so `final=True` fires "as the drone starts landing" without the caller
+      counting waypoints (the LAND seq shifts every time a waypoint is
+      added/removed). Resolved from `MISSION_CURRENT.total`, which ArduPilot sets
+      to the last item's sequence. `dwell` delays it too — `final=True, dwell=5`
+      fires 5 s after the last item goes active.
+    * `descending_below` — satisfied once the vehicle is on its last mission item
+      **and** its altitude (ENU up, metres above the run origin) has dropped
+      below this value: i.e. the landing descent is actually underway. Unlike a
+      bare altitude check it does not fire during the takeoff climb, and unlike
+      `dwell` it tracks the vehicle rather than the wall clock, so it is
+      unaffected by `speedup`. Needs `GLOBAL_POSITION_INT` (a blackout MITM that
+      drops it keeps this from firing).
 
-    At least one must be set; `mode` combines them when both are (`"any"` on
-    whichever hits first, `"all"` requires both).
+    `dwell` requires `seq` or `final`; it measures from whichever is reached
+    first. At least one of `seq`, `after`, `final`, `descending_below` must be
+    set; `mode` combines them when several are (`"any"` on whichever hits first,
+    `"all"` requires all).
 
     These conditions are **monotone** — once satisfied they stay satisfied — so an
     intervention using this trigger takes control and never gives it back. Use
@@ -76,29 +94,66 @@ class MissionTrigger:
     seq: int | None = None
     after: float | None = None
     dwell: float | None = None
+    final: bool = False
+    descending_below: float | None = None
     mode: TriggerMode = "any"
+    # Latches once any condition is first met, so the trigger stays satisfied
+    # even for a reversible condition like `descending_below` (the GCS climbing
+    # the vehicle back up must not un-fire the trigger and hand it to AUTO).
+    _fired: bool = field(default=False, init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
-        if self.seq is None and self.after is None:
-            raise ValueError("MissionTrigger needs a seq, an after time, or both")
-        if self.dwell is not None and self.seq is None:
-            raise ValueError("MissionTrigger dwell requires a seq to delay from")
+        if (
+            self.seq is None
+            and self.after is None
+            and not self.final
+            and self.descending_below is None
+        ):
+            raise ValueError(
+                "MissionTrigger needs seq, after, final=True, or descending_below"
+            )
+        if self.dwell is not None and self.seq is None and not self.final:
+            raise ValueError(
+                "MissionTrigger dwell requires a seq or final to delay from"
+            )
+
+    def _dwell_met(self, ctx: TriggerContext) -> bool:
+        """Whether `dwell` has elapsed since the seq/final point was reached."""
+        return self.dwell is None or (
+            ctx.seq_elapsed is not None and ctx.seq_elapsed >= self.dwell
+        )
+
+    @staticmethod
+    def _on_final_item(ctx: TriggerContext) -> bool:
+        """Whether the vehicle is on its last mission item (via MISSION_CURRENT)."""
+        return (
+            ctx.current_seq is not None
+            and ctx.total is not None
+            and ctx.total >= 1
+            and ctx.current_seq >= ctx.total
+        )
 
     def holds(self, ctx: TriggerContext) -> bool:
         """Whether the GCS should hold control at this tick."""
+        if self._fired:
+            return True
         conditions: list[bool] = []
         if self.seq is not None:
             seq_met = ctx.current_seq is not None and ctx.current_seq >= self.seq
-            if self.dwell is not None:
-                seq_met = (
-                    seq_met
-                    and ctx.seq_elapsed is not None
-                    and ctx.seq_elapsed >= self.dwell
-                )
-            conditions.append(seq_met)
+            conditions.append(seq_met and self._dwell_met(ctx))
+        if self.final:
+            conditions.append(self._on_final_item(ctx) and self._dwell_met(ctx))
+        if self.descending_below is not None:
+            conditions.append(
+                self._on_final_item(ctx)
+                and ctx.position is not None
+                and ctx.position.z < self.descending_below
+            )
         if self.after is not None:
             conditions.append(ctx.elapsed >= self.after)
-        return all(conditions) if self.mode == "all" else any(conditions)
+        met = all(conditions) if self.mode == "all" else any(conditions)
+        self._fired = met
+        return met
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize for the GCS-process config JSON, tagged with its kind."""
@@ -107,6 +162,8 @@ class MissionTrigger:
             "seq": self.seq,
             "after": self.after,
             "dwell": self.dwell,
+            "final": self.final,
+            "descending_below": self.descending_below,
             "mode": self.mode,
         }
 
@@ -115,10 +172,15 @@ class MissionTrigger:
         """Rebuild a MissionTrigger from its serialized form."""
         after = data.get("after")
         dwell = data.get("dwell")
+        descending_below = data.get("descending_below")
         return cls(
             seq=data.get("seq"),
             after=None if after is None else float(after),
             dwell=None if dwell is None else float(dwell),
+            final=bool(data.get("final", False)),
+            descending_below=(
+                None if descending_below is None else float(descending_below)
+            ),
             mode=data.get("mode", "any"),
         )
 

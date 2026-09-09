@@ -285,7 +285,7 @@ class Simulator(Generic[VehT]):
                 "veh_port_offset": veh.port_offset,
                 "oracle_port_offset": self.orc_port_offset,
                 "plan_spec": veh.plan.get_spec().to_dict(),
-                "mitm": sysid in self.oracle.mitm,
+                "mitm": veh.mitm is not None,
                 "gcs_telem_ports": self.veh_telem_ports[sysid],
                 "rid_frequency": self.oracle.rid_frequency,
                 "spoof": veh.spoof_spec(),
@@ -411,10 +411,8 @@ class Simulator(Generic[VehT]):
 
         arp_cmd.extend(self.visualizer.add_sitl_args(veh))
         logic_config_path = str(self.logic_dir / f"logic_config_{sysid}.json")
-        mitm_config = self.oracle.mitm.get(sysid)
-        mitm_enabled = mitm_config is not None
-        strategy = mitm_config["strategy"] if mitm_config is not None else "passthrough"
-        mitm_params = mitm_config.get("params", {}) if mitm_config is not None else {}
+        mitm_strategy = veh.mitm
+        mitm_enabled = mitm_strategy is not None
         # The MITM sits between Logic and the GCSs, so it is what fans the
         # telemetry out; it needs every monitoring GCS's port, not just this one.
         # An unmonitored vehicle has none, and the flag is then left off.
@@ -425,12 +423,11 @@ class Simulator(Generic[VehT]):
                 f"python3 -m simulator.mitm"
                 f" --sysid {sysid}"
                 f" --port-offset {port_offset}"
-                f" --strategy {strategy}"
-                f" --params '{json.dumps(mitm_params)}'"
+                f" --spec '{json.dumps(mitm_strategy.get_spec().to_dict())}'"
                 f"{telem_ports_arg}"
                 f" --verbose {self.verbose}"
             )
-            if mitm_enabled
+            if mitm_strategy is not None
             else ""
         )
         veh_config: VehicleConfig = {

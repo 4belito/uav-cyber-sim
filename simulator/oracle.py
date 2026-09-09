@@ -25,7 +25,6 @@ from matplotlib.figure import Figure
 from mpl_toolkits.mplot3d import Axes3D
 
 from simulator.config import DATA_PATH, Color, SimPort, VehPort
-from simulator.configs.mitm import MITMConfig
 from simulator.entities import SimGCS, SimVehicle
 from simulator.entities.riddata import RIDData
 from simulator.helpers.connections import create_zmq_socket, create_zmq_sockets
@@ -146,7 +145,6 @@ class Oracle:
         # scenario is executed (ports, processes, visualizer).
         self.vehicles: dict[int, SimVehicle] = {}
         self.gcss: dict[str, SimGCS] = {}
-        self.mitm: dict[int, MITMConfig] = {}
 
         # Filled in by `bind`; every one of these depends on state that only
         # exists once the Simulator has assigned port offsets.

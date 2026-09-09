@@ -30,7 +30,7 @@ import json
 import logging
 import threading
 from collections.abc import Callable, Sequence
-from typing import TypeAlias
+from typing import TypeAlias, cast
 
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
@@ -38,10 +38,19 @@ from simulator.config import GCS_TELEM_WINDOW, LOGS_PATH, VehPort
 from simulator.helpers.connections import MAVConnection, create_udp_conn
 from simulator.helpers.logging.setup_log import setup_logging
 from simulator.helpers.math import connection_id
-from simulator.runtime.mitm.strategies import MITMContext, MITMStrategy, get_strategy
+from simulator.runtime.mitm.strategies import MITMContext, MITMSpec, MITMStrategy
 
 MAVMsg: TypeAlias = mavlink.MAVLink_message
 Hook: TypeAlias = Callable[[MAVMsg], MAVMsg | None]
+
+
+def _describe(msg: MAVMsg) -> str:
+    """Key field values for a message, so the debug log shows data, not just a type."""
+    if msg.get_type() == "GLOBAL_POSITION_INT":
+        pos = cast(mavlink.MAVLink_global_position_int_message, msg)
+        lat, lon, alt = pos.lat / 1e7, pos.lon / 1e7, pos.alt / 1000
+        return f" (lat={lat:.7f}, lon={lon:.7f}, alt={alt:.2f}m)"
+    return ""
 
 
 class _Relay(threading.Thread):
@@ -89,6 +98,12 @@ class _Relay(threading.Thread):
                 buf = msg.get_msgbuf()
                 if not buf:
                     buf = msg.pack(self._encoder)
+                logging.debug(
+                    "MITM %s: forwarding %s%s",
+                    self._name,
+                    msg.get_type(),
+                    _describe(msg),
+                )
                 for dst in self._dsts:
                     dst.write(bytes(buf))
             except Exception as exc:
@@ -157,9 +172,10 @@ class MITMProxy:
         )
 
         # Let the strategy inject its own traffic (command injection, spoofing).
-        # Injected traffic goes to the first GCS, the one owning the vehicle.
+        # `to_gcs` carries every monitoring GCS, index-aligned with `veh.gcss`
+        # (index 0 is the owner); a strategy picks which one(s) to target.
         strategy.bind(
-            MITMContext(sysid=sysid, to_logic=self.logic_cmd, to_gcs=self.gcs_telems[0])
+            MITMContext(sysid=sysid, to_logic=self.logic_cmd, to_gcs=self.gcs_telems)
         )
 
         self.relays: list[_Relay] = [
@@ -224,17 +240,16 @@ class MITMProxy:
         logging.info("MITM proxy for vehicle %s stopped", self.sysid)
 
 
-def parse_arguments() -> tuple[int, int, str, dict[str, float], list[int], int]:
+def parse_arguments() -> tuple[int, int, MITMSpec, list[int], int]:
     """Parse MITM proxy CLI arguments."""
     parser = argparse.ArgumentParser(description="Man-in-the-middle MAVLink proxy")
     parser.add_argument("--sysid", type=int, required=True)
     parser.add_argument("--port-offset", type=int, required=True)
-    parser.add_argument("--strategy", type=str, default="passthrough")
     parser.add_argument(
-        "--params",
+        "--spec",
         type=str,
-        default="{}",
-        help="JSON-encoded strategy parameters",
+        default='{"strategy_class": "passthrough", "kwargs": {}}',
+        help="JSON-encoded MITMSpec (strategy_class + kwargs)",
     )
     parser.add_argument(
         "--telem-ports",
@@ -244,29 +259,23 @@ def parse_arguments() -> tuple[int, int, str, dict[str, float], list[int], int]:
     )
     parser.add_argument("--verbose", type=int, default=1)
     args = parser.parse_args()
-    params: dict[str, float] = json.loads(args.params)
-    telem_ports = [int(p) for p in args.telem_ports.split(",") if p]
-    return (
-        args.sysid,
-        args.port_offset,
-        args.strategy,
-        params,
-        telem_ports,
-        args.verbose,
+    spec_data = json.loads(args.spec)
+    spec = MITMSpec(
+        strategy_class=spec_data["strategy_class"], kwargs=spec_data["kwargs"]
     )
+    telem_ports = [int(p) for p in args.telem_ports.split(",") if p]
+    return (args.sysid, args.port_offset, spec, telem_ports, args.verbose)
 
 
 def main() -> None:
     """Entry point for a single-vehicle MITM proxy process."""
-    sysid, port_offset, strategy_name, params, telem_ports, verbose = parse_arguments()
+    sysid, port_offset, spec, telem_ports, verbose = parse_arguments()
     setup_logging(
         LOGS_PATH / "mitm" / f"mitm_{sysid}.log",
         verbose=verbose or 1,
         console_output=True,
     )
-    proxy = MITMProxy(
-        sysid, port_offset, get_strategy(strategy_name, params), telem_ports
-    )
+    proxy = MITMProxy(sysid, port_offset, MITMStrategy.build(spec), telem_ports)
     proxy.run_forever()
 
 
