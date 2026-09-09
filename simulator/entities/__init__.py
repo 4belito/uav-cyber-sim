@@ -1,6 +1,12 @@
 """Entities for the simulator module."""
 
-from .intervention import Intervention, Trigger
+from .intervention import (
+    Intervention,
+    MissionTrigger,
+    ProximityTrigger,
+    Trigger,
+    TriggerContext,
+)
 from .riddata import RIDData
 from .simgcs import SimGCS
 from .simvehicle import SimVehicle
@@ -18,4 +24,7 @@ __all__ = [
     "RIDData",
     "Intervention",
     "Trigger",
+    "MissionTrigger",
+    "ProximityTrigger",
+    "TriggerContext",
 ]

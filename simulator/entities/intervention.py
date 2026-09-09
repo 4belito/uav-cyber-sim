@@ -2,22 +2,61 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Literal, Protocol
+
+from simulator.helpers.coordinates import ENU
 
 if TYPE_CHECKING:
+    from simulator.config import Firmware
     from simulator.planner.plan import Plan
 
 TriggerMode = Literal["any", "all"]
 
 
 @dataclass
-class Trigger:
+class TriggerContext:
     """
-    When a GCS intervention fires.
+    What a trigger gets to look at, sampled once per monitor tick.
 
-    Two independent conditions, each against its own reference:
+    `elapsed` is seconds since the GCS started monitoring the vehicle;
+    `seq_elapsed` is seconds since the mission reached the trigger's `seq` (None
+    until then); `engaged` says whether the GCS already holds control, which is
+    what lets a guard apply hysteresis.
+    """
+
+    current_seq: int | None = None
+    elapsed: float = 0.0
+    seq_elapsed: float | None = None
+    position: ENU | None = None
+    engaged: bool = False
+
+
+class Trigger(Protocol):
+    """
+    Decides whether the GCS should be holding control right now.
+
+    Re-evaluated every monitor tick: the runner engages while it holds and
+    releases when it stops holding. Implementations differ in **lifecycle** —
+    `MissionTrigger` is an event (monotone, so control is taken and kept), while
+    `ProximityTrigger` is a state (reversible, so control is handed back).
+    """
+
+    def holds(self, ctx: TriggerContext) -> bool:
+        """Whether the GCS should hold control at this tick."""
+        ...
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for the GCS-process config JSON, tagged with its kind."""
+        ...
+
+
+@dataclass
+class MissionTrigger:
+    """
+    Take control at a point in the mission, or after a delay.
 
     * `seq` — a mission-sequence point: satisfied once the vehicle's
       `MISSION_CURRENT.seq` reaches it. `dwell` optionally delays it by that many
@@ -26,9 +65,12 @@ class Trigger:
     * `after` — a delay in seconds measured from **when the GCS starts monitoring
       the vehicle** (the beginning), not from the seq point.
 
-    At least one of `seq`/`after` must be set. `mode` combines them when both are:
-    `"any"` fires on whichever hits first, `"all"` requires both. A plain
-    `Trigger(seq=3)` reproduces the legacy behavior.
+    At least one must be set; `mode` combines them when both are (`"any"` on
+    whichever hits first, `"all"` requires both).
+
+    These conditions are **monotone** — once satisfied they stay satisfied — so an
+    intervention using this trigger takes control and never gives it back. Use
+    `ProximityTrigger` for a condition that can clear again.
     """
 
     seq: int | None = None
@@ -38,37 +80,30 @@ class Trigger:
 
     def __post_init__(self) -> None:
         if self.seq is None and self.after is None:
-            raise ValueError("Trigger needs a seq, an after time, or both")
+            raise ValueError("MissionTrigger needs a seq, an after time, or both")
         if self.dwell is not None and self.seq is None:
-            raise ValueError("Trigger dwell requires a seq to delay from")
+            raise ValueError("MissionTrigger dwell requires a seq to delay from")
 
-    def ready(
-        self,
-        current_seq: int | None,
-        elapsed: float,
-        seq_elapsed: float | None = None,
-    ) -> bool:
-        """
-        Whether the intervention should fire now.
-
-        `elapsed` is seconds since monitoring began; `seq_elapsed` is seconds
-        since the `seq` point was reached (None until then), used by `dwell`.
-        """
+    def holds(self, ctx: TriggerContext) -> bool:
+        """Whether the GCS should hold control at this tick."""
         conditions: list[bool] = []
         if self.seq is not None:
-            seq_met = current_seq is not None and current_seq >= self.seq
+            seq_met = ctx.current_seq is not None and ctx.current_seq >= self.seq
             if self.dwell is not None:
                 seq_met = (
-                    seq_met and seq_elapsed is not None and seq_elapsed >= self.dwell
+                    seq_met
+                    and ctx.seq_elapsed is not None
+                    and ctx.seq_elapsed >= self.dwell
                 )
             conditions.append(seq_met)
         if self.after is not None:
-            conditions.append(elapsed >= self.after)
+            conditions.append(ctx.elapsed >= self.after)
         return all(conditions) if self.mode == "all" else any(conditions)
 
     def to_dict(self) -> dict[str, Any]:
-        """Serialize for the GCS-process config JSON."""
+        """Serialize for the GCS-process config JSON, tagged with its kind."""
         return {
+            "kind": "mission",
             "seq": self.seq,
             "after": self.after,
             "dwell": self.dwell,
@@ -76,8 +111,8 @@ class Trigger:
         }
 
     @classmethod
-    def from_dict(cls, data: Mapping[str, Any]) -> Trigger:
-        """Rebuild a Trigger from its serialized form."""
+    def from_dict(cls, data: Mapping[str, Any]) -> MissionTrigger:
+        """Rebuild a MissionTrigger from its serialized form."""
         after = data.get("after")
         dwell = data.get("dwell")
         return cls(
@@ -89,23 +124,105 @@ class Trigger:
 
 
 @dataclass
+class ProximityTrigger:
+    """
+    Hold control while the vehicle is near a point — a guard, not an event.
+
+    Distance is **horizontal** (East/North only), so a tall hazard such as a tower
+    guards at every altitude and the point's `z` does not matter.
+
+    Unlike `MissionTrigger` this is **reversible**, which is what lets the GCS give
+    the vehicle back: it engages inside `radius`, keeps control until the vehicle
+    is clear past `release_radius` (hysteresis, so it does not chatter at the
+    boundary; defaults to `radius`), and engages again if the vehicle returns.
+    """
+
+    near: ENU
+    radius: float
+    release_radius: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.radius <= 0:
+            raise ValueError("ProximityTrigger radius must be positive")
+        if self.release_radius is not None and self.release_radius < self.radius:
+            raise ValueError("ProximityTrigger release_radius must be >= radius")
+
+    def holds(self, ctx: TriggerContext) -> bool:
+        """Whether the GCS should hold control at this tick."""
+        if ctx.position is None:
+            return False
+        # Wider threshold once engaged, so the vehicle must clearly leave the zone
+        # before the GCS lets go.
+        limit = self.radius
+        if ctx.engaged and self.release_radius is not None:
+            limit = self.release_radius
+        return (
+            math.hypot(ctx.position.x - self.near.x, ctx.position.y - self.near.y)
+            < limit
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize for the GCS-process config JSON, tagged with its kind."""
+        return {
+            "kind": "proximity",
+            "near": self.near._asdict(),
+            "radius": self.radius,
+            "release_radius": self.release_radius,
+        }
+
+    @classmethod
+    def from_dict(cls, data: Mapping[str, Any]) -> ProximityTrigger:
+        """Rebuild a ProximityTrigger from its serialized form."""
+        release_radius = data.get("release_radius")
+        return cls(
+            near=ENU(**data["near"]),
+            radius=float(data["radius"]),
+            release_radius=(None if release_radius is None else float(release_radius)),
+        )
+
+
+_TRIGGER_KINDS: dict[str, type[MissionTrigger] | type[ProximityTrigger]] = {
+    "mission": MissionTrigger,
+    "proximity": ProximityTrigger,
+}
+
+
+def build_trigger(data: Mapping[str, Any]) -> Trigger:
+    """Rebuild the trigger described by a serialized `{"kind": ...}` mapping."""
+    kind = data.get("kind", "mission")
+    trigger_cls = _TRIGGER_KINDS.get(kind)
+    if trigger_cls is None:
+        raise ValueError(
+            f"Unknown trigger kind {kind!r}; expected one of {sorted(_TRIGGER_KINDS)}"
+        )
+    return trigger_cls.from_dict(data)
+
+
+@dataclass
 class Intervention:
     """
-    A GCS intervention: a `Trigger` and the guided `Plan` to run when it fires.
+    A GCS intervention: a `Trigger` and the guided `Plan` to run while it holds.
 
     The plan is any registered `Plan` exposing a spec (typically an
-    `InterventionPlan`). It crosses to the GCS process as `{trigger, plan_spec}`
-    and is rebuilt there with `Plan.build`.
+    `InterventionPlan`). It crosses to the GCS process as
+    `{trigger, plan_spec, firmware}` and is rebuilt there with `Plan.build`.
+
+    `firmware` is what the GCS commands to hand control back: when the trigger
+    stops holding it switches the vehicle to that firmware's AUTO mode, and the
+    paused mission resumes from where it left off. With a `MissionTrigger` that
+    never happens, since those conditions never clear.
     """
 
     trigger: Trigger
     plan: Plan
+    firmware: Firmware = "ArduCopter"
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the intervention for the GCS-process config JSON."""
         return {
             "trigger": self.trigger.to_dict(),
             "plan_spec": self.plan.get_spec().to_dict(),
+            "firmware": self.firmware,
         }
 
     @classmethod
@@ -116,6 +233,7 @@ class Intervention:
         from simulator.planner.plan import Plan, PlanSpec
 
         return cls(
-            trigger=Trigger.from_dict(data["trigger"]),
+            trigger=build_trigger(data["trigger"]),
             plan=Plan.build(PlanSpec(**data["plan_spec"])),
+            firmware=data.get("firmware", "ArduCopter"),
         )

@@ -13,6 +13,15 @@ def guided_mode(firmware: Firmware) -> CopterMode | PlaneMode:
             return PlaneMode.GUIDED
 
 
+def auto_mode(firmware: Firmware) -> CopterMode | PlaneMode:
+    """Return the AUTO (mission) mode enum for the given firmware."""
+    match firmware:
+        case "ArduCopter":
+            return CopterMode.AUTO
+        case "ArduPlane":
+            return PlaneMode.AUTO
+
+
 def reset_mode(firmware: Firmware) -> CopterMode | PlaneMode:
     """Return the post-mission reset mode for the given firmware."""
     match firmware:

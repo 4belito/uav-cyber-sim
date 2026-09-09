@@ -42,7 +42,16 @@ class InterventionPlan(Plan):
     ) -> None:
         super().__init__(name=name)
         self.add(make_set_mode(guided_mode(firmware)))
-        self.add(make_path(wps=wps, wp_margin=wp_margin, firmware=firmware))
+        # `stop_asking_pos=False`: arriving at a waypoint must not switch off the
+        # position stream, which the GCS proximity guard reads every tick.
+        self.add(
+            make_path(
+                wps=wps,
+                wp_margin=wp_margin,
+                stop_asking_pos=False,
+                firmware=firmware,
+            )
+        )
         if not land:
             self.add(make_hold())
         elif firmware == "ArduPlane":
