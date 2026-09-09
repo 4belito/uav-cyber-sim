@@ -1,5 +1,6 @@
 """Typed wrappers and interfaces for MAVLink waypoint loading and manipulation."""
 
+from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 from pymavlink.dialects.v20.ardupilotmega import MAVLink_mission_item_message as ItemMsg
@@ -79,7 +80,8 @@ class MissionLoader:
         return self._loader.load(filename)
 
     def save(self, filename: str) -> None:
-        """Save item messages to a file."""
+        """Save item messages to a file, creating the parent directory if needed."""
+        Path(filename).parent.mkdir(parents=True, exist_ok=True)
         self._loader.save(filename)
 
     def items(self) -> list[ItemMsg]:

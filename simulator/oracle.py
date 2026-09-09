@@ -566,9 +566,9 @@ class Oracle:
         xlim: tuple[float, float] | None = None,
         ylim: tuple[float, float] | None = None,
         zlim: tuple[float, float] | None = None,
-        elev: float | None = None,
-        azim: float | None = None,
-        roll: float | None = None,
+        elev: float = 30.0,
+        azim: float = -60.0,
+        roll: float = 0.0,
         save: str | Path | None = None,
         show: bool = True,
     ) -> Figure | None:
@@ -606,8 +606,8 @@ class Oracle:
         `elev`, `azim` and `roll` rotate the camera, in degrees: `elev` above the
         east/north plane, `azim` around the up axis (counter-clockwise, so `-90`
         looks along north and `0` along east), and `roll` about the line of
-        sight. Each defaults to matplotlib's own view (30, -60, 0) when left
-        unset. `elev=90, azim=-90` gives a plain top-down ground track.
+        sight. They default to matplotlib's own view (30, -60, 0). `elev=90,
+        azim=-90` gives a plain top-down ground track.
 
         Returns the figure, or `None` when there is nothing recorded to draw.
         """
@@ -695,8 +695,8 @@ class Oracle:
 
         fig = plt.figure(figsize=(8, 8))  # type: ignore
         ax = fig.add_subplot(projection="3d", proj_type="ortho")  # type: ignore
-        # A `None` here is matplotlib's own "use the default angle", so passing
-        # the arguments straight through keeps the untouched view unchanged.
+        # Defaults match matplotlib's own view (30, -60, 0), so the untouched
+        # call renders the same as before these were made explicit.
         ax.view_init(elev=elev, azim=azim, roll=roll)  # type: ignore
         ax.set_title("ENU Trajectories")  # type: ignore
         ax.set_xlabel("East (m)")  # type: ignore
