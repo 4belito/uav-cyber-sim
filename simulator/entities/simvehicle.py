@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from typing import Any, Self
 
 from simulator.config import VEH_PARAMS_PATH, Color, Model
 from simulator.entities.simgcs import SimGCS
@@ -40,6 +41,14 @@ class SimVehicle(Vehicle):
     def parms(self) -> list[str]:
         """SITL defaults for this vehicle, normalized to an ordered list."""
         return [self.parm] if isinstance(self.parm, str) else list(self.parm)
+
+    def spoof_spec(self) -> dict[str, Any] | None:
+        """
+        Return the serialized RID spoof profile for the logic process.
+
+        `None` for an honest vehicle; `RIDSpoofer` overrides this to lie.
+        """
+        return None
 
     def set_port_offset(self, offset: int):
         """Set the port offset for the vehicle."""
@@ -79,7 +88,7 @@ class SimVehicle(Vehicle):
         relative_path: ENUs,  # relative waypoints
         gcss: Sequence[SimGCS] = (),
         parm: str | Sequence[str] = str(VEH_PARAMS_PATH),
-    ) -> SimVehicle:
+    ) -> Self:
         """Create a SimVehicle from poses given relative to an ENU origin."""
         enu_home = enu_origin.to_abs(relative_home)
         return cls(

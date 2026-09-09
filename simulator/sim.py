@@ -288,6 +288,7 @@ class Simulator(Generic[VehT]):
                 "mitm": sysid in self.oracle.mitm,
                 "gcs_telem_ports": self.veh_telem_ports[sysid],
                 "rid_frequency": self.oracle.rid_frequency,
+                "spoof": veh.spoof_spec(),
             }
             config_path = self.logic_dir / f"logic_config_{sysid}.json"
             with config_path.open("w") as f:

@@ -14,6 +14,7 @@ from pymavlink.dialects.v20 import ardupilotmega as mavlink
 from simulator.config import DATA_PATH, LOGS_PATH, VehPort
 from simulator.configs import LogicConfig
 from simulator.entities.riddata import RIDData
+from simulator.entities.spoof_profile import SpoofProfile
 from simulator.helpers.connections import (
     MAVConnection,
     create_tcp_conn,
@@ -100,6 +101,8 @@ def start_logic(config: LogicConfig):
     rid_event = mavutil.periodic_event(rid_frequency)
     mitm_enabled = bool(config.get("mitm", False))
     gcs_telem_ports = list(config.get("gcs_telem_ports", []))
+    spoof_spec = config.get("spoof")
+    spoof = SpoofProfile.from_dict(spoof_spec) if spoof_spec else None
     if mitm_enabled:
         cs_conns = [
             create_udp_conn(
@@ -143,6 +146,7 @@ def start_logic(config: LogicConfig):
         orc_port_offset,
         gra_origin,
         data_logger=data_logger,
+        spoof=spoof,
     )
     # Router stop signal
     mav_mng = MAVLinkManager(

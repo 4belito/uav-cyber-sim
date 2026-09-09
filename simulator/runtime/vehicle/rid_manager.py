@@ -5,7 +5,6 @@ from __future__ import annotations
 import copy
 import logging
 import math
-import pickle
 import threading
 import time
 from queue import Queue
@@ -13,8 +12,9 @@ from typing import cast
 
 import zmq
 
-from simulator.config import DATA_PATH, SimPort, VehPort
+from simulator.config import SimPort, VehPort
 from simulator.entities.riddata import RIDData
+from simulator.entities.spoof_profile import SpoofProfile
 from simulator.helpers.connections import create_zmq_socket
 from simulator.helpers.connections.mavlink.streams import make_json_safe
 from simulator.helpers.coordinates import ENU, GRA
@@ -41,6 +41,7 @@ class RIDManager:
         orc_port_offset: int,
         gra_origin: GRA,
         data_logger: DataLogger | None = None,
+        spoof: SpoofProfile | None = None,
     ) -> None:
         self.gra_origin = gra_origin
         self.sysid = sysid
@@ -51,13 +52,10 @@ class RIDManager:
         self._stop = threading.Event()
         self.pending = False  # whether there is new data to publish
 
-        # TODO: load fake position from config
-        fake_pos_path = DATA_PATH / "fake_position.pkl"
-        if fake_pos_path.exists():
-            with open(fake_pos_path, "rb") as f:
-                self.fake_pos = pickle.load(f)
-        else:
-            self.fake_pos = None
+        # RID spoofing: a `SpoofProfile` (or None to broadcast honestly). Times in
+        # the profile are measured from this manager's start.
+        self.spoof = spoof
+        self._spoof_t0 = time.monotonic()
 
         # ZMQ setup
         self._ctx = zmq.Context()
@@ -139,16 +137,21 @@ class RIDManager:
         send_data: RIDData | None = None
         with self._lock:
             if self.pending and self.data is not None:
-                if self.fake_pos and self.sysid == 255:
+                send_data = self.data
+                fake_pos = (
+                    self.spoof.position_at(time.monotonic() - self._spoof_t0)
+                    if self.spoof is not None
+                    else None
+                )
+                if fake_pos is not None:
                     send_data = copy.copy(self.data)
-                    send_data.enu_pos = self.fake_pos
+                    send_data.enu_pos = fake_pos
                     # Neighbors convert RID -> ADS-B from gra_pos (lat/lon/alt),
                     # not enu_pos, so the geodetic position must be spoofed too or
                     # the victim keeps avoiding our true location.
-                    send_data.gra_pos = self.gra_origin.to_abs(self.fake_pos)
+                    send_data.gra_pos = self.gra_origin.to_abs(fake_pos)
                     logging.debug(f"SEND FAKE DATA RID({self.sysid}): {send_data}")
                 else:
-                    send_data = self.data
                     logging.debug(f"SEND DATA RID({self.sysid}): {send_data}")
 
                 self._out_sock.send_pyobj(send_data)  # type: ignore

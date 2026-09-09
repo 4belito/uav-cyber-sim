@@ -18,3 +18,6 @@ class LogicConfig(TypedDict):
     gcs_telem_ports: NotRequired[list[int]]
     # Remote ID broadcast rate in Hz, set on the Oracle.
     rid_frequency: NotRequired[int]
+    # RID spoof profile (a serialized `SpoofProfile`) for a spoofing vehicle;
+    # absent/None for an honest one. See `simulator.entities.spoofer`.
+    spoof: NotRequired[dict[str, Any] | None]
