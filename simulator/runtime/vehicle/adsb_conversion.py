@@ -1,9 +1,14 @@
 """ADS-B related data structures and utilities."""
 
+from __future__ import annotations
+
 import hashlib
+from typing import TYPE_CHECKING
 
 from simulator.entities.adsb import ADSBBeacon
-from simulator.entities.riddata import RIDData
+
+if TYPE_CHECKING:
+    from simulator.entities.riddata import RIDData
 
 
 def sysid_to_icao(sysid: int) -> int:
@@ -14,16 +19,13 @@ def sysid_to_icao(sysid: int) -> int:
 
 def rid_to_adsb_beacon(rid: RIDData) -> ADSBBeacon:
     """Convert Remote ID data to ADS-B semantic beacon."""
-    # --- position ---
     lat = rid.gra_pos.lat
     lon = rid.gra_pos.lon
     alt = rid.gra_pos.alt  # meters MSL
 
-    # --- heading ---
     # ADS-B expects course-over-ground in degrees
     heading = rid.cog % 360.0
 
-    # --- velocity ---
     # Horizontal speed is already provided
     hor_speed = rid.speed
 

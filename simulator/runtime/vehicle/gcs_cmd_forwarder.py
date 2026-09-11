@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import logging
 import threading
+from typing import TYPE_CHECKING
 
-from simulator.helpers.connections import MAVConnection
+if TYPE_CHECKING:
+    from simulator.helpers.connections import MAVConnection
 
 # Message types the GCS is permitted to send to the vehicle.
 # Heartbeats and acknowledgements are excluded — Logic manages those independently.

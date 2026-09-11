@@ -2,16 +2,18 @@
 Remote ID spoof profile: what fake position to broadcast and when.
 
 Kept free of any vehicle/runtime imports (only coordinates) so the RID manager
-can import it without a cycle; the `RIDSpoofer` vehicle lives in `spoofer.py`.
+can import it without a cycle; `SimVehicle.spoof` carries one of these.
 """
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from simulator.helpers.coordinates import ENU
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 @dataclass
@@ -38,7 +40,6 @@ class SpoofProfile:
     def __post_init__(self) -> None:
         if not self.keyframes:
             raise ValueError("SpoofProfile needs at least one keyframe")
-        # Keep keyframes time-ordered so `position_at` can assume sorted input.
         self.keyframes = sorted(self.keyframes, key=lambda kf: kf[0])
 
     @classmethod

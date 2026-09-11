@@ -1,5 +1,7 @@
 """Init file for enums package."""
 
+from __future__ import annotations
+
 from .autopilot import Autopilot
 from .cmd import Cmd
 from .cmdcond import CmdCond

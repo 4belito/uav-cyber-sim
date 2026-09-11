@@ -2,6 +2,8 @@
 Mission monitoring helpers for ArduPilot-based vehicles.
 """
 
+from __future__ import annotations
+
 import logging
 from typing import Literal
 
@@ -92,5 +94,7 @@ def make_monitoring(
     monitoring.add(CheckEndMission(name="check end mission"))
 
     # Switch to STABILIZE/MANUAL to reset the ArduPilot state machine.
-    monitoring.add(SwitchMode(name="Switch to manual", flight_mode=reset_mode(firmware)))
+    monitoring.add(
+        SwitchMode(name="Switch to manual", flight_mode=reset_mode(firmware))
+    )
     return monitoring

@@ -1,5 +1,7 @@
 """Init file for plan package."""
 
+from __future__ import annotations
+
 from .action import Action, State
 from .plan import Plan, Plans, PlanSpec
 from .plans.auto import AutoPlan

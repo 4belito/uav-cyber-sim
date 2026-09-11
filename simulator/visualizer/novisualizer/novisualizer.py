@@ -1,11 +1,16 @@
 """Minimal visualizer that sets home locations without GUI rendering."""
 
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from simulator.entities.simvehicle import SimVehicle, Vehicle
-from simulator.helpers.coordinates import ENUPose, GRAPose
 from simulator.visualizer.visualizer import Visualizer  # ConfigVis,
+
+if TYPE_CHECKING:
+    from simulator.helpers.coordinates import ENUPose, GRAPose
 
 
 @dataclass

@@ -15,21 +15,22 @@ from __future__ import annotations
 import argparse
 import logging
 import time
+from typing import TYPE_CHECKING
 
 import zmq
 
 from simulator.config import LOGS_PATH, VehPort
-from simulator.entities.adsb import ADSBBeacon
 from simulator.helpers.connections import create_zmq_socket
 from simulator.helpers.connections.mavlink.conn import connect, send_heartbeat
-from simulator.helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from simulator.helpers.connections.mavlink.enums import Autopilot, State, Type
 from simulator.helpers.logging.setup_log import setup_logging
 
-# =============================================================================
-# MAVLink ADS-B constants
-# =============================================================================
+if TYPE_CHECKING:
+    from simulator.entities.adsb import ADSBBeacon
+    from simulator.helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 
+
+# MAVLink ADS-B constants
 ADSB_ALTITUDE_TYPE_GEOMETRIC = 1
 ADSB_EMITTER_TYPE_UAV = 14
 
@@ -42,11 +43,7 @@ ADSB_FLAGS_SIMULATED = 64
 ADSB_FLAGS_VERTICAL_VELOCITY_VALID = 128
 
 
-# =============================================================================
-# ADS-B Injector
-# =============================================================================
-
-
+# ADS-B injector
 class ADSBInjector:
     """ADS-B device adapter: ZMQ ADSBBeacon -> MAVLink ADSB_VEHICLE -> serial."""
 
@@ -67,10 +64,7 @@ class ADSBInjector:
             port_offset,
         )
 
-    # -------------------------------------------------------------------------
     # Lifecycle
-    # -------------------------------------------------------------------------
-
     def connect(self) -> None:
         """Open serial connection to ArduPilot."""
         logging.debug(f"[ADSB] Connecting to {self.uart} @ {self.baudrate} baud")
@@ -90,10 +84,6 @@ class ADSBInjector:
             self.conn.close()
         self.sub.close(linger=0)
         self.ctx.term()
-
-    # -------------------------------------------------------------------------
-    # MAVLink output
-    # -------------------------------------------------------------------------
 
     def send_heartbeat(self) -> None:
         """Identify as an ADS-B peripheral."""
@@ -134,11 +124,6 @@ class ADSBInjector:
             ),
             squawk=1200,
         )
-
-
-# =============================================================================
-# Main
-# =============================================================================
 
 
 def main() -> None:

@@ -7,6 +7,8 @@ ArduPlane:  AIRSPEED_CRUISE (m/s) — TECS cruise airspeed target.
             without it TECS ignores this value and uses TRIM_THROTTLE instead.
 """
 
+from __future__ import annotations
+
 from typing import Literal
 
 from simulator.helpers.ardupilot.enums import AirSpeed, WPNav
@@ -36,8 +38,7 @@ class SetSpeed(Step):
         self.expected_id = self.param_id.decode("ascii")
 
     def exec_fn(self) -> None:
-        # Drain stale PARAM_VALUE messages (e.g. ARSPD_OFFSET flood during calibration)
-        # so check_fn only sees responses that arrive after this PARAM_SET is sent.
+        # Drain stale PARAM_VALUE so check_fn only sees replies to this PARAM_SET.
         while self.mav_manager.state.wait_for("PARAM_VALUE", timeout=0) is not None:
             pass
 
@@ -51,8 +52,7 @@ class SetSpeed(Step):
         self.mav_manager.send(msg)
 
     def check_fn(self) -> bool:
-        # Consume all queued PARAM_VALUE messages looking for our parameter.
-        # ARSPD_OFFSET and other params are discarded; return True only on exact match.
+        # Scan queued PARAM_VALUE for ours; discard the rest.
         wait = self.mav_manager.state.wait_for
         while (msg := wait("PARAM_VALUE", timeout=0)) is not None:
             if isinstance(msg.param_id, (bytes, bytearray)):

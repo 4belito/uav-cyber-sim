@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import logging
-import time
 from collections.abc import Callable
-from typing import Any, Self
+from typing import TYPE_CHECKING, Any, Self
 
-from simulator.config import Firmware
 from simulator.entities.riddata import RIDData
 from simulator.helpers.connections.mavlink.enums import MsgID
 from simulator.helpers.connections.mavlink.streams import ask_msg
@@ -15,6 +13,9 @@ from simulator.planner.action import Action
 from simulator.planner.actions import make_takeoff
 from simulator.planner.plan import Plan, PlanSpec
 from simulator.planner.step import Step
+
+if TYPE_CHECKING:
+    from simulator.config import Firmware
 
 RIDGetter = Callable[[int], RIDData | None]
 
@@ -51,11 +52,14 @@ class PursueStep(Step):
             if rid is not None:
                 self.target_pos = rid.enu_pos
                 self.send_position_target(rid.enu_pos)
-                self._last_update = time.time()
+                self._last_update = self.mav_manager.state.sim_time_s() or 0.0
 
     def check_fn(self) -> bool:
         """Refresh GoTo with the latest target position; never signals done."""
-        now = time.time()
+        # Sim clock, so `update_interval` is sim seconds regardless of `speedup`.
+        now = self.mav_manager.state.sim_time_s()
+        if now is None:
+            return False
         update_needed = now - self._last_update >= self.update_interval
         if update_needed and self._get_target is not None:
             rid = self._get_target(self.target_sysid)

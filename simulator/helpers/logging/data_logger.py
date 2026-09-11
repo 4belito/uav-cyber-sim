@@ -5,9 +5,12 @@ from __future__ import annotations
 import json
 import logging
 import time
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from simulator.helpers.connections.mavlink.streams import JSONType, make_json_safe
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 Record = dict[str, JSONType]
 

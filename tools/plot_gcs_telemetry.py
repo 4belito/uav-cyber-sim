@@ -1,4 +1,5 @@
-"""Plot per-drone flight paths (longitude vs latitude) from GCS telemetry logs.
+"""
+Plot per-drone flight paths (longitude vs latitude) from GCS telemetry logs.
 
 The GCS writes one JSONL file per drone (``veh_<sysid>.jsonl``) under
 ``simulator/data/gcs_msgs/``. Each line is a received MAVLink message; this
@@ -37,7 +38,8 @@ class Track:
 
 
 def load_track(path: Path) -> Track | None:
-    """Read one ``veh_<sysid>.jsonl`` file into a :class:`Track`.
+    """
+    Read one ``veh_<sysid>.jsonl`` file into a :class:`Track`.
 
     Records with a zero lat/lon (emitted before the SITL GPS fix) are skipped.
     Returns ``None`` if the file holds no usable position fixes.
@@ -90,12 +92,22 @@ def plot_tracks(tracks: list[Track], save: Path | None) -> None:
         color = line.get_color()
         # Mark where each path starts (○) and ends (■).
         ax.scatter(
-            track.lons[0], track.lats[0],
-            color=color, marker="o", s=70, edgecolors="black", zorder=3,
+            track.lons[0],
+            track.lats[0],
+            color=color,
+            marker="o",
+            s=70,
+            edgecolors="black",
+            zorder=3,
         )
         ax.scatter(
-            track.lons[-1], track.lats[-1],
-            color=color, marker="s", s=70, edgecolors="black", zorder=3,
+            track.lons[-1],
+            track.lats[-1],
+            color=color,
+            marker="s",
+            s=70,
+            edgecolors="black",
+            zorder=3,
         )
 
     ax.set_xlabel("Longitude (°)")

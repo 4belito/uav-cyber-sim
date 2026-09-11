@@ -1,8 +1,11 @@
 """Typed interface for accessing MAVLink messages from VehicleState."""
 
-from typing import Literal, Protocol, overload
+from __future__ import annotations
 
-import pymavlink.dialects.v20.ardupilotmega as mavlink
+from typing import TYPE_CHECKING, Literal, Protocol, overload
+
+if TYPE_CHECKING:
+    import pymavlink.dialects.v20.ardupilotmega as mavlink
 
 
 class VehicleStateP(Protocol):
@@ -11,12 +14,12 @@ class VehicleStateP(Protocol):
     # latest messages keyed by MAVLink message type name
     messages: dict[str, mavlink.MAVLink_message]
 
-    # ---------------------------------------------------------
-    # Typed accessors
-    # ---------------------------------------------------------
-
     def update(self, msg: mavlink.MAVLink_message) -> None:
         """Update the vehicle state with a new MAVLink message."""
+
+    def sim_time_s(self) -> float | None:
+        """Vehicle boot clock in seconds (advances at SITL `speedup`)."""
+        ...
 
     @overload
     def get(

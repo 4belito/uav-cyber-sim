@@ -1,7 +1,12 @@
 """Helper module for setting up logging configuration for UAV Cyber Sim."""
 
+from __future__ import annotations
+
 import logging
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def setup_logging(filepath: Path, verbose: int = 1, console_output: bool = True):

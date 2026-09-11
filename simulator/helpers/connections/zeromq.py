@@ -1,8 +1,13 @@
 """Helper functions for creating ZeroMQ sockets."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import zmq
 
-from simulator.config import SimPort, VehPort
+if TYPE_CHECKING:
+    from simulator.config import SimPort, VehPort
 
 
 def create_zmq_sockets(

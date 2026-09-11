@@ -1,9 +1,12 @@
 """RIDData class definition."""
 
-from dataclasses import dataclass
-from typing import TypedDict
+from __future__ import annotations
 
-from simulator.helpers.coordinates import ENU, GRA
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, TypedDict
+
+if TYPE_CHECKING:
+    from simulator.helpers.coordinates import ENU, GRA
 
 
 class RIDDict(TypedDict):

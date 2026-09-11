@@ -5,9 +5,12 @@ This module defines Protocols for various MAVLink messages and a typed MAVLink
 connection interface.
 """
 
-from typing import Literal, Protocol, overload
+from __future__ import annotations
 
-import pymavlink.dialects.v20.ardupilotmega as mavlink
+from typing import TYPE_CHECKING, Literal, Protocol, overload
+
+if TYPE_CHECKING:
+    import pymavlink.dialects.v20.ardupilotmega as mavlink
 
 
 class MAVConnection(Protocol):

@@ -7,14 +7,19 @@ Includes:
 - make_path: factory dispatching by firmware.
 """
 
-import logging
+from __future__ import annotations
 
-from simulator.config import Firmware
+import logging
+from typing import TYPE_CHECKING
+
 from simulator.helpers.connections.mavlink.enums import Cmd, Frame, MsgID
 from simulator.helpers.connections.mavlink.streams import ask_msg, stop_msg
 from simulator.helpers.coordinates import ENU, ENUs
 from simulator.planner.action import Action
 from simulator.planner.step import Step
+
+if TYPE_CHECKING:
+    from simulator.config import Firmware
 
 
 class GoTo(Step):
@@ -61,7 +66,8 @@ class GoTo(Step):
 
 
 class PlaneGoTo(Step):
-    """GoTo step for ArduPlane using DO_REPOSITION in GUIDED mode.
+    """
+    GoTo step for ArduPlane using DO_REPOSITION in GUIDED mode.
 
     SET_POSITION_TARGET_GLOBAL_INT is ignored for lat/lon by ArduPlane; it only
     processes the altitude component. DO_REPOSITION calls set_guided_WP() with

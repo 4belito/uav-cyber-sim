@@ -1,5 +1,7 @@
 """Init file for enums package."""
 
+from __future__ import annotations
+
 from .airspeed import AirSpeed
 from .brdtype import BRDType
 from .frameclass import FrameClass

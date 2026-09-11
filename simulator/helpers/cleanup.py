@@ -1,12 +1,14 @@
 """Tools to stop simulation processes and clean up log files."""
 
+from __future__ import annotations
+
 import contextlib
 import glob
 import os
 import shutil
 import subprocess
 import time
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from simulator.config import (
     ARDU_LOGS_PATH,
@@ -16,20 +18,16 @@ from simulator.config import (
     RUNTIME_GAZEBO_WORLDS,
 )
 
-# Patterns matched against the full command line (`pkill -f`), covering every
-# process the simulator spawns. The spawn sites are `create_process` in
-# `runtime/vehicle_launcher.py` (MITM, socat, ADS-B injector, logic, SITL),
-# `sim.py` (GCS) and the visualizers (`gazebo/`, `QGroundControl/`).
-#
-# The `xterm`/`bash -c` wrappers used for visible terminals carry the inner
-# command in their own command line, so matching the inner pattern kills them
-# too — they need no entries of their own.
+if TYPE_CHECKING:
+    from pathlib import Path
+
+# `pkill -f` patterns for every process the simulator spawns. Matching the
+# inner command also kills its `xterm`/`bash -c` wrapper, so wrappers need no
+# entry of their own.
 ALL_PROCESSES = [
-    # Every Python child is launched as `python3 -m simulator.<module>`, so one
-    # pattern covers logic, gcs, adsb_injector and mitm — and anything added
-    # later, which is how `simulator.mitm` came to be missed before.
+    # One pattern for every `python3 -m simulator.<module>` child.
     "python3 -m simulator.",
-    # ArduPilot SITL binaries; "arducopter" also matches "arducopter-heli".
+    # ArduPilot SITL binaries ("arducopter" also matches "arducopter-heli").
     "arduplane",
     "arducopter",
     "ardurover",
@@ -60,7 +58,8 @@ def kill_processes(victims: list[str], wait_timeout: float = 2.0) -> None:
     deadline = time.monotonic() + wait_timeout
     while time.monotonic() < deadline:
         still_alive = [
-            p for p in victims
+            p
+            for p in victims
             if subprocess.run(["pgrep", "-f", p], capture_output=True).returncode == 0
         ]
         if not still_alive:
@@ -84,6 +83,7 @@ def del_folder(path: Path):
 def _close_oracles() -> None:
     """Close all active Oracle ZMQ contexts in the current kernel."""
     from simulator.oracle import _active  # avoid circular import at module level
+
     for oracle in list(_active):
         oracle.close()
 
@@ -91,7 +91,8 @@ def _close_oracles() -> None:
 def _kill_stale_sim_sockets(
     base: int = 5760, span: int = 20, extra_ports: tuple[int, ...] = (11345,)
 ) -> None:
-    """Kill any process holding a TCP port in the simulation range.
+    """
+    Kill any process holding a TCP port in the simulation range.
 
     SITL binds sequential ports starting at base (SERIAL0–SERIAL9). If a
     previous Oracle ZMQ socket in another kernel holds e.g. port base+5

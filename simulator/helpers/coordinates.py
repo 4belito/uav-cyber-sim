@@ -4,18 +4,17 @@ from __future__ import annotations
 
 import math
 from collections.abc import Generator, Iterable, Iterator
-from typing import (
-    NamedTuple,
-    Self,
-)
+from typing import TYPE_CHECKING, NamedTuple, Self
 
 import folium
 import numpy as np
 from geopy import distance
-from matplotlib.axes import Axes
 from pymap3d import enu2geodetic, geodetic2enu  # type: ignore
 
-from simulator.config import Color
+if TYPE_CHECKING:
+    from matplotlib.axes import Axes
+
+    from simulator.config import Color
 
 # TODO: Check repetitions of similar methods across classes
 

@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any, Self
+from typing import TYPE_CHECKING, Any, Self
 
 from pymavlink.dialects.v20.ardupilotmega import MAVLink_mission_item_message as ItemMsg
 
-from simulator.config import Firmware
+from simulator.config import MISSIONS_PATH
 from simulator.helpers.connections.mavlink.customtypes.mission import MissionLoader
-from simulator.helpers.connections.mavlink.enums import (
-    CmdNav,
-    Frame,
-)  # Cmd,
+from simulator.helpers.connections.mavlink.enums import CmdNav, Frame
 from simulator.helpers.coordinates import ENUPose, ENUs, GRAPose, GRAs
 from simulator.planner.actions import (
     make_monitoring,
@@ -19,6 +16,9 @@ from simulator.planner.actions import (
     make_upload_mission,
 )
 from simulator.planner.plan import Plan, PlanSpec
+
+if TYPE_CHECKING:
+    from simulator.config import Firmware
 
 
 @Plan.register("AutoPlan")
@@ -70,6 +70,11 @@ class AutoPlan(Plan):
             navigation_speed=kwargs.get("navigation_speed", 5),
         )
 
+    @staticmethod
+    def default_mission_path(sysid: int) -> str:
+        """Per-vehicle mission file used when no `mission_path` is given."""
+        return str(MISSIONS_PATH / f"mission_{sysid}.waypoints")
+
     @classmethod
     def rectangle_traj(
         cls,
@@ -77,16 +82,20 @@ class AutoPlan(Plan):
         ylen: float,
         alt: float,
         gra_origin: GRAPose,
-        mission_path: str,
         relative_home: ENUPose,
         firmware: Firmware,
+        mission_path: str | None = None,
         name: str = "auto_rectangle_plan",
         sysid: int = 1,
         clockwise: bool = True,
         navigation_speed: float = 5.0,
         land: bool = True,
     ) -> Self:
-        """Create a rectangular auto plan from relative waypoints."""
+        """
+        Create a rectangular auto plan from relative waypoints.
+
+        `mission_path` defaults to `default_mission_path(sysid)`.
+        """
         relative_path = Plan.create_rectangle_path(
             xlen=xlen,
             ylen=ylen,
@@ -111,16 +120,20 @@ class AutoPlan(Plan):
         side_len: float,
         alt: float,
         gra_origin: GRAPose,
-        mission_path: str,
         relative_home: ENUPose,
         firmware: Firmware,
+        mission_path: str | None = None,
         name: str = "auto_square_plan",
         sysid: int = 1,
         clockwise: bool = True,
         navigation_speed: float = 5.0,
         land: bool = True,
     ) -> Self:
-        """Create a square auto plan from relative waypoints."""
+        """
+        Create a square auto plan from relative waypoints.
+
+        `mission_path` defaults to `default_mission_path(sysid)`.
+        """
         return cls.rectangle_traj(
             xlen=side_len,
             ylen=side_len,
@@ -142,12 +155,17 @@ class AutoPlan(Plan):
         name: str,
         sysid: int,
         gra_wps: GRAs,
-        mission_path: str,
         firmware: Firmware,
+        mission_path: str | None = None,
         navigation_speed: float = 5.0,
         land: bool = True,
     ) -> Self:
-        """Create and save a basic mission to file."""
+        """
+        Create and save a basic mission to file.
+
+        `mission_path` defaults to `default_mission_path(sysid)`.
+        """
+        mission_path = mission_path or cls.default_mission_path(sysid)
         AutoPlan.save_basic_mission(
             mission_path,
             sysid,
@@ -170,12 +188,18 @@ class AutoPlan(Plan):
         gra_origin: GRAPose,
         relative_home: ENUPose,
         relative_path: ENUs,
-        mission_path: str,
         firmware: Firmware,
+        mission_path: str | None = None,
         navigation_speed: float = 5.0,
         land: bool = True,
     ) -> Self:
-        """Create and save a basic mission from relative waypoints to file."""
+        """
+        Create and save a basic mission from relative waypoints to file.
+
+        `mission_path` defaults to `default_mission_path(sysid)` — one file per
+        vehicle, so the caller rarely needs to pass it.
+        """
+        mission_path = mission_path or cls.default_mission_path(sysid)
         AutoPlan.save_basic_mission_from_relative(
             mission_path,
             sysid,
@@ -200,7 +224,6 @@ class AutoPlan(Plan):
         sysid: int,
         gra_wps: GRAs,
         land: bool = True,
-        # speed: float = 5.0,
         takeoff_alt: float | None = None,
     ):
         """Save the mission to file and returns number of items."""
@@ -212,9 +235,8 @@ class AutoPlan(Plan):
             altitude=0,
             terrain_alt=False,
         )
-        # takeoff_alt lets the TAKEOFF command finish below cruise altitude so
-        # TECS handles the final climb at controlled speed — prevents the abrupt
-        # full-throttle → cruise transition that causes phugoid oscillation.
+        # takeoff_alt below cruise lets TECS handle the final climb, avoiding
+        # the full-throttle -> cruise jump that causes phugoid oscillation.
         tk_alt = takeoff_alt if takeoff_alt is not None else wps[1].alt
         mission_loader.add(
             ItemMsg(
@@ -271,7 +293,6 @@ class AutoPlan(Plan):
         relative_home: ENUPose,
         relative_path: ENUs,
         land: bool = True,
-        # speed: float = 5.0,
     ):
         """Convert ENU waypoints to GRAs and save the mission to file."""
         gra_wps = GRAPose.resolve_path(gra_origin, relative_home, relative_path)

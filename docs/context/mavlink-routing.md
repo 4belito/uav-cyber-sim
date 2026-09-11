@@ -219,7 +219,7 @@ picks these up on 5766 and forwards them to ArduPilot.
 ## Man-in-the-Middle (MITM) Interposition
 
 `simulator/mitm.py` runs a per-vehicle proxy that sits transparently between the
-GCS and the vehicle's Logic. Enabled via `vehicle.mitm = HijackStrategy(...)`
+GCS and the vehicle's Logic. Enabled via `vehicle.mitm = InterventionStrategy(...)`
 (a typed `MITMStrategy`, `None` by default). When set:
 
 - Sim writes `mitm=True` into the logic config and `mitm` + `mitm_cmd` into each
@@ -258,7 +258,10 @@ strategy_class=..., kwargs={...})`; `Simulator._build_veh_config` serializes
 a `_REGISTRY` keyed by `strategy_class` — falling back to `passthrough` with a
 warning on an unknown name. New attacks subclass `MITMStrategy` and decorate
 with `@MITMStrategy.register("name")`; a notebook constructs one directly
-(`HijackStrategy(trigger_seq=3, ...)`) and assigns it to `vehicle.mitm`.
+(`InterventionStrategy(Intervention(...))`) and assigns it to `vehicle.mitm`.
+`Simulator._build_veh_config` also passes the run's geodetic origin to the proxy
+(`--gra-origin '<json>'` → `MITMContext.gra_origin`), so a strategy that reuses
+the planner machinery can resolve ENU waypoints exactly as the GCS does.
 
 **Built-in strategies:**
 
@@ -266,7 +269,7 @@ with `@MITMStrategy.register("name")`; a notebook constructs one directly
 |---|---|
 | `passthrough` | Forward everything unmodified (default). |
 | `blackout` | Drop all uplink commands and all downlink telemetry **except** `HEARTBEAT` (GCS blocks on `wait_heartbeat` at startup) and the `LOGIC_DONE` STATUSTEXT (GCS completion). Attacker keeps the link looking alive while blinding the operator. |
-| `hijack` | Watch `MISSION_CURRENT` on the relayed downlink; once `seq >= trigger_seq`, inject `SET_MODE(GUIDED)` + `DO_REPOSITION` toward `target_lat/lon/alt` — the GCS intervention, but attacker-driven and GCS-spoofed. Telemetry still passes through (visible hijack). |
+| `intervention` | Run a real GCS `Intervention` (a `Trigger` + guided `InterventionPlan`) from the MITM position. `bind()` builds the same `InterventionRunner` the GCS uses, pointed at the proxy's Logic-facing command link (`MITMContext.command_conn`, srcSystem 255) with `source="MITM"`; `on_downlink` feeds relayed telemetry to it and ticks it each message. Commands are GCS-spoofed; telemetry still passes through (visible hijack). With a `MissionTrigger` it takes control and keeps it; with a `ProximityTrigger` it hands control back when the condition clears — identical semantics to `gcs.intervene(...)`. |
 | `spoof_gcs` | Watch `MISSION_CURRENT` on the relayed downlink; once `seq >= trigger_seq`, inject one fabricated `GLOBAL_POSITION_INT` (`spoof_lat/lon/alt`), spoofed with `srcSystem = sysid` (looks vehicle-origin), toward the GCS connections selected by `target_mask` (bit *i* = GCS at position *i* in `veh.gcss`; bit 0 is the owner). Real telemetry still reaches every GCS unmodified — the downlink relay fans one message out to all of them, so this can't suppress it per-target, only add a spoofed report alongside it. |
 | `spoof_owner_gcs` | Same as `spoof_gcs` but always targets index 0 (the owner) regardless of `target_mask`. |
 
@@ -281,14 +284,18 @@ with `@MITMStrategy.register("name")`; a notebook constructs one directly
 > `srcSystem=255`) since spoofed telemetry should look vehicle-origin, not
 > GCS-origin.
 
-> **Confidence:** Confirmed — passthrough, blackout, and hijack all verified
-> end-to-end against the real proxy (downlink/uplink/backflow forwarding, blackout
-> suppression with heartbeat+LOGIC_DONE passthrough, hijack injection of
-> SET_MODE+DO_REPOSITION at the trigger seq). Notebooks `8-mitm_passthrough`,
-> `9-mitm_blackout`, `10-mitm_hijack`. `spoof_gcs`/`spoof_owner_gcs` are verified
-> at the unit level (target-index selection, srcSystem, message content via a
-> fake-connection harness) but not yet run end-to-end through a full SITL
-> simulation — see `13-mitm_spoof_gcs.ipynb` / `14-mitm_spoof_owner.ipynb`.
+> **Confidence:** Confirmed — passthrough, blackout, and the earlier bespoke
+> hijack all verified end-to-end against the real proxy (downlink/uplink/backflow
+> forwarding, blackout suppression with heartbeat+LOGIC_DONE passthrough, hijack
+> injection of SET_MODE+DO_REPOSITION at the trigger seq). The `hijack` strategy
+> has since been replaced by `intervention`, which drives the shared
+> `InterventionRunner` from the MITM; the runner itself is confirmed on the GCS
+> side (`5-GCS_intervention_*`). Notebooks `8-mitm_passthrough`, `8-mitm_blackout`,
+> `8-mitm_hijack`, `11-mitm_hijack_fleet`, `12-mitm_hijack_fleet_random`.
+> `spoof_gcs`/`spoof_owner_gcs` are verified at the unit level (target-index
+> selection, srcSystem, message content via a fake-connection harness) but not yet
+> run end-to-end through a full SITL simulation — see `13-mitm_spoof_gcs.ipynb` /
+> `14-mitm_spoof_owner.ipynb`.
 
 ## QGC InitialConnectStateMachine Timing
 

@@ -3,12 +3,12 @@ Launches multi-Vehicle simulation with ArduPilot SITL, logic, and optional
 visualization.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import socket
-from collections.abc import Container, Iterable, Sequence
-from subprocess import Popen
-from typing import ClassVar, Generic
+from typing import TYPE_CHECKING, ClassVar, Generic
 
 from simulator.config import (
     ARDU_LOGS_PATH,
@@ -21,7 +21,6 @@ from simulator.config import (
     SitlPort,
     VehPort,
 )
-from simulator.configs.gcs import VehicleConfig
 from simulator.entities import Intervention, VehT
 from simulator.external.sitl import resolve_sitl_build
 from simulator.helpers.cleanup import (
@@ -32,9 +31,15 @@ from simulator.helpers.cleanup import (
 from simulator.helpers.logging.setup_log import setup_logging
 from simulator.helpers.math import connection_id
 from simulator.helpers.processes import SimProcess, create_process
-from simulator.oracle import Oracle
 from simulator.runtime.vehicle_launcher import launch_vehicle
-from simulator.visualizer import Visualizer
+
+if TYPE_CHECKING:
+    from collections.abc import Container, Iterable, Sequence
+    from subprocess import Popen
+
+    from simulator.configs.gcs import GCSVehicleConfig
+    from simulator.oracle import Oracle
+    from simulator.visualizer import Visualizer
 
 # TODO: remove hard-coded ArduCopter and add it to SimVehicle as firmware
 
@@ -48,9 +53,10 @@ class Simulator(Generic[VehT]):
     oracle_name: str = "Oracle ⚪"
     logic_dir = DATA_PATH / "logic"
     gcs_dir = DATA_PATH / "gcs"
-    # Every vehicle claims `base + its offset` for each of these, plus the whole
-    # GCS telemetry window — so a vehicle can be monitored by that many GCSs
-    # before it runs out of listeners. Claimed as one atomic block.
+    # One atomic per-vehicle block, claimed at `base + offset`: our ports, plus
+    # the GCS telemetry window expanded to one entry per slot (the allocator
+    # probes one port per base), plus SitlPort — SITL binds those itself, so the
+    # block isn't really free unless they are.
     veh_base_ports: ClassVar[list[int]] = [
         VehPort.ARP,
         VehPort.ADSB,
@@ -61,12 +67,7 @@ class Simulator(Generic[VehT]):
         VehPort.GCS_CMD,
         VehPort.MITM_TELEM,
         VehPort.MITM_CMD,
-        # The window is SITL_INSTANCE_STRIDE ports per vehicle, but the allocator
-        # understands one port per base — expand it into that many entries so
-        # the whole window is claimed with the block.
         *range(GCS_TELEM_WINDOW, GCS_TELEM_WINDOW + SITL_INSTANCE_STRIDE),
-        # Claimed by SITL itself at the same stride; nothing of ours binds them,
-        # but the block is not really free unless they are.
         *SitlPort,
     ]
     max_gcss_per_veh: ClassVar[int] = SITL_INSTANCE_STRIDE
@@ -85,20 +86,15 @@ class Simulator(Generic[VehT]):
         if suppress_output is None:
             suppress_output = [SimProcess.ARDUPILOT, SimProcess.ADSB_SOCAT]
         self.visualizer = visualizer
-        # The Oracle holds the scenario (vehicles, GCSs, interventions, MITM);
-        # the Simulator only decides how to execute it. `launch()` binds it.
         self.oracle = oracle
         self.gra_origin = self.visualizer.gra_origin
         self.terminals = terminals
         self.suppress = suppress_output
-        # Telemetry listener port per (vehicle, GCS), aligned with `veh.gcss`.
         self.veh_telem_ports: dict[int, list[int]] = {}
-        # Processes of the vehicles no GCS monitors, which the Simulator owns.
         self.unassigned_procs: dict[int, dict[SimProcess, Popen[bytes]]] = {}
         self.orc_port_offset: int
         self.verbose = verbose
-        # SITL wall-clock multiplier: how fast the run goes, not what it runs.
-        self.speedup = speedup
+        self.speedup = speedup  # SITL clock multiplier: how fast, not what
         setup_logging(
             LOGS_PATH / f"{self.oracle_name}.log", verbose=verbose, console_output=True
         )
@@ -109,12 +105,11 @@ class Simulator(Generic[VehT]):
 
         Binds `self.oracle` to the run as its last step, so `simulator.oracle`
         (or the Oracle you passed in) is ready to `run()` when this returns.
+
+        Simulation-wide ports are claimed first (few, and QGC's is fixed), then
+        the vehicle search excludes them, so the two groups stay disjoint however
+        far the vehicle blocks climb.
         """
-        # Simulation-wide ports are claimed first: there are only a couple and
-        # QGC's is fixed by QGroundControl, whereas the vehicle blocks are many
-        # and free to move. The vehicle search then excludes them, so the two
-        # groups stay disjoint however far the blocks climb (a vehicle's
-        # MITM_TELEM would otherwise reach QGC's 14550 at ~556 vehicles).
         self.orc_port_offset = self._find_port_offsets(
             [SimPort.ORC_DONE], 1, {int(SimPort.QGC)}
         )[0]
@@ -135,8 +130,7 @@ class Simulator(Generic[VehT]):
         self.visualizer.launch(port_offsets_dict)
         self._launch_gcses()
         self._launch_unassigned_vehicles()
-        # Everything the Oracle needs exists only now, so it is wired up here
-        # rather than by the caller.
+        # Wired up here: the Oracle's dependencies exist only now.
         self.oracle.bind(self.gra_origin, port_offset=self.orc_port_offset)
 
     def preview(self):
@@ -176,7 +170,7 @@ class Simulator(Generic[VehT]):
                 suppress_output=SimProcess.GCS in suppress,
                 title=f"GCS: {gcs_name}",
                 env_cmd=ENV_CMD_PYT,
-            )  # "exit"
+            )
             logging.info(f"🚀 GCS {gcs_name} launched (PID {p.pid})")
 
     def run(self, timeout: float | None = None) -> bool:
@@ -187,12 +181,13 @@ class Simulator(Generic[VehT]):
         the two separately when you need to do something in between — inspect
         the spawned processes, or watch the visualizer come up before flying.
 
-        `timeout` is a wall-clock cap in seconds on the flying, and the way to
-        run a scenario that has no ending of its own — a pursuit where nobody is
-        caught, or a plan that wedges. When it expires the run is torn down by
-        `stop()` rather than left hanging, and so it is on Ctrl-C or any error;
-        a run that finishes on its own is left up, as before, so the visualizer
-        stays on screen. The default `None` waits forever, the old behaviour.
+        `timeout` is a cap in **sim seconds** (the vehicles' telemetry clock, so
+        `speedup` doesn't change it) on the flying, and the way to run a scenario
+        with no ending of its own — a pursuit where nobody is caught, drones told
+        to hover forever, a plan that wedges. When it expires the run is torn
+        down by `stop()` rather than left hanging, and so it is on Ctrl-C or any
+        error; a run that finishes on its own is left up, as before, so the
+        visualizer stays on screen. The default `None` waits forever.
 
         Returns True when every mission completed, False when the timeout
         stopped the run first.
@@ -201,8 +196,7 @@ class Simulator(Generic[VehT]):
         try:
             completed = self.oracle.run(timeout=timeout)
         except BaseException:
-            # Interrupting the cell lands here too, and is the common case: a
-            # half-stopped run leaves ports held and the next launch fails.
+            # Ctrl-C too: a half-stopped run holds ports and fails the next launch.
             self.stop()
             raise
         if not completed:
@@ -220,8 +214,7 @@ class Simulator(Generic[VehT]):
         is the one that wipes those, and is still what you want before a *new*
         run in the same kernel.
         """
-        # The Oracle's own sockets sit on simulation ports inside this process,
-        # so they are released before anything goes hunting for what holds them.
+        # Release the Oracle's in-process sockets before hunting port holders.
         self.oracle.close()
         kill_processes(ALL_PROCESSES)
         clean_adsb_ptys()
@@ -299,10 +292,9 @@ class Simulator(Generic[VehT]):
         for gcs_name, gcs in self.oracle.gcss.items():
             terminals = self.terminals if gcs.terminals is None else gcs.terminals
             suppress = self.suppress if gcs.suppress is None else gcs.suppress
-            veh_configs: list[VehicleConfig] = []
+            veh_configs: list[GCSVehicleConfig] = []
             for veh in gcs.vehicles:
-                # Where this GCS sits in the vehicle's list decides both its
-                # telemetry port and whether it owns the vehicle's processes.
+                # This GCS's index in veh.gcss -> its telem port + process ownership.
                 idx = next(i for i, g in enumerate(veh.gcss) if g is gcs)
                 veh_configs.append(
                     self._build_veh_config(
@@ -319,8 +311,7 @@ class Simulator(Generic[VehT]):
                 "vehicles": veh_configs,
                 "terminals": terminals,
                 "suppress": suppress,
-                # Origin the GCS needs to turn an intervention's ENU waypoints
-                # into geodetic go-to targets.
+                # For resolving an intervention's ENU waypoints to geodetic targets.
                 "gra_origin": self.gra_origin.unpose()._asdict(),
             }
 
@@ -378,7 +369,7 @@ class Simulator(Generic[VehT]):
         telem_port: int,
         launch: bool,
         intervention: Intervention | None = None,
-    ) -> VehicleConfig:
+    ) -> GCSVehicleConfig:
         veh = self.oracle.vehicles[sysid]
 
         port_offset = veh.port_offset_required
@@ -413,9 +404,7 @@ class Simulator(Generic[VehT]):
         logic_config_path = str(self.logic_dir / f"logic_config_{sysid}.json")
         mitm_strategy = veh.mitm
         mitm_enabled = mitm_strategy is not None
-        # The MITM sits between Logic and the GCSs, so it is what fans the
-        # telemetry out; it needs every monitoring GCS's port, not just this one.
-        # An unmonitored vehicle has none, and the flag is then left off.
+        # The MITM fans telemetry out, so it needs every monitoring GCS's port.
         telem_ports = ",".join(str(port) for port in self.veh_telem_ports[sysid])
         telem_ports_arg = f" --telem-ports {telem_ports}" if telem_ports else ""
         mitm_cmd = (
@@ -425,12 +414,13 @@ class Simulator(Generic[VehT]):
                 f" --port-offset {port_offset}"
                 f" --spec '{json.dumps(mitm_strategy.get_spec().to_dict())}'"
                 f"{telem_ports_arg}"
+                f" --gra-origin '{json.dumps(self.gra_origin.unpose()._asdict())}'"
                 f" --verbose {self.verbose}"
             )
             if mitm_strategy is not None
             else ""
         )
-        veh_config: VehicleConfig = {
+        veh_config: GCSVehicleConfig = {
             "sysid": sysid,
             "veh_port_offset": port_offset,
             "telem_port": telem_port,

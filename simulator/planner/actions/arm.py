@@ -6,6 +6,8 @@ HEARTBEAT messages, and construct a corresponding Action object for integration
 into mission plans.
 """
 
+from __future__ import annotations
+
 import logging
 import time
 

@@ -2,16 +2,19 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import TypeAlias
+from typing import TYPE_CHECKING, TypeAlias
 
 import numpy as np
 import plotly.graph_objects as go
 from numpy.typing import NDArray
 
 from simulator.config import Color
-from simulator.helpers.coordinates import ENU
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from simulator.helpers.coordinates import ENU
 
 SphereTriMesh: TypeAlias = tuple[
     NDArray[np.float64],

@@ -1,5 +1,7 @@
 """Init file for plan actions package."""
 
+from __future__ import annotations
+
 from .arm import make_arm
 from .change_mode import make_set_mode
 from .change_parameter import make_change_nav_speed

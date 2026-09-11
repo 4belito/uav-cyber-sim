@@ -1,8 +1,10 @@
 """Defines a LAND action with execution and landing check using MAVLink commands."""
 
-import logging
+from __future__ import annotations
 
-from simulator.config import Firmware
+import logging
+from typing import TYPE_CHECKING
+
 from simulator.helpers.connections.mavlink.enums import (
     Cmd,
     CmdNav,
@@ -17,6 +19,9 @@ from simulator.helpers.connections.mavlink.streams import ask_msg, stop_msg
 from simulator.helpers.coordinates import ENU, ENUPose
 from simulator.planner.action import Action
 from simulator.planner.step import Step
+
+if TYPE_CHECKING:
+    from simulator.config import Firmware
 
 
 class Land(Step):
@@ -78,7 +83,8 @@ class Land(Step):
 
 
 class PlaneLand(Step):
-    """ArduPlane landing via AUTOLAND mode (mode 26).
+    """
+    ArduPlane landing via AUTOLAND mode (mode 26).
 
     AUTOLAND uses the takeoff heading captured by PlaneMode.TAKEOFF to set up
     a glide-slope approach and land without any mission upload. Requires that

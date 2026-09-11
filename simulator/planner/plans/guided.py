@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Self
+from typing import TYPE_CHECKING, Any, Self
 
-from simulator.config import Firmware
 from simulator.helpers.coordinates import ENU, ENUPose, ENUs
 from simulator.helpers.math import enu_bearing
 from simulator.planner.actions import (
@@ -14,6 +13,9 @@ from simulator.planner.actions import (
     make_takeoff,
 )
 from simulator.planner.plan import Plan, PlanSpec
+
+if TYPE_CHECKING:
+    from simulator.config import Firmware
 
 
 @Plan.register("GuidedPlan")

@@ -1,10 +1,16 @@
 """Typed wrappers and interfaces for MAVLink waypoint loading and manipulation."""
 
-from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from __future__ import annotations
 
-from pymavlink.dialects.v20.ardupilotmega import MAVLink_mission_item_message as ItemMsg
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
 from pymavlink.mavwp import MAVWPLoader
+
+if TYPE_CHECKING:
+    from pymavlink.dialects.v20.ardupilotmega import (
+        MAVLink_mission_item_message as ItemMsg,
+    )
 
 
 @runtime_checkable

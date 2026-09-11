@@ -15,6 +15,8 @@ The main entry point is `make_pre_arm()`, which returns an `Action` composed of
 these checks in sequence.
 """
 
+from __future__ import annotations
+
 import logging
 import time
 from typing import Literal
@@ -161,7 +163,8 @@ class CheckSystem(Step):
 
 
 class GyroStatus(Step):
-    """Wait for all present IMU gyros to be healthy and enabled.
+    """
+    Wait for all present IMU gyros to be healthy and enabled.
 
     ArduPlane SITL simulates multiple IMUs. The 'Gyros inconsistent' prearm
     failure occurs when they haven't converged yet. Polling SYS_STATUS for
@@ -200,7 +203,8 @@ _PREARM_RETRY_INTERVAL = 2.0
 
 
 class WaitArmReady(Step):
-    """Step that polls MAV_CMD_RUN_PREARM_CHECKS until all checks pass.
+    """
+    Step that polls MAV_CMD_RUN_PREARM_CHECKS until all checks pass.
 
     Handles vehicle-specific checks not exposed via SYS_STATUS, such as
     ArduPlane's gyro-consistency requirement across multiple IMUs.
@@ -235,7 +239,8 @@ class WaitArmReady(Step):
         self._send_check()
 
     def check_fn(self) -> bool:
-        """Return True once all ArduPilot arming checks report ready.
+        """
+        Return True once all ArduPilot arming checks report ready.
 
         MAV_CMD_RUN_PREARM_CHECKS always returns MAV_RESULT_ACCEPTED (result=0)
         to indicate the command was processed, NOT that all checks passed.
@@ -280,13 +285,15 @@ class WaitStartupStable(Step):
         self._stable_since = None
 
     def check_fn(self) -> bool:
-        now = time.monotonic()
+        # Sim clock, so `stable_seconds` is sim seconds and takeoff isn't
+        # delayed proportionally to `speedup`.
+        now = self.mav_manager.state.sim_time_s()
 
         gps = self.mav_manager.state.get("GPS_RAW_INT")
         ekf = self.mav_manager.state.get("EKF_STATUS_REPORT")
         sys_status = self.mav_manager.state.get("SYS_STATUS")
 
-        if not gps or not ekf or not sys_status:
+        if now is None or not gps or not ekf or not sys_status:
             self._stable_since = None
             return False
 

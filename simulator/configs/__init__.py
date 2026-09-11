@@ -1,10 +1,12 @@
 """Configusration for the simulator module."""
 
-from .gcs import GCSConfig, VehicleConfig
+from __future__ import annotations
+
+from .gcs import GCSConfig, GCSVehicleConfig
 from .logic import LogicConfig
 
 __all__ = [
-    "VehicleConfig",
+    "GCSVehicleConfig",
     "GCSConfig",
     "LogicConfig",
 ]

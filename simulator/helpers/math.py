@@ -1,11 +1,16 @@
 """Distance and bearing utilities for ENU coordinate arithmetic."""
 
+from __future__ import annotations
+
 import math
+from typing import TYPE_CHECKING
 
 import numpy as np
-from numpy.typing import NDArray
 
-from simulator.helpers.coordinates import ENU
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
+    from simulator.helpers.coordinates import ENU
 
 
 def manhattan_distance(

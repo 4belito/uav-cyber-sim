@@ -6,11 +6,9 @@ Supports static and dynamic waypoint modes and includes predefined plans.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable
 from dataclasses import asdict, dataclass
-from typing import Any, ClassVar, TypeVar
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 
-from simulator.config import Firmware
 from simulator.helpers.ardupilot.firmware import guided_mode
 from simulator.helpers.coordinates import ENU, XY, ENUs, XYs
 from simulator.planner.action import Action
@@ -21,6 +19,11 @@ from simulator.planner.actions import (
     make_set_mode,
 )
 from simulator.planner.step import Step
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from simulator.config import Firmware
 
 P = TypeVar("P", bound="Plan")
 # TODO: Substitute Any with a more specific type

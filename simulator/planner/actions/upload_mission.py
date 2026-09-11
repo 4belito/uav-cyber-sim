@@ -7,28 +7,35 @@ format.
 
 """
 
+from __future__ import annotations
+
 import logging
+from typing import TYPE_CHECKING
 
 from pymavlink import mavutil
-from pymavlink.dialects.v20.ardupilotmega import (
-    MAVLink_mission_item_int_message as ItemIntMsg,
-)
-from pymavlink.dialects.v20.ardupilotmega import MAVLink_mission_item_message as ItemMsg
 
 from simulator.helpers.connections.mavlink.customtypes.mission import MissionLoader
-from simulator.helpers.connections.mavlink.customtypes.vehicle_state import (
-    VehicleStateP,
-)
 from simulator.helpers.connections.mavlink.enums import Cmd, MissionResult
 from simulator.planner.action import Action
 from simulator.planner.step import Step
+
+if TYPE_CHECKING:
+    from pymavlink.dialects.v20.ardupilotmega import (
+        MAVLink_mission_item_int_message as ItemIntMsg,
+    )
+    from pymavlink.dialects.v20.ardupilotmega import (
+        MAVLink_mission_item_message as ItemMsg,
+    )
+
+    from simulator.helpers.connections.mavlink.customtypes.vehicle_state import (
+        VehicleStateP,
+    )
 
 
 def mission_item_to_int(
     wp: ItemMsg,
 ) -> ItemIntMsg:
     """Convert MISSION_ITEM to MISSION_ITEM_INT before sending to ArduPilot."""
-
     frame = wp.frame
 
     if frame == mavutil.mavlink.MAV_FRAME_GLOBAL:
@@ -117,7 +124,6 @@ class SendMissionCount(Step):
         """Return True once ArduPilot requests seq=0; retry MISSION_COUNT on timeout."""
         while not _got_request(state=self.mav_manager.state, seq=0):
             self.exec_fn()
-            # time.sleep(0.05)
         _clear_requests(self.mav_manager.state)
         return True
 

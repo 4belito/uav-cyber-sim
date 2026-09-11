@@ -1,10 +1,14 @@
 """Visualizer module."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Generic
+from typing import TYPE_CHECKING, Generic
 
 from simulator.entities import SimVehicle, VehT
-from simulator.helpers.coordinates import GRAPose
+
+if TYPE_CHECKING:
+    from simulator.helpers.coordinates import GRAPose
 
 
 class Visualizer(ABC, Generic[VehT]):
@@ -13,10 +17,6 @@ class Visualizer(ABC, Generic[VehT]):
     def __init__(self, gra_origin: GRAPose) -> None:
         self.gra_origin = gra_origin
         self.vehicles: dict[int, VehT] = {}
-
-    # ==================
-    # Abstract interface
-    # ==================
 
     @property
     @abstractmethod
@@ -44,17 +44,9 @@ class Visualizer(ABC, Generic[VehT]):
         """Show a static preview visualization."""
         pass
 
-    # ===================================
-    # Optional (subclasses may override)
-    # ===================================
-
     def add_sitl_args(self, vehicle: SimVehicle) -> list[str]:
         """Add optional SITL arguments for a vehicle."""
         return []
-
-    # ==================
-    # Base functionality
-    # ==================
 
     def add_vehicle(self, vehicle: SimVehicle) -> None:
         """Add a vehicle to the visualizer."""

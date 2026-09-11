@@ -1,13 +1,13 @@
 """Build SITL binaries for ArduPilot."""
 
+from __future__ import annotations
+
 import subprocess
 import sys
-from pathlib import Path
 from types import SimpleNamespace
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from simulator.config import ARDUPILOT_PATH, Firmware
-from simulator.helpers.ardupilot.types import FrameOptions, VehicleInfoProtocol
 
 _autotest = str(ARDUPILOT_PATH / "Tools" / "autotest")
 if _autotest not in sys.path:
@@ -15,7 +15,12 @@ if _autotest not in sys.path:
 
 from pysim import vehicleinfo  # type: ignore[import-untyped]  # noqa: E402
 
-_vinfo = cast(VehicleInfoProtocol, vehicleinfo.VehicleInfo())  # type: ignore[reportUnknownMemberType]
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from simulator.helpers.ardupilot.types import FrameOptions, VehicleInfoProtocol
+
+_vinfo = cast("VehicleInfoProtocol", vehicleinfo.VehicleInfo())  # type: ignore[reportUnknownMemberType]
 _opts = SimpleNamespace(model=None, build_target=None)
 
 

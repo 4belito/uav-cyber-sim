@@ -1,5 +1,7 @@
 """Module defining the START_MISSION action for vehicle mission planning."""
 
+from __future__ import annotations
+
 import logging
 
 from simulator.helpers.connections.mavlink.enums import Cmd

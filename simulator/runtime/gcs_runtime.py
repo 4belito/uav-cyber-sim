@@ -1,10 +1,15 @@
 """Runtime state for a UAV, including its active connection and processes."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from subprocess import Popen
+from typing import TYPE_CHECKING
 
-from simulator.helpers.connections import MAVConnection
 from simulator.helpers.processes import SimProcess
+
+if TYPE_CHECKING:
+    from simulator.helpers.connections import MAVConnection
 
 
 @dataclass

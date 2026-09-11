@@ -9,5 +9,7 @@ or run choice is a constructor argument instead:
 * `Simulator(speedup=...)` — the SITL wall-clock multiplier.
 """
 
+from __future__ import annotations
+
 HEARTBEAT_FREQUENCY: int = 1  # Hz - logic and GCS
 DATA_STREAM_FREQUENCY: int = 5  # Hz - logic

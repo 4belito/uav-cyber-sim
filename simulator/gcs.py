@@ -1,7 +1,6 @@
-"""
-Define the GCS class to monitor Vehicles through MAVLink messages and run GCS
-instances.
-"""
+"""GCS process: monitor vehicles over MAVLink, run interventions, log trajectories."""
+
+from __future__ import annotations
 
 import argparse
 import json
@@ -9,8 +8,7 @@ import logging
 import pickle
 import time
 from concurrent import futures
-from subprocess import Popen
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 import zmq
@@ -22,7 +20,6 @@ from simulator.config import (
     SimPort,
     VehPort,
 )
-from simulator.configs import VehicleConfig
 from simulator.entities.intervention import Intervention
 from simulator.helpers.connections import create_udp_conn, create_zmq_socket
 from simulator.helpers.connections.mavlink.customenums.customcmd import CustomCmd
@@ -35,6 +32,11 @@ from simulator.params.simulation import HEARTBEAT_FREQUENCY
 from simulator.runtime.gcs_intervention import InterventionRunner
 from simulator.runtime.gcs_runtime import VehicleRuntime
 from simulator.runtime.vehicle_launcher import launch_vehicle
+
+if TYPE_CHECKING:
+    from subprocess import Popen
+
+    from simulator.configs import GCSVehicleConfig
 
 heartbeat_event = mavutil.periodic_event(HEARTBEAT_FREQUENCY)
 
@@ -59,16 +61,15 @@ class GCS:
     def __init__(
         self,
         name: str,
-        vehicles: list[VehicleConfig],
+        vehicles: list[GCSVehicleConfig],
         oracle_port_offset: int,
         terminals: list[SimProcess],
         suppress: list[SimProcess],
         gra_origin: dict[str, float],
         record_positions: bool = True,
     ) -> None:
-        # Configure logging for this GCS process
         self.name = name
-        # Origin for turning an intervention's ENU waypoints into geodetic targets.
+        # Origin for resolving an intervention's ENU waypoints to geodetic targets.
         self.gra_origin = GRA(**gra_origin)
         self.vehicles = vehicles
         self.sysids = [vehconfig["sysid"] for vehconfig in vehicles]
@@ -96,19 +97,16 @@ class GCS:
             for vehconfig in vehicles
         }
 
-        # Trajectory logging: filled straight from the monitor loop's own
-        # GLOBAL_POSITION_INT messages, so nothing competes for the socket.
+        # Trajectory logging
         self.record_positions = record_positions
         self.paths: dict[int, GRAs] = {sysid: [] for sysid in self.sysids}
         logging.info(f" GCS {self.name} started with {self.n_vehicles} Vehicles")
 
-    ###
     def run(self):
         """Run the GCS monitoring loop until all Vehicles complete their missions."""
         sysids_snapshot = tuple(self.sysids)
 
-        # A GCS may legitimately monitor no vehicle at all; it then has nothing
-        # to wait for and reports DONE straight away.
+        # A GCS may monitor no vehicle at all -> nothing to wait for, DONE at once.
         if sysids_snapshot:
             with futures.ThreadPoolExecutor(
                 max_workers=len(sysids_snapshot)
@@ -159,8 +157,7 @@ class GCS:
         veh_config = self.vehicles[i]
         sysid = veh_config["sysid"]
 
-        # Only the vehicle's owning GCS spawns its processes; the other GCSs
-        # monitoring the same vehicle attach to the already-running one.
+        # Only the owning GCS spawns processes; others attach to the running one.
         procs: dict[SimProcess, Popen[bytes]] = {}
         if veh_config["launch"]:
             procs = launch_vehicle(veh_config, self.terminals, self.suppress)
@@ -169,18 +166,15 @@ class GCS:
                 f"Vehicle {sysid} processes owned by another GCS; monitoring only"
             )
 
-        ## create MAVLink connection to the SITL instance for this Vehicle
-        # `telem_port` is this GCS's own slot in the vehicle's telemetry window;
-        # every GCS watching the vehicle gets a distinct one.
+        # `telem_port` is this GCS's own slot in the vehicle's telemetry window.
         conn = create_udp_conn(
             base_port=veh_config["telem_port"],
             offset=0,
             mode="receiver",
-            src_sysid=255,  # estándar GCS sysid
-            src_compid=190,  # estándar GCS commponent ID
+            src_sysid=255,  # GCS sysid
+            src_compid=190,  # GCS component id
         )
-        # When a MITM is interposed, send commands to its listener instead of
-        # directly to Logic; the MITM relays them onward to VehPort.GCS_CMD.
+        # With a MITM interposed, send commands to its listener, not straight to Logic.
         cmd_base = VehPort.MITM_CMD if veh_config["mitm"] else VehPort.GCS_CMD
         cmd_conn = create_udp_conn(
             base_port=cmd_base,
@@ -197,8 +191,6 @@ class GCS:
     def _monitor_vehicle(self, sysid: int):
         logging.info(f"Monitoring Vehicle {sysid}")
         intervention = self.interventions[sysid]
-        # When an intervention is configured, run it as a guided plan driven from
-        # this monitor loop against the vehicle's command channel.
         runner = (
             InterventionRunner(
                 sysid,
@@ -210,11 +202,8 @@ class GCS:
             else None
         )
         conn = self.conns[sysid]
-        # A short timeout keeps the plan ticking even when telemetry is quiet.
+        # Short timeout keeps the intervention plan ticking when telemetry is quiet.
         timeout = 0.1 if runner is not None else 1.0
-        # This is a per-vehicle channel (self.conns[sysid] is its own UDP socket),
-        # so every message read here belongs to this drone. Log them all to one
-        # JSONL file per sysid — the GCS's ground-side view of the vehicle.
         telem_logger = DataLogger(path=DATA_PATH / "gcs_msgs", sysid=sysid)
         try:
             while True:
@@ -234,17 +223,15 @@ class GCS:
                         runner.feed(msg)
 
                     if self.record_positions and msg_type == "GLOBAL_POSITION_INT":
-                        pos = cast(mavlink.MAVLink_global_position_int_message, msg)
-                        # lat/lon 0,0 means the EKF has not converged yet — a
-                        # "no fix" marker rather than a position, and one that
-                        # plots ~3000 km from the origin if kept.
+                        pos = cast("mavlink.MAVLink_global_position_int_message", msg)
+                        # lat/lon 0,0 == no EKF fix yet (would plot ~3000 km out).
                         if not (pos.lat == 0 and pos.lon == 0):
                             self.paths[sysid].append(
                                 GRA.from_global_int(pos.lat, pos.lon, pos.relative_alt)
                             )
 
                     if msg_type == "STATUSTEXT":
-                        statustext = cast(mavlink.MAVLink_statustext_message, msg)
+                        statustext = cast("mavlink.MAVLink_statustext_message", msg)
                         if statustext.text == "LOGIC_DONE":
                             conn.mav.command_ack_send(
                                 command=CustomCmd.LOGIC_DONE,

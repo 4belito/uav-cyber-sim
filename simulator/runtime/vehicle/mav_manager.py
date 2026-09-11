@@ -8,17 +8,21 @@ from __future__ import annotations
 import logging
 import threading
 import time
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
-import pymavlink.dialects.v20.ardupilotmega as mavlink
-
-from simulator.helpers.connections import MAVConnection
 from simulator.helpers.connections.mavlink.streams import (
     decode_unknown_message,
     make_json_safe,
 )
-from simulator.helpers.logging.data_logger import DataLogger
 from simulator.runtime.vehicle.state import VehicleState
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    import pymavlink.dialects.v20.ardupilotmega as mavlink
+
+    from simulator.helpers.connections import MAVConnection
+    from simulator.helpers.logging.data_logger import DataLogger
 
 # SITL messages forwarded to the GCS telemetry channel.
 _GCS_TELEMETRY_TYPES: frozenset[str] = frozenset(
@@ -68,10 +72,8 @@ class MAVLinkManager(threading.Thread):
                 if msg.get_type().startswith("UNKNOWN"):
                     msg = decode_unknown_message(msg)
 
-                # Heartbeats from non-autopilot sources (e.g. echoed GCS/logic
-                # heartbeats routed back by ArduPilot) must not overwrite the
-                # vehicle autopilot's HEARTBEAT in state.  The autopilot always
-                # uses srcComponent == 1 (MAV_COMP_ID_AUTOPILOT1).
+                # Only the autopilot's HEARTBEAT (srcComponent 1) belongs in
+                # state; ignore echoed GCS/logic beats routed back by ArduPilot.
                 if msg.get_type() == "HEARTBEAT" and msg.get_srcComponent() != 1:
                     continue
 
@@ -84,7 +86,6 @@ class MAVLinkManager(threading.Thread):
                         except Exception as fwd_exc:
                             logging.debug("GCS telemetry forward error: %s", fwd_exc)
 
-                # Log all received MAVLink messages with their type and timestamp
                 self.data_logger.write(
                     {
                         "type": "mavlink_in",

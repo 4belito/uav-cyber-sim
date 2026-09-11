@@ -16,6 +16,8 @@ Run from the repo root:
     python tools/gen_ardupilot_intenum.py
 """
 
+from __future__ import annotations
+
 import importlib.util
 import json
 import os
@@ -40,6 +42,8 @@ def _existing_enum_names(enums_dir: str) -> list[str]:
         return []
     with open(init_path) as f:
         return re.findall(r"^from \.\w+ import (\w+)", f.read(), re.MULTILINE)
+
+
 PARAM_PATH = os.path.join(_ARDUPILOT_HELPERS, "ardupilot.pdef.json")
 _PDEF_REL = os.path.relpath(PARAM_PATH, _REPO_ROOT)
 

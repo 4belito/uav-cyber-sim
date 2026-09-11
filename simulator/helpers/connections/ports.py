@@ -1,11 +1,14 @@
 """Helpers for plain TCP socket/port checks."""
 
+from __future__ import annotations
+
 import subprocess
 import time
 
 
 def is_port_listening(port: int) -> bool:
-    """Return True if anything is in LISTEN state on the given TCP port.
+    """
+    Return True if anything is in LISTEN state on the given TCP port.
 
     Uses `ss` rather than a socket connect so we never accidentally establish
     (and immediately drop) a real connection — ArduPilot SITL exits when its
@@ -25,7 +28,8 @@ def wait_for_port(
     startup_delay: float = 1.0,
     verbose: bool = False,
 ) -> None:
-    """Wait until a TCP port is in LISTEN state, then pause for startup_delay.
+    """
+    Wait until a TCP port is in LISTEN state, then pause for startup_delay.
 
     startup_delay gives the server (e.g. ArduPilot SITL) time to finish
     initialising after the socket is bound but before accepting MAVLink data.

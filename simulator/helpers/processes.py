@@ -1,5 +1,7 @@
 """Utility for launching subprocesses, optionally in a visible terminal."""
 
+from __future__ import annotations
+
 import logging
 import os
 import platform
@@ -44,28 +46,18 @@ def create_process(
     bash_cmd = ["bash", "-c", full_cmd]
 
     env = env if env is not None else os.environ.copy()
-    # 🔴 Fix broken GNOME terminal session in VNC
+    # Drop a broken GNOME terminal session (VNC).
     env.pop("GNOME_TERMINAL_SERVICE", None)
     env.pop("GNOME_TERMINAL_SCREEN", None)
-    # =========================
-    # Visible terminal (Linux)
-    # =========================
     if visible and platform.system() == "Linux":
         display_env = env.get("DISPLAY")
         if not display_env:
             raise RuntimeError("DISPLAY not set. X11 forwarding may not be active.")
 
         env["DISPLAY"] = display_env
-        # Prefer xterm for SSH/container/snap sessions. Inside a snap-confined
-        # launcher (e.g. the VS Code snap that hosts the Jupyter kernel) the
-        # env carries a snap library path, and gnome-terminal then dies with
-        # "libpthread.so.0: undefined symbol __libc_pthread_init"; xterm is
-        # immune, so route to it whenever SNAP is present.
-        if (
-            "SSH_CONNECTION" in env
-            or "REMOTE_CONTAINERS" in env
-            or "SNAP" in env
-        ):
+        # xterm for SSH/container/snap: under a snap lib path gnome-terminal
+        # dies with "libpthread.so.0: undefined symbol __libc_pthread_init".
+        if "SSH_CONNECTION" in env or "REMOTE_CONTAINERS" in env or "SNAP" in env:
             terminal_cmd = [
                 "xterm",
                 "-fa",
@@ -95,9 +87,6 @@ def create_process(
             start_new_session=new_process_group,
         )
 
-    # =========================
-    # Headless execution
-    # =========================
     if visible:
         raise OSError("Unsupported OS for visible terminal mode.")
 
@@ -139,3 +128,6 @@ def terminate_process_group(
         return
     except Exception as e:
         logging.warning(f"Could not kill process {name}: {e}")
+
+
+SimProcesses = list[SimProcess]

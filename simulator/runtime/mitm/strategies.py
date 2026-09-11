@@ -14,25 +14,35 @@ drop it. Strategies may also *inject* their own messages via the
 The default :class:`PassthroughStrategy` forwards everything unchanged. New
 attacks subclass :class:`MITMStrategy`, take typed constructor kwargs, and
 register with :meth:`MITMStrategy.register`; a notebook constructs one
-directly (e.g. ``HijackStrategy(trigger_seq=3, ...)``) and assigns it to
+directly (e.g. ``InterventionStrategy(Intervention(...))``) and assigns it to
 ``vehicle.mitm``. This mirrors ``Plan``/``PlanSpec``
 (``simulator/planner/plan.py``): each strategy builds its own ``self._spec``
 so :meth:`MITMStrategy.build` can reconstruct it from JSON on the far side of
 the ``simulator.mitm`` subprocess boundary.
+
+:class:`InterventionStrategy` is the "hijack" attack: it runs a real GCS
+:class:`~simulator.entities.intervention.Intervention` (trigger + guided plan)
+from the man-in-the-middle position, reusing the exact same
+:class:`~simulator.runtime.gcs_intervention.InterventionRunner` the GCS drives —
+only the injection point differs.
 """
 
 from __future__ import annotations
 
 import logging
-import math
 import threading
-from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
-from typing import Any, ClassVar, TypeAlias, TypeVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, TypeAlias, TypeVar, cast
 
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
-from simulator.helpers.connections import MAVConnection
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping, Sequence
+
+    from simulator.entities.intervention import Intervention
+    from simulator.helpers.connections import MAVConnection
+    from simulator.helpers.coordinates import GRA
+    from simulator.runtime.gcs_intervention import InterventionRunner
 
 MAVMsg: TypeAlias = mavlink.MAVLink_message
 S = TypeVar("S", bound="MITMStrategy")
@@ -57,6 +67,10 @@ class MITMContext:
     The MITM owns the two outbound connections; a strategy uses this context to
     originate messages (spoofing, command injection) rather than only
     transforming messages that happen to pass through.
+
+    `gra_origin` is the run's geodetic origin, threaded in so a strategy that
+    reuses the planner machinery (`InterventionStrategy`) can resolve its ENU
+    waypoints exactly as the GCS does.
     """
 
     def __init__(
@@ -64,16 +78,28 @@ class MITMContext:
         sysid: int,
         to_logic: MAVConnection,
         to_gcs: Sequence[MAVConnection],
+        gra_origin: GRA,
     ) -> None:
         self.sysid = sysid
+        self.gra_origin = gra_origin
         self._to_logic = to_logic
         self._to_gcs = to_gcs
-        # srcSystem 255 makes injected commands look like they came from the
-        # real GCS; srcSystem <sysid> makes injected telemetry look like it
-        # came from the vehicle itself.
+        # srcSystem 255 -> injected commands look GCS-origin; srcSystem <sysid>
+        # -> injected telemetry looks vehicle-origin.
         self._logic_encoder = mavlink.MAVLink(None, srcSystem=255, srcComponent=200)
         self._gcs_encoder = mavlink.MAVLink(None, srcSystem=sysid, srcComponent=200)
         self._lock = threading.Lock()
+
+    @property
+    def command_conn(self) -> MAVConnection:
+        """
+        The Logic-facing command connection (spoofed as the GCS, srcSystem 255).
+
+        A strategy that drives a full guided plan (`InterventionStrategy`) hands
+        this to an `InterventionRunner` so its `MAVLinkManager` sends land at
+        Logic just as the GCS's command channel would.
+        """
+        return self._to_logic
 
     def inject_to_logic(self, msg: MAVMsg) -> None:
         """Send an attacker-originated message toward the vehicle's Logic."""
@@ -109,12 +135,13 @@ class MITMStrategy:
         """Handle a command message travelling GCS -> Logic."""
         return msg
 
+    def close(self) -> None:
+        """Release any resources the strategy started (default: nothing)."""
+
     def get_spec(self) -> MITMSpec:
         """Get the specification of this strategy."""
         if self._spec is None:
-            raise RuntimeError(
-                f"{type(self).__name__} does not expose a specification"
-            )
+            raise RuntimeError(f"{type(self).__name__} does not expose a specification")
         return self._spec
 
     @classmethod
@@ -182,87 +209,71 @@ class BlackoutStrategy(MITMStrategy):
         return None
 
 
-@MITMStrategy.register("hijack")
-class HijackStrategy(MITMStrategy):
+@MITMStrategy.register("intervention")
+class InterventionStrategy(MITMStrategy):
     """
-    Attacker-driven intervention.
+    Run a GCS `Intervention` from the man-in-the-middle position (the hijack).
 
-    Watches ``MISSION_CURRENT`` on the relayed telemetry and, once
-    ``seq >= trigger_seq``, injects ``SET_MODE(GUIDED)`` + ``DO_REPOSITION``
-    toward the vehicle — the same redirect the GCS performed, but originated by
-    the man-in-the-middle and spoofed to look like it came from the GCS.
+    Takes the very same object a GCS would — a `Trigger` plus a guided
+    `InterventionPlan` — and drives it with the very same
+    `InterventionRunner`; only the injection point differs. Relayed downlink
+    telemetry is fed to the runner and it is ticked on every message, so the
+    plan's waypoint margins and the trigger's `dwell` / `final` / proximity
+    conditions all behave exactly as they do on the GCS side. Commands the
+    runner emits are spoofed as the GCS (srcSystem 255) via the MITM's
+    Logic-facing command connection.
+
+    With a `MissionTrigger` this is the classic visible hijack: take control at
+    a mission point and keep it, telemetry still flowing to the real GCS. With a
+    `ProximityTrigger` the attacker hands control back when the condition
+    clears, just like the GCS runner.
+
+    Same target assumptions as a GCS intervention (`Intervention`): only a
+    seq-based `MissionTrigger` needs the victim on an `AutoPlan`. Nothing
+    enforces it.
     """
 
-    _GUIDED_CUSTOM_MODE = 4  # ArduCopter GUIDED
-
-    def __init__(
-        self,
-        trigger_seq: int = 1,
-        target_lat: float = 0.0,
-        target_lon: float = 0.0,
-        target_alt: float = 0.0,
-    ) -> None:
+    def __init__(self, intervention: Intervention | Mapping[str, Any]) -> None:
         super().__init__()
-        self.trigger_seq = trigger_seq
-        self.target_lat = target_lat
-        self.target_lon = target_lon
-        self.target_alt = target_alt
-        self._fired = False
-        # Builder used only to construct message objects (packed by the context).
-        self._builder = mavlink.MAVLink(None, srcSystem=255, srcComponent=200)
+        # Local import: keeps the planner chain out of every MITM process.
+        from simulator.entities.intervention import Intervention as _Intervention
+
+        iv_dict = (
+            intervention.to_dict()
+            if isinstance(intervention, _Intervention)
+            else dict(intervention)
+        )
+        # Rebuild now so a malformed intervention fails fast in the notebook.
+        self._intervention = _Intervention.from_dict(iv_dict)
+        self._runner: InterventionRunner | None = None
         self._spec = MITMSpec(
-            strategy_class="hijack",
-            kwargs={
-                "trigger_seq": trigger_seq,
-                "target_lat": target_lat,
-                "target_lon": target_lon,
-                "target_alt": target_alt,
-            },
+            strategy_class="intervention",
+            kwargs={"intervention": iv_dict},
+        )
+
+    def bind(self, ctx: MITMContext) -> None:
+        """Build the `InterventionRunner` against the Logic-facing command link."""
+        super().bind(ctx)
+        from simulator.config import DATA_PATH
+        from simulator.helpers.logging.data_logger import DataLogger
+        from simulator.runtime.gcs_intervention import InterventionRunner
+
+        self._runner = InterventionRunner(
+            sysid=ctx.sysid,
+            intervention=self._intervention,
+            cmd_conn=ctx.command_conn,
+            gra_origin=ctx.gra_origin,
+            data_logger=DataLogger(path=DATA_PATH / "mitm_cmd", sysid=ctx.sysid),
+            source="MITM",
         )
 
     def on_downlink(self, msg: MAVMsg) -> MAVMsg | None:
-        """Fire the reposition injection once the mission reaches the trigger seq."""
-        if not self._fired and msg.get_type() == "MISSION_CURRENT":
-            mission_current = cast(mavlink.MAVLink_mission_current_message, msg)
-            if mission_current.seq >= self.trigger_seq:
-                self._inject_reposition()
-                self._fired = True
+        """Feed telemetry to the intervention runner and advance it one tick."""
+        runner = self._runner
+        if runner is not None:
+            runner.feed(msg)
+            runner.tick()
         return msg  # visible hijack: telemetry still flows to the GCS
-
-    def _inject_reposition(self) -> None:
-        if self.ctx is None:
-            logging.error("HijackStrategy not bound to a MITMContext; cannot inject")
-            return
-        sysid = self.ctx.sysid
-        logging.info(
-            "MITM hijack: redirecting vehicle %s to (%.7f, %.7f, %.1f)",
-            sysid,
-            self.target_lat,
-            self.target_lon,
-            self.target_alt,
-        )
-        set_mode = self._builder.set_mode_encode(
-            sysid,
-            mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
-            self._GUIDED_CUSTOM_MODE,
-        )
-        self.ctx.inject_to_logic(set_mode)
-        reposition = self._builder.command_int_encode(
-            sysid,
-            1,  # autopilot component
-            mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT,
-            mavlink.MAV_CMD_DO_REPOSITION,
-            0,  # current
-            0,  # autocontinue
-            -1.0,  # param1: speed, no change
-            1.0,  # param2: MAV_DO_REPOSITION_FLAGS_CHANGE_MODE
-            0.0,  # param3
-            math.nan,  # param4: yaw, no change
-            int(self.target_lat * 1e7),
-            int(self.target_lon * 1e7),
-            self.target_alt,
-        )
-        self.ctx.inject_to_logic(reposition)
 
 
 #: Generous bound on distinguishable GCS-per-vehicle count for `target_mask`.
@@ -274,7 +285,7 @@ class SpoofGCSStrategy(MITMStrategy):
     """
     Inject a fabricated GLOBAL_POSITION_INT toward a chosen subset of GCS.
 
-    Watches ``MISSION_CURRENT`` like `HijackStrategy`; once
+    Watches ``MISSION_CURRENT`` on the relayed telemetry; once
     ``seq >= trigger_seq``, injects one fake position report — spoofed to look
     like it came from the vehicle itself — toward the GCS connections selected
     by ``target_mask`` (bit *i* selects the GCS at position *i* in the
@@ -322,7 +333,7 @@ class SpoofGCSStrategy(MITMStrategy):
             and self.target_indices
             and msg.get_type() == "MISSION_CURRENT"
         ):
-            mission_current = cast(mavlink.MAVLink_mission_current_message, msg)
+            mission_current = cast("mavlink.MAVLink_mission_current_message", msg)
             if mission_current.seq >= self.trigger_seq:
                 self._inject_spoofed_position()
                 self._fired = True

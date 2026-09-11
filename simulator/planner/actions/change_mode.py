@@ -5,6 +5,8 @@ Includes logic for creating a mode-switching Action with execution and verificat
 steps based on HEARTBEAT messages and supported flight modes.
 """
 
+from __future__ import annotations
+
 from simulator.helpers.connections.mavlink.enums import CopterMode, ModeFlag, PlaneMode
 from simulator.planner.action import Action
 from simulator.planner.step import Step
@@ -15,6 +17,10 @@ class SwitchMode(Step):
 
     def __init__(self, name: str, flight_mode: CopterMode | PlaneMode) -> None:
         super().__init__(name)
+        self._flight_mode = flight_mode
+
+    def set_mode(self, flight_mode: CopterMode | PlaneMode) -> None:
+        """Change the target mode after construction (before this step runs)."""
         self._flight_mode = flight_mode
 
     def exec_fn(self) -> None:

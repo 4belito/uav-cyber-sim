@@ -1,5 +1,7 @@
 """visualizer package for the simulator module."""
 
+from __future__ import annotations
+
 from .gazebo.gazebo import Gazebo
 from .gazebo.preview import GazMarker
 from .novisualizer.novisualizer import NoVisualizer

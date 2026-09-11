@@ -1,12 +1,18 @@
 """Lightweight 3D spatial index for neighbor queries."""
 
+from __future__ import annotations
+
 import threading
 from collections import defaultdict
-from collections.abc import Iterable
 from math import floor
+from typing import TYPE_CHECKING
 
-from simulator.entities import RIDData
 from simulator.helpers.coordinates import ENU
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+
+    from simulator.entities import RIDData
 
 CellKey = tuple[int, int, int]
 Cell = set[int]
@@ -24,7 +30,6 @@ class Grid:
         self._lock = threading.RLock()  # single structure lock
         self._pending_rid: defaultdict[int, bool] = defaultdict(lambda: False)
 
-    # === Core methods ===
     def _idx(self, coor: float) -> int:
         return int(floor(coor / self.cell_size))
 
@@ -45,7 +50,6 @@ class Grid:
                 return rid
             return None
 
-    # === Sysid management ===
     def add_rid(self, sysid: int, rid: RIDData) -> None:
         """
         Insert a new UAV at the given position.
@@ -95,7 +99,6 @@ class Grid:
             self._rid[sysid] = rid
             self._pending_rid[sysid] = True
 
-    # === Neighbor queries ===
     def _iter_neighbor_keys(self, pos: ENU) -> Iterable[CellKey]:
         cx, cy, cz = self._pos2key(pos)
         for dx in (-1, 0, 1):

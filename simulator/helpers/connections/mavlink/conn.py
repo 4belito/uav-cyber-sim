@@ -1,13 +1,17 @@
 """Utility functions for MAVLink connections and messaging."""
 
+from __future__ import annotations
+
 import logging
 import time
-from typing import Literal, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 from pymavlink import mavutil
 
-from simulator.helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from simulator.helpers.connections.mavlink.enums import Autopilot, Type
+
+if TYPE_CHECKING:
+    from simulator.helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 
 mavutil.set_dialect("ardupilotmega")  # type: ignore[attr-defined]
 
@@ -29,7 +33,7 @@ def connect(
         source_component=src_compid,
         baud=baud,
     )
-    return cast(MAVConnection, conn)
+    return cast("MAVConnection", conn)
 
 
 # taken from mavproxy
@@ -42,7 +46,6 @@ def send_heartbeat(
     system_status: int = 0,
 ) -> None:
     """Send a GCS heartbeat message to the UAV."""
-    # Set the source system ID for this connection
     conn.mav.heartbeat_send(sys_type, autopilot, base_mode, custom_mode, system_status)
 
 

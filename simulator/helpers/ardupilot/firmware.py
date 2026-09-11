@@ -1,7 +1,13 @@
 """Firmware-specific flight-mode helpers."""
 
-from simulator.config import Firmware
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from simulator.helpers.connections.mavlink.enums import CopterMode, PlaneMode
+
+if TYPE_CHECKING:
+    from simulator.config import Firmware
 
 
 def guided_mode(firmware: Firmware) -> CopterMode | PlaneMode:

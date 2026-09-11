@@ -5,59 +5,72 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from simulator.entities.intervention import Intervention
-from simulator.helpers.processes import SimProcess
-
 if TYPE_CHECKING:
-    from simulator.entities.simvehicle import SimVehicle
+    from simulator.entities.intervention import Intervention
+    from simulator.entities.simvehicle import SimVehicle, SimVehicles
+    from simulator.helpers.processes import SimProcesses
 
 
 @dataclass
 class SimGCS:
     """
-    Simulator GCS configuration.
+    Simulator GCS configuration: which vehicles a ground station monitors and how.
 
-    A GCS monitors zero or more vehicles, and a vehicle may be monitored by
-    zero, one or several GCSs. `SimGCS.vehicles` and `SimVehicle.gcss` are the
-    two sides of that many-to-many relation; always link them through
-    `add_vehicle` (or `SimVehicle.assign_gcs`) so both sides stay consistent.
+    A GCS monitors zero or more vehicles, and a vehicle may be monitored by zero,
+    one or several GCSs. `SimGCS.vehicles` and `SimVehicle.gcss` are the two sides
+    of that many-to-many relation; always link them through `add_vehicle` (or
+    `SimVehicle.assign_gcs`) so both sides stay consistent. The first GCS a
+    vehicle is assigned to owns the vehicle's OS processes (SITL, logic, ADS-B,
+    MITM); the rest only monitor it.
 
-    The first GCS a vehicle is assigned to owns the vehicle's OS processes
-    (SITL, logic, ADS-B, MITM); the remaining ones only monitor it.
+    Fields:
 
-    `verbose`/`terminals`/`suppress` override the Simulator-wide defaults for
-    this GCS only; leave them `None` to inherit the Simulator's settings.
-    `record_positions` decides whether this GCS logs the trajectories it sees.
+    - `vehicles` — the monitored vehicles; `repr`/`compare` are off to avoid
+      recursing back through `SimVehicle.gcss`.
+    - `record_positions` — when set, log each vehicle's `GLOBAL_POSITION_INT` to
+      `data/trajectories_<name>.pkl`, read by `Oracle.plot_trajectories(gcss=True)`.
+    - `verbose` / `terminals` / `suppress` — override the Simulator-wide defaults
+      for this GCS only; leave `None` to inherit them.
+    - `interventions` — per-vehicle-sysid map of `Intervention`s this GCS applies;
+      when a trigger fires the GCS takes over that vehicle with its guided plan.
+      Set it via `intervene`.
     """
 
     name: str
-    # repr/compare are off to avoid recursing back through SimVehicle.gcss.
-    vehicles: list[SimVehicle] = field(
-        default_factory=lambda: [], repr=False, compare=False
-    )
-    # Record each vehicle's GLOBAL_POSITION_INT into `data/trajectories_<name>.pkl`,
-    # read by `Oracle.plot_trajectories(gcss=True)`. Turn off to skip the file.
+    vehicles: SimVehicles = field(default_factory=lambda: [], repr=False, compare=False)
     record_positions: bool = False
     verbose: int | None = None
-    terminals: list[SimProcess] | None = None
-    suppress: list[SimProcess] | None = None
-    # Interventions this GCS applies, keyed by the monitored vehicle's sysid: when
-    # each trigger fires, the GCS takes over that vehicle with its guided plan.
+    terminals: SimProcesses | None = None
+    suppress: SimProcesses | None = None
     interventions: dict[int, Intervention] = field(
-        default_factory=dict[int, Intervention], repr=False, compare=False
+        default_factory=dict[int, "Intervention"], repr=False, compare=False
     )
 
     def __post_init__(self) -> None:
-        # Back-link any vehicle passed straight to the constructor, mirroring
-        # `SimVehicle.__post_init__`; without this the vehicle would not know
-        # about the GCS and the two sides of the relation would disagree.
-        for vehicle in list(self.vehicles):
-            self.add_vehicle(vehicle)
+        """Back-link any vehicle passed straight to the constructor."""
+        self.add_vehicles(list(self.vehicles))
+
+    def __repr__(self) -> str:
+        """Show the monitored sysids and which of them this GCS owns."""
+        return (
+            f"SimGCS(name={self.name!r}, monitors={self.sysids}, "
+            f"owns={self.owned_sysids}, record_positions={self.record_positions}"
+        )
 
     @property
     def sysids(self) -> list[int]:
         """System IDs of the monitored vehicles, in assignment order."""
         return [veh.sysid for veh in self.vehicles]
+
+    @property
+    def owned_sysids(self) -> list[int]:
+        """
+        System IDs of the monitored vehicles this GCS owns.
+
+        A GCS owns a vehicle when it is the first GCS assigned to it (see
+        `SimVehicle.owner_gcs`); it then launches that vehicle's OS processes.
+        """
+        return [veh.sysid for veh in self.vehicles if veh.gcss and veh.gcss[0] is self]
 
     def add_vehicle(self, vehicle: SimVehicle) -> None:
         """
@@ -71,6 +84,11 @@ class SimGCS:
         if not any(gcs is self for gcs in vehicle.gcss):
             vehicle.gcss.append(self)
 
+    def add_vehicles(self, vehicles: SimVehicles) -> None:
+        """Monitor multiple vehicles from this GCS."""
+        for vehicle in vehicles:
+            self.add_vehicle(vehicle)
+
     def remove_vehicle(self, vehicle: SimVehicle) -> None:
         """Stop monitoring `vehicle`, unlinking both sides of the relation."""
         self.vehicles = [veh for veh in self.vehicles if veh is not vehicle]
@@ -80,12 +98,10 @@ class SimGCS:
         """
         Have this GCS intervene on a vehicle it monitors.
 
-        When the intervention's trigger fires, this GCS takes over `vehicle` with
-        the intervention's guided plan. Raises if `vehicle` is not monitored here
-        (`add_vehicle` it first) — turning a silent no-op into an early error.
-        Interventions are per-GCS, so several GCSs may each intervene on the same
-        vehicle independently; a repeat call for the same vehicle replaces the
-        previous one.
+        Raises `ValueError` if `vehicle` is not monitored here (`add_vehicle` it
+        first). Most interventions assume the target flies an `AutoPlan` — see
+        `Intervention` for which parts depend on it. Interventions are per-GCS; a
+        repeat call for the same vehicle replaces the previous one.
         """
         if not any(veh is vehicle for veh in self.vehicles):
             raise ValueError(

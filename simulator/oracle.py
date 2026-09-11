@@ -1,9 +1,4 @@
-"""
-Define the Oracle class to simulate Vehicle-to-Vehicle communication.
-Currently provides basic global position tracking and mission completion detection.
-Define the Oracle class to simulate Vehicle-to-Vehicle communication.
-Currently provides basic global position tracking and mission completion detection.
-"""
+"""Oracle: Remote ID relay, position tracking, and mission-completion detection."""
 
 from __future__ import annotations
 
@@ -15,33 +10,31 @@ import subprocess
 import threading
 import time
 import unicodedata
-from collections.abc import Iterable
-from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 import matplotlib.pyplot as plt
 import zmq
-from matplotlib.figure import Figure
-from mpl_toolkits.mplot3d import Axes3D
 
 from simulator.config import DATA_PATH, Color, SimPort, VehPort
-from simulator.entities import SimGCS, SimVehicle
-from simulator.entities.riddata import RIDData
 from simulator.helpers.connections import create_zmq_socket, create_zmq_sockets
-from simulator.helpers.coordinates import GRA, ENUs, GRAPose, GRAs
 from simulator.helpers.logging.log_reader import read_true_track
 from simulator.runtime.grid import Grid
 
-# Smallest ground span a plot is given, so a stationary or straight-line flight
-# is not zoomed into centimetres of numerical noise.
-MIN_PLOT_SPAN = 5.0  # metres
-# The Up axis gets a much smaller floor: altitude detail is worth seeing, and a
-# 5 m floor would bury a low hop or the centimetre-scale wobble of a landed
-# vehicle. Only a genuinely flat track is padded to this.
-MIN_UP_SPAN = 1.0  # metres
-# One marker per GCS, so two stations watching the same vehicle stay apart on a
-# plot: the colour says which vehicle, the marker says which recorded it.
-# The Oracle's own Remote ID view always uses "o".
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from pathlib import Path
+
+    from matplotlib.figure import Figure
+    from mpl_toolkits.mplot3d import Axes3D
+
+    from simulator.entities import SimGCS, SimVehicle
+    from simulator.entities.riddata import RIDData
+    from simulator.helpers.coordinates import GRA, ENUs, GRAPose, GRAs
+
+# Ground-axis plot floor (m), so a straight-line flight isn't zoomed to noise.
+MIN_PLOT_SPAN = 5.0
+# Up-axis floor (m) — smaller, since altitude detail is worth seeing.
+MIN_UP_SPAN = 1.0
 GCS_MARKERS = ("^", "s", "D", "v", "P", "X", "*", "<", ">", "h")
 COLOR_EMOJI_LABELS = {
     "🟦": "BLUE",
@@ -55,12 +48,10 @@ COLOR_EMOJI_LABELS = {
 
 TX_LOOP_SLEEP = 0.01
 RX_LOOP_SLEEP = 0.10
-# How long `stop()` waits on each worker thread. They only ever sleep for a
-# loop tick, so anything longer means the thread is wedged and is not worth
-# waiting for — the run is being torn down either way.
+# A worker still busy past this is wedged; the run is ending anyway.
 THREAD_JOIN_TIMEOUT = 2.0
 
-# Module-level registry so clean() can reach active Oracle instances
+# Active instances, so clean() can reach them.
 _active: set["Oracle"] = set()
 
 
@@ -127,27 +118,24 @@ class Oracle:
         self.network_sim = network_sim
         self.rid_frequency = rid_frequency
         self.rid_enabled = rid_enabled
-        # sysid -> transmitted ENU track, filled from Remote ID as the run
-        # proceeds. This is what each vehicle broadcast, so it is the *spoofed*
-        # position for an attacker, not necessarily where the drone really was.
+        # `paths` is the *transmitted* RID track (an attacker's spoofed position);
+        # `true_paths` is the real one, filled on demand by `load_true_paths`.
         self.paths: dict[int, ENUs] = {}
-        # sysid -> real ENU track, reconstructed on demand from the ground-truth
-        # logs (see `load_true_paths`). Empty until asked for.
         self.true_paths: dict[int, ENUs] = {}
         self.grid = Grid(cell_size=transmission_range * 1.01)
         self._seen_in_grid: set[int] = set()
         self._bound = False
-        # Set by `stop()` to release the workers when a run is cut short.
         self._shutdown = threading.Event()
+        # Sim-time clock for `run(timeout=)` — see `_wait_for` for how the
+        # per-vehicle boot clocks are reconciled into one deadline.
+        self._sim_now = 0.0
+        self._sim_deadline: float | None = None
 
-        # --- the scenario: what is being simulated -------------------------
-        # Owned here rather than by the Simulator, which only decides how the
-        # scenario is executed (ports, processes, visualizer).
+        # The scenario, owned here (the Simulator only decides how to execute it).
         self.vehicles: dict[int, SimVehicle] = {}
         self.gcss: dict[str, SimGCS] = {}
 
-        # Filled in by `bind`; every one of these depends on state that only
-        # exists once the Simulator has assigned port offsets.
+        # Filled in by `bind`, once the Simulator has assigned port offsets.
         self.gra_origin: GRA
         self.sysids: list[int] = []
         self.n_entities = 0
@@ -177,7 +165,7 @@ class Oracle:
         self.vehicles[vehicle.sysid] = vehicle
         for gcs in list(vehicle.gcss):
             self._register_gcs(gcs)
-            gcs.add_vehicle(vehicle)  # idempotent: keeps both sides in sync
+            gcs.add_vehicle(vehicle)  # idempotent
 
     def add_gcs(self, gcs: SimGCS) -> None:
         """
@@ -264,7 +252,7 @@ class Oracle:
         }
         self.done_thread = threading.Thread(target=self.wait_done)
 
-        # Events and locks for thread coordination
+        # Events and locks
         self.stop_sys = {sysid: threading.Event() for sysid in self.sysids}
         self.stop_gcs = {gcs_name: threading.Event() for gcs_name in self.gcss}
         self.rid_locks = {sysid: threading.Lock() for sysid in self.sysids}
@@ -310,9 +298,12 @@ class Oracle:
         Run the Oracle to manage Vehicle connections and communication.
 
         Blocks until every vehicle and every GCS has reported DONE. `timeout`
-        caps that wait in seconds: a scenario that never finishes on its own —
-        a pursuit with no capture, a vehicle stuck mid-plan — would otherwise
-        block forever. The default `None` waits indefinitely, as before.
+        caps that wait in **sim seconds** (the vehicles' telemetry clock, so it
+        is unaffected by `speedup`): a scenario that never finishes on its own —
+        a pursuit with no capture, drones told to hover indefinitely — would
+        otherwise block forever. It covers the whole run, not each phase. The
+        default `None` waits indefinitely. Falls back to wall time only if no
+        telemetry clock ever starts.
 
         Returns True when everything completed, False when the timeout ended
         the wait. Either way the Oracle's own threads are wound down before
@@ -335,20 +326,18 @@ class Oracle:
             thread.start()
         self.done_thread.start()
 
-        # One deadline for both waits, not one each: `timeout` is how long the
-        # whole run may take, so vehicles finishing late leave the GCSs less.
-        deadline = None if timeout is None else time.monotonic() + timeout
-        completed = self._wait_for(self.stop_sys.values(), deadline)
+        self._sim_deadline = None  # anchored fresh per run, shared by both waits below
+        completed = self._wait_for(self.stop_sys.values(), timeout)
         if completed:
             logging.info("✅ All Vehicle threads completed")
-            completed = self._wait_for(self.stop_gcs.values(), deadline)
+            completed = self._wait_for(self.stop_gcs.values(), timeout)
             if completed:
                 logging.info("✅ All GCS threads completed")
         if not completed:
             pending_veh = [s for s, e in self.stop_sys.items() if not e.is_set()]
             pending_gcs = [n for n, e in self.stop_gcs.items() if not e.is_set()]
             logging.warning(
-                f"⏱️ Timed out after {timeout}s — still running: "
+                f"⏱️ Timed out after {timeout}s of sim time — still running: "
                 f"vehicles {pending_veh or 'none'}, GCSs {pending_gcs or 'none'}"
             )
         self.stop()
@@ -356,13 +345,35 @@ class Oracle:
         logging.info("🎉 Oracle shutdown complete!")
         return completed
 
-    @staticmethod
-    def _wait_for(events: Iterable[threading.Event], deadline: float | None) -> bool:
-        """Wait for every event, or until `deadline`. True if all were set."""
+    def _wait_for(
+        self, events: Iterable[threading.Event], timeout: float | None
+    ) -> bool:
+        """
+        Wait for every event, or until `timeout` **sim** seconds elapse.
+
+        There is no single sim clock: each vehicle's SITL has its own
+        `time_boot_ms`, offset by launch stagger and, under host overload,
+        drifting apart. `_sim_now` (bumped in `update_rid`) is the running *max*
+        of `RIDData.last_update` over all vehicles — the sim's leading edge. Max,
+        not min/mean, because `timeout` is a *cap*: one bogged-down straggler
+        must not stretch the wall-clock run without bound. The deadline is
+        anchored on the first non-zero reading and cached on `_sim_deadline`, so
+        it measures *elapsed* sim time and both `run` waits share one budget. If
+        the telemetry clock never starts (a broken launch), fall back to a
+        wall-clock cap. True if all events were set.
+        """
         pending = list(events)
+        wall_deadline = None if timeout is None else time.monotonic() + timeout
         while any(not event.is_set() for event in pending):
-            if deadline is not None and time.monotonic() >= deadline:
-                return False
+            if timeout is not None:
+                sim_now = self._sim_now
+                if sim_now > 0.0:
+                    if self._sim_deadline is None:
+                        self._sim_deadline = sim_now + timeout
+                    if sim_now >= self._sim_deadline:
+                        return False
+                elif wall_deadline is not None and time.monotonic() >= wall_deadline:
+                    return False
             time.sleep(0.1)
         return True
 
@@ -392,9 +403,9 @@ class Oracle:
     def close(self) -> None:
         """Close all ZMQ sockets and terminate the context."""
         if not self._bound:
-            return  # never opened anything
-        # Threads first: destroying the context under a thread still blocked in
-        # `recv` is what leaves a kernel with wedged workers.
+            return
+        # Threads first: destroying the context under a thread still in `recv`
+        # is what leaves a kernel with wedged workers.
         self.stop()
         self._zmq_ctx.destroy(linger=0)
         _active.discard(self)
@@ -404,9 +415,10 @@ class Oracle:
         while not self.stop_sys[sysid].is_set():
             try:
                 rid: RIDData = self.rid_in_socks[sysid].recv_pyobj()
-                # Before the EKF converges the vehicle reports lat/lon 0,0,
-                # which converts to an ENU point ~3000 km away and would set the
-                # scale of any plot. Those are "no fix yet", not positions.
+                if rid.last_update > self._sim_now:
+                    self._sim_now = rid.last_update  # running max; see `_wait_for`
+                # lat/lon 0,0 is "no EKF fix yet", not a position — it would
+                # plot ~3000 km out and blow up the axis scale.
                 has_fix = not (rid.gra_pos.lat == 0.0 and rid.gra_pos.lon == 0.0)
                 if self.record_positions and has_fix:
                     self.paths.setdefault(sysid, []).append(rid.enu_pos)
@@ -424,8 +436,6 @@ class Oracle:
     def retransmit_rid(self, sysid: int):
         """Retransmit Remote IDs to neighbor Vehicles (one-shot per update)."""
         if not self.rid_enabled:
-            # Nothing is relayed, so this thread has no work: vehicles still
-            # report to the Oracle, they just never hear each other.
             logging.info(f"Remote ID relay disabled: vehicle {sysid} sends only")
             return
         while not self.stop_sys[sysid].is_set():
@@ -437,7 +447,6 @@ class Oracle:
                 if rid is None:
                     time.sleep(TX_LOOP_SLEEP)
                     continue
-                # get position and velocity parameters for each drone
                 if self.network_sim:
                     pos = rid.enu_pos
                     spd = rid.speed
@@ -469,11 +478,9 @@ class Oracle:
                             f"{round(o_cog, 3)},{round(o_ele, 3)}"
                         )
 
-                    # continue if there not at least two drones to simulate
                     if len(operands) <= 1:
                         continue
 
-                    # invoke a one-off uli-net-sim Remote ID broadcast simulation
                     result = subprocess.run(
                         [
                             "./rid-one-off.sh",
@@ -611,8 +618,6 @@ class Oracle:
         wanted = set(sysids) if sysids is not None else None
         series: list[tuple[str, ENUs, str, str]] = []
 
-        # `truth` selects which vehicles get a real-trajectory overlay: none,
-        # all (`True`), or an explicit set of sysids.
         if truth is True:
             truth_wanted: set[int] | None = None  # every vehicle
         elif truth is False:
@@ -620,8 +625,6 @@ class Oracle:
         else:
             truth_wanted = set(truth)
         overlay = truth is True or bool(truth_wanted)
-        # Only distinguish the two in the legend when both are actually shown;
-        # a plain call keeps its original labels.
         rid_suffix = " (RID)" if overlay else ""
 
         if oracle:
@@ -648,8 +651,7 @@ class Oracle:
                         (f"Vehicle {sysid} (real)", track, self._color(sysid))
                     )
 
-        # Marker is fixed by the station's position in the scenario, not by
-        # what this call asked for, so a GCS keeps the same symbol between plots.
+        # Marker fixed by scenario position, so a GCS keeps its symbol across plots.
         marker_of = {
             name: GCS_MARKERS[i % len(GCS_MARKERS)]
             for i, name in enumerate(sorted(self.gcss))
@@ -657,7 +659,6 @@ class Oracle:
         if gcss == "all":
             names = sorted(self.gcss)
         else:
-            # A bare string is a single name, not a sequence of characters.
             names = [gcss] if isinstance(gcss, str) else list(gcss)
         for name in names:
             if name not in self.gcss:
@@ -674,8 +675,7 @@ class Oracle:
                 recorded: dict[int, GRAs] = pickle.load(f)
             for sysid, gra_track in sorted(recorded.items()):
                 if (wanted is None or sysid in wanted) and gra_track:
-                    # Stations are often named "GCS_..." already; do not say it twice.
-                    shown = _legend_safe(name)
+                    shown = _legend_safe(name)  # names often start "GCS_" already
                     prefix = "" if shown.upper().startswith("GCS") else "GCS "
                     series.append(
                         (
@@ -692,8 +692,6 @@ class Oracle:
 
         fig = plt.figure(figsize=(8, 8))  # type: ignore
         ax = fig.add_subplot(projection="3d", proj_type="ortho")  # type: ignore
-        # Defaults match matplotlib's own view (30, -60, 0), so the untouched
-        # call renders the same as before these were made explicit.
         ax.view_init(elev=elev, azim=azim, roll=roll)  # type: ignore
         ax.set_title("ENU Trajectories")  # type: ignore
         ax.set_xlabel("East (m)")  # type: ignore
@@ -711,9 +709,11 @@ class Oracle:
                 label=label,
                 depthshade=True,
             )
-        # Real trajectories are drawn as lines so they read as a continuous path
-        # against the transmitted dots, even sharing a vehicle's colour.
-        for label, track, color in truth_series:
+        for (
+            label,
+            track,
+            color,
+        ) in truth_series:  # lines, to read apart from the RID dots
             ax.plot(  # type: ignore
                 [p.x for p in track],
                 [p.y for p in track],
@@ -723,7 +723,7 @@ class Oracle:
                 alpha=0.9,
                 label=label,
             )
-        # `_set_axes` only reads track points, so the marker slot is a filler.
+        # `_set_axes` only reads track points; the marker slot is filler.
         axis_series = series + [(lbl, trk, col, "o") for lbl, trk, col in truth_series]
         self._set_axes(ax, axis_series, xlim=xlim, ylim=ylim, zlim=zlim)
         if legend:
@@ -765,7 +765,7 @@ class Oracle:
         zs = [p.z for _, track, _, _ in series for p in track]
 
         ground = max(max(xs) - min(xs), max(ys) - min(ys), MIN_PLOT_SPAN)
-        half = ground / 2 * 1.05  # margin so points are not on the edge
+        half = ground / 2 * 1.05  # 5% margin
         for set_lim, vals, lim in (  # type: ignore
             (ax.set_xlim, xs, xlim),  # type: ignore
             (ax.set_ylim, ys, ylim),  # type: ignore
@@ -776,10 +776,6 @@ class Oracle:
             mid = (max(vals) + min(vals)) / 2
             set_lim(mid - half, mid + half)  # type: ignore
 
-        # The floor is strict and never padded: it sits on the ground plane, or
-        # exactly on the lowest sample when the track dips below it. Ground noise
-        # puts a landed vehicle a few centimetres under zero, and that stays
-        # visible at the bottom of the axis rather than being clipped away.
         if zlim is not None:
             ax.set_zlim(*zlim)  # type: ignore
         else:

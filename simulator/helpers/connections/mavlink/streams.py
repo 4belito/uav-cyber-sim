@@ -1,13 +1,17 @@
 """Helpers for MAVLink message streams."""
 
+from __future__ import annotations
+
 from collections.abc import Mapping, Sequence
-from typing import TypeAlias, cast
+from typing import TYPE_CHECKING, TypeAlias, cast
 
 import pymavlink.dialects.v20.ardupilotmega as mavlink
 import pymavlink.dialects.v20.development as development_mavlink
 
-from simulator.helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from simulator.helpers.connections.mavlink.enums import CmdSet, DataStream
+
+if TYPE_CHECKING:
+    from simulator.helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 
 
 class DummyWriter:
@@ -80,21 +84,6 @@ def request_sensor_streams(
     return msgs
 
 
-# Secondary MAVLink decoder (used to decode UNKNOWN_* messages)
-# secondary_decoder = mavlink.MAVLink(None)
-
-
-# def decode_unknown_message(msg: mavlink.MAVLink_message) -> mavlink.MAVLink_message:
-#     """Attempt to decode an UNKNOWN_* message using a secondary MAVLink parser."""
-#     try:
-#         decoded = secondary_decoder.parse_char(msg.get_msgbuf())
-#         if decoded:
-#             return decoded
-#     except Exception:
-#         pass
-#     return msg
-
-
 def decode_unknown_message(msg: mavlink.MAVLink_message) -> mavlink.MAVLink_message:
     """Attempt to decode an UNKNOWN_* message using a secondary MAVLink parser."""
     try:
@@ -103,7 +92,7 @@ def decode_unknown_message(msg: mavlink.MAVLink_message) -> mavlink.MAVLink_mess
         for byte in buf:
             decoded = secondary_decoder.parse_char(bytes([byte]))
         if decoded is not None:
-            return cast(mavlink.MAVLink_message, decoded)
+            return cast("mavlink.MAVLink_message", decoded)
     except Exception:
         pass
     return msg
@@ -118,11 +107,11 @@ def make_json_safe(obj: object) -> JSONType:
         return obj.decode("utf-8", errors="ignore").strip("\x00")
 
     elif isinstance(obj, Mapping):
-        obj_map = cast(Mapping[object, object], obj)
+        obj_map = cast("Mapping[object, object]", obj)
         return {str(k): make_json_safe(v) for k, v in obj_map.items()}
 
     elif isinstance(obj, Sequence) and not isinstance(obj, (str, bytes, bytearray)):
-        obj_seq = cast(Sequence[object], obj)
+        obj_seq = cast("Sequence[object]", obj)
         return [make_json_safe(v) for v in obj_seq]
 
     elif isinstance(obj, (str, int, float, bool)) or obj is None:

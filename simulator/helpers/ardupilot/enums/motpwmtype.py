@@ -6,6 +6,8 @@ motors) or where each ESC must have its PWM range set individually using the
 Servo params instead of PWM_MIN/MAX parameters.
 """
 
+from __future__ import annotations
+
 from enum import IntEnum
 
 

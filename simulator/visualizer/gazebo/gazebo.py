@@ -13,6 +13,8 @@ Main Features:
 
 """
 
+from __future__ import annotations
+
 import logging
 import os
 import re
@@ -97,9 +99,8 @@ class Gazebo(Visualizer[GazVehicle]):
             visible=False,
             suppress_output=True,
             env=self._build_gazebo_env(),
-            # Detach into its own process group so an interrupt/restart of the
-            # launching process (e.g. a Jupyter kernel) does not tear down the
-            # Gazebo window. It is cleaned up explicitly by clean().
+            # Own process group, so a Jupyter-kernel interrupt doesn't kill the
+            # Gazebo window; clean() tears it down explicitly.
             new_process_group=True,
         )
         logging.info(

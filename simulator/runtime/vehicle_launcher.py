@@ -12,12 +12,16 @@ from __future__ import annotations
 import logging
 import os
 import time
-from collections.abc import Container
-from subprocess import Popen
+from typing import TYPE_CHECKING
 
 from simulator.config import ARDU_LOGS_PATH, ENV_CMD_ARP, ENV_CMD_PYT
-from simulator.configs import VehicleConfig
 from simulator.helpers.processes import SimProcess, create_process
+
+if TYPE_CHECKING:
+    from collections.abc import Container
+    from subprocess import Popen
+
+    from simulator.configs import GCSVehicleConfig
 
 VehicleProcesses = dict[SimProcess, "Popen[bytes]"]
 
@@ -32,20 +36,22 @@ def wait_for_pty(path: str, timeout: float = 3.0) -> None:
 
 
 def launch_vehicle(
-    veh_config: VehicleConfig,
+    veh_config: GCSVehicleConfig,
     terminals: Container[SimProcess],
     suppress: Container[SimProcess],
 ) -> VehicleProcesses:
-    """Spawn every process of one vehicle and return them keyed by role."""
+    """
+    Spawn every process of one vehicle and return them keyed by role.
+
+    Launch order is MITM -> socat -> ADS-B -> logic -> SITL. The MITM goes first
+    so its UDP listeners are bound before Logic and the GCS retarget their
+    senders at it.
+    """
     sysid = veh_config["sysid"]
     procs: VehicleProcesses = {}
     mitm_enabled = veh_config.get("mitm", False)
-    # -----------------------
-    # 0. MITM proxy (interposed on GCS<->Logic links)
-    # -----------------------
-    # Launched first so its UDP listeners are bound before Logic/GCS begin
-    # sending. When enabled, Logic and the GCS retarget their senders at the
-    # MITM (see logic.py / cmd_conn in gcs.py) and the MITM relays onward.
+
+    # MITM proxy (interposed on GCS<->Logic links)
     if mitm_enabled and veh_config["mitm_cmd"]:
         p_mitm = create_process(
             veh_config["mitm_cmd"],
@@ -59,9 +65,7 @@ def launch_vehicle(
         logging.debug(f"MITM proxy for vehicle {sysid} launched (PID {p_mitm.pid})")
         procs[SimProcess.MITM] = p_mitm
 
-    # -----------------------
-    # 1. ADS-B virtual cable
-    # -----------------------
+    # ADS-B virtual cable
     p_socat = create_process(
         veh_config["socat_cmd"],
         after="exec bash",
@@ -74,9 +78,7 @@ def launch_vehicle(
     procs[SimProcess.ADSB_SOCAT] = p_socat
     wait_for_pty(f"/tmp/adsb_{sysid}_injector")
 
-    # -----------------------
-    # 2. ADS-B injector
-    # -----------------------
+    # ADS-B injector
     p_adsb = create_process(
         veh_config["adsb_cmd"],
         after="exec bash",
@@ -89,9 +91,7 @@ def launch_vehicle(
     logging.debug(f"ADSB injector for vehicle {sysid} launched (PID {p_adsb.pid})")
     procs[SimProcess.ADSB_INJECTOR] = p_adsb
 
-    # -----------
-    # 3. Logic
-    # -----------
+    # Logic
     p_logic = create_process(
         veh_config["logic_cmd"],
         after="exec bash",
@@ -104,9 +104,7 @@ def launch_vehicle(
     logging.debug(f"Vehicle logic for vehicle {sysid} launched (PID {p_logic.pid})")
     procs[SimProcess.LOGIC] = p_logic
 
-    # ----------------
-    # 4. ArduPilot
-    # ----------------
+    # ArduPilot SITL
     ardu_log_folder = ARDU_LOGS_PATH / f"veh_{sysid}"
     ardu_log_folder.mkdir(parents=True, exist_ok=True)
     p_ard = create_process(

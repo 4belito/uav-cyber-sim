@@ -7,9 +7,11 @@ Includes:
 - make_takeoff: factory dispatching by firmware.
 """
 
-import logging
+from __future__ import annotations
 
-from simulator.config import Firmware
+import logging
+from typing import TYPE_CHECKING
+
 from simulator.helpers.connections.mavlink.enums import (
     CmdNav,
     LandState,
@@ -21,6 +23,9 @@ from simulator.helpers.connections.mavlink.enums import (
 from simulator.helpers.connections.mavlink.streams import ask_msg, stop_msg
 from simulator.planner.action import Action
 from simulator.planner.step import Step
+
+if TYPE_CHECKING:
+    from simulator.config import Firmware
 
 
 class TakeOff(Step):
@@ -78,7 +83,8 @@ class TakeOff(Step):
 
 
 class PlaneTakeOff(Step):
-    """ArduPlane takeoff via TAKEOFF flight mode (mode 13), then switch to GUIDED.
+    """
+    ArduPlane takeoff via TAKEOFF flight mode (mode 13), then switch to GUIDED.
 
     PlaneMode.TAKEOFF executes a proper runway roll and climb without any
     mission upload. Once the plane reaches IN_AIR state, we switch back to

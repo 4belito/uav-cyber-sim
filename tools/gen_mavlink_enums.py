@@ -16,6 +16,8 @@ Run from the repo root:
     python tools/gen_mavlink_enums.py
 """
 
+from __future__ import annotations
+
 import importlib.util
 import os
 

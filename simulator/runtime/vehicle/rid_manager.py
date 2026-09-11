@@ -8,18 +8,20 @@ import math
 import threading
 import time
 from queue import Queue
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import zmq
 
 from simulator.config import SimPort, VehPort
 from simulator.entities.riddata import RIDData
-from simulator.entities.spoof_profile import SpoofProfile
 from simulator.helpers.connections import create_zmq_socket
 from simulator.helpers.connections.mavlink.streams import make_json_safe
 from simulator.helpers.coordinates import ENU, GRA
-from simulator.helpers.logging.data_logger import DataLogger
 from simulator.runtime.vehicle.adsb_conversion import rid_to_adsb_beacon
+
+if TYPE_CHECKING:
+    from simulator.entities.spoof_profile import SpoofProfile
+    from simulator.helpers.logging.data_logger import DataLogger
 
 
 class RIDManager:
@@ -52,12 +54,14 @@ class RIDManager:
         self._stop = threading.Event()
         self.pending = False  # whether there is new data to publish
 
-        # RID spoofing: a `SpoofProfile` (or None to broadcast honestly). Times in
-        # the profile are measured from this manager's start.
+        # `SpoofProfile` (or None). Its keyframe times run against the vehicle
+        # boot clock fed in via `update`, so the schedule tracks the flight under
+        # any `speedup`; `_veh_t0` anchors it at the first fix.
         self.spoof = spoof
-        self._spoof_t0 = time.monotonic()
+        self._veh_now: float | None = None
+        self._veh_t0: float | None = None
 
-        # ZMQ setup
+        # ZMQ
         self._ctx = zmq.Context()
         self._in_sock = create_zmq_socket(
             self._ctx, zmq.SUB, VehPort.RID_DOWN, port_offset
@@ -85,7 +89,7 @@ class RIDManager:
         # Background threads
         self._threads: list[threading.Thread] = []
 
-        # Dataset file (JSONL stream)
+        # Dataset log (JSONL)
         self.logger = data_logger
 
     def start(self) -> None:
@@ -124,13 +128,17 @@ class RIDManager:
             else:
                 logging.warning(f"RID {self.sysid} ignoring unexpected message: {msg}")
 
-    # --- state update / publish -----------------------------------------------
     def update(self, payload: dict[str, str | float | int]) -> None:
         """Update internal RID state from MAVLink-derived payload."""
         rid = self._build_rid(payload)
+        boot_ms = payload.get("time_boot_ms")
         with self._lock:
             self.data = rid
             self.pending = True
+            if boot_ms is not None:
+                self._veh_now = float(boot_ms) / 1000.0
+                if self._veh_t0 is None:
+                    self._veh_t0 = self._veh_now
 
     def publish(self) -> None:
         """Send current RID snapshot (pyobj) to oracle."""
@@ -139,16 +147,14 @@ class RIDManager:
             if self.pending and self.data is not None:
                 send_data = self.data
                 fake_pos = (
-                    self.spoof.position_at(time.monotonic() - self._spoof_t0)
-                    if self.spoof is not None
+                    self.spoof.position_at(self._veh_now - (self._veh_t0 or 0.0))
+                    if self.spoof is not None and self._veh_now is not None
                     else None
                 )
                 if fake_pos is not None:
                     send_data = copy.copy(self.data)
                     send_data.enu_pos = fake_pos
-                    # Neighbors convert RID -> ADS-B from gra_pos (lat/lon/alt),
-                    # not enu_pos, so the geodetic position must be spoofed too or
-                    # the victim keeps avoiding our true location.
+                    # Neighbours build ADS-B from gra_pos, so spoof it too.
                     send_data.gra_pos = self.gra_origin.to_abs(fake_pos)
                     logging.debug(f"SEND FAKE DATA RID({self.sysid}): {send_data}")
                 else:
@@ -164,7 +170,6 @@ class RIDManager:
                 }
             )
 
-    # --- background loops ------------------------------------------------------
     def get_latest(self, sysid: int) -> RIDData | None:
         """Return the most recently received RID for a given sysid."""
         return self._latest.get(sysid)
@@ -177,11 +182,9 @@ class RIDManager:
                 self._latest[rid.sysid] = rid
                 self.received_rid.put(rid)
                 logging.debug(f"Uav {self.sysid} received RID: {rid.sysid}")
-                # Convert to ADS-B and forward
                 beacon = rid_to_adsb_beacon(rid)
                 self._adsb_out_sock.send_pyobj(beacon)  # type: ignore
 
-                # Record incoming RID
                 if self.logger:
                     self.logger.write(
                         {
@@ -197,14 +200,14 @@ class RIDManager:
                 logging.error(f"RID receiver error: {e}")
 
     def _build_rid(self, payload: dict[str, str | float | int]) -> RIDData:
-        lat = cast(int, payload.get("lat"))
-        lon = cast(int, payload.get("lon"))
-        alt = cast(int, payload.get("alt"))
-        vx = cast(int, payload.get("vx")) / 100
-        vy = cast(int, payload.get("vy")) / 100
-        vz = cast(int, payload.get("vz")) / 100
-        rel_alt = cast(int, payload.get("relative_alt"))
-        hdg = cast(int, payload.get("hdg")) / 100.0
+        lat = cast("int", payload.get("lat"))
+        lon = cast("int", payload.get("lon"))
+        alt = cast("int", payload.get("alt"))
+        vx = cast("int", payload.get("vx")) / 100
+        vy = cast("int", payload.get("vy")) / 100
+        vz = cast("int", payload.get("vz")) / 100
+        rel_alt = cast("int", payload.get("relative_alt"))
+        hdg = cast("int", payload.get("hdg")) / 100.0
 
         gra = GRA.from_global_int(lat, lon, alt)
         enu_pos = self.gra_origin.to_rel(gra)
@@ -216,6 +219,7 @@ class RIDManager:
         cog = (math.degrees(math.atan2(ve, vn)) + 360) % 360
         ele = (math.degrees(math.atan2(vu, vn)) + 360) % 360
 
+        boot_ms = payload.get("time_boot_ms")
         return RIDData(
             sysid=self.sysid,
             gra_pos=gra,
@@ -226,5 +230,6 @@ class RIDManager:
             ele=ele,
             rel_alt=rel_alt,
             hdg=hdg,
-            last_update=time.time(),
+            # Vehicle boot clock (sim seconds) for freshness checks.
+            last_update=float(boot_ms) / 1000.0 if boot_ms is not None else 0.0,
         )

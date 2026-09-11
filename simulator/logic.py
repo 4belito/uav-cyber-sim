@@ -6,14 +6,12 @@ import argparse
 import json
 import logging
 import time
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from pymavlink import mavutil
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
 from simulator.config import DATA_PATH, LOGS_PATH, VehPort
-from simulator.configs import LogicConfig
-from simulator.entities.riddata import RIDData
 from simulator.entities.spoof_profile import SpoofProfile
 from simulator.helpers.connections import (
     MAVConnection,
@@ -36,7 +34,13 @@ from simulator.planner import Action, Plan, PlanSpec, State, Step
 from simulator.runtime.vehicle.gcs_cmd_forwarder import GCSCommandForwarder
 from simulator.runtime.vehicle.mav_manager import MAVLinkManager
 from simulator.runtime.vehicle.rid_manager import RIDManager
-from simulator.runtime.vehicle.state import VehicleStateP
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from simulator.configs import LogicConfig
+    from simulator.entities.riddata import RIDData
+    from simulator.runtime.vehicle.state import VehicleStateP
 
 DATA_STREAM_IDS = [
     DataStream.RAW_SENSORS,
@@ -91,11 +95,9 @@ def start_logic(config: LogicConfig):
         src_compid=140,
     )
     logging.debug(f"Vehicle {sysid}: Logic connection established")
-    # One telemetry link per GCS monitoring this vehicle. The list is empty for
-    # an unmonitored vehicle, which then emits no telemetry and waits for no ack.
-    # When a MITM is interposed there is a single link to its listener instead;
-    # the MITM fans the stream out to every GCS port on the vehicle's behalf.
-    # Remote ID rate comes from the Oracle, per run, not from a global.
+    # `cs_conns`: one telemetry link per monitoring GCS (empty = unmonitored, no
+    # telemetry); with a MITM interposed, a single link to its listener, which
+    # fans the stream out to every GCS port itself.
     rid_frequency = int(config.get("rid_frequency", 5))
     rid_interval = int(1_000_000 / rid_frequency)
     rid_event = mavutil.periodic_event(rid_frequency)
@@ -148,7 +150,6 @@ def start_logic(config: LogicConfig):
         data_logger=data_logger,
         spoof=spoof,
     )
-    # Router stop signal
     mav_mng = MAVLinkManager(
         conn=ap_conn,
         data_logger=data_logger,
@@ -212,24 +213,16 @@ def start_logic(config: LogicConfig):
                         logging.error(f"Error sending RID data: {e}")
                         pass
             if logic.plan.state == State.DONE:
-                # Skipped for an unmonitored vehicle: nobody would ever ack.
-                if gcs_telem_ports:
+                if gcs_telem_ports:  # unmonitored vehicle: no one to ack
                     logic.send_done_msgs(cs_conns)
                 break
 
             logic.act()
-            # time.sleep(0.01)
-
-            # msgs = mav_mng.state.messages.copy()
-            # for msg_type, msg in msgs.items():
-            #     logging.debug(f"{msg_type}: {msg}")
     finally:
-        # 1. stop producers
         mav_mng.stop()
         rid_mng.stop()
         gcs_cmd_fwd.stop()
 
-        # 2. close connections
         for cs_conn in cs_conns:
             cs_conn.close()
 
@@ -246,7 +239,7 @@ class VehicleLogic:
         mav_manager: MAVLinkManager,
         home_heading: float = 0.0,
     ):
-        # Vehicle Creation
+        # Vehicle
         self.conn = mav_manager.conn
         self.sysid = mav_manager.data_logger.sysid
         self.name = f"Logic 🧠 {self.sysid}"
@@ -257,7 +250,7 @@ class VehicleLogic:
         self.plan = plan
         self.plan.bind(self.gra_origin, mav_manager, home_heading)
 
-        # Communication properties (positions are local)
+        # Communication (positions are local)
         self.rid: RIDData | None = None
 
         logging.info(f"{self.name}: launching")

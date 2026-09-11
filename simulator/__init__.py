@@ -5,6 +5,8 @@ This package provides interfaces and configuration classes for different UAV sim
 and ground control software.
 """
 
+from __future__ import annotations
+
 from .oracle import Oracle
 from .sim import Simulator
 

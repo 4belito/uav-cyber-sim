@@ -1,9 +1,15 @@
 """Helpers for saving/loading MAVLink missions (.waypoints files)."""
 
-from pathlib import Path
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from simulator.helpers.connections.mavlink.enums import Cmd, CmdNav, Frame
-from simulator.helpers.coordinates import GRAs
+
+if TYPE_CHECKING:
+    from pathlib import Path
+
+    from simulator.helpers.coordinates import GRAs
 
 
 def save_mission(
@@ -32,7 +38,7 @@ def save_mission(
             f"{idx}\t0\t{REL_ALT}\t{WP}\t0\t0\t0\t0\t{home.lat:.7f}\t{home.lon:.7f}\t0.0\t1\n"
         )
         idx += 1
-        # Dalay mission (mission item with delay=0 does not work)
+        # Delay mission (mission item with delay=0 does not work)
         if delay:
             f.write(
                 f"{idx}\t0\t{REL_ALT}\t{DELAY}\t{delay}\t0\t0\t0\t{home.lat:.7f}\t{home.lon:.7f}\t0.0\t1\n"

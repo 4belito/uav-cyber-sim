@@ -1,4 +1,6 @@
 TODO:
+- review and clean all the simulator code (configs and entities already done)
+- check QGrounControl representation (Iris and Zephir look at 4-GCS.ipynb)
 - Oracle close sincronization (logic,GCS Dones sincroniation issue with many drones)
 - Check all priveate methoid notations _method
 - GCS - Logic Comunicatioin (save traj)
@@ -10,3 +12,8 @@ TODO:
 - Add a parameter for waypoint reach distance, similar to Guided mode.
 - Add more cyber attacks and modulireze the current rid spooing attack
 
+
+The gap actually worth closing
+Given this project's whole point is GCS spoofing / MITM / blackout — you don't emit a GCS HEARTBEAT, so ArduPilot's GCS failsafe (FS_GCS_ENABLE, FS_GCS_TIMEOUT, SYSID_MYGCS) is dormant. Your blackout MITM drops the GCS→vehicle link and nothing happens, because there was no heartbeat to sever. That's a missing attack surface, not just a fidelity nit.
+
+Fix: a small periodic sender in GCS — heartbeat_send(MAV_TYPE_GCS, MAV_AUTOPILOT_INVALID, 0, 0, 0) at 1 Hz per monitored vehicle. Then you can set FS_GCS_ENABLE=1 in the vehicle params and study: does a blackout trigger RTL? does a spoofed-heartbeat attacker suppress a legitimate failsafe? Set SYSID_MYGCS and you can also study command-authorization bypass. ~a small module, high research value, low risk.

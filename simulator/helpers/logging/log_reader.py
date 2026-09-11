@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from simulator.helpers.coordinates import GRA, ENUs
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def read_true_track(msgs_dir: Path, sysid: int, gra_origin: GRA) -> ENUs:
@@ -38,8 +41,7 @@ def read_true_track(msgs_dir: Path, sysid: int, gra_origin: GRA) -> ENUs:
             data = record["data"]
             lat = data["lat"]
             lon = data["lon"]
-            # Before the EKF converges the vehicle reports lat/lon 0,0, which is
-            # "no fix yet", not a position; the Oracle drops these too.
+            # lat/lon 0,0 == no EKF fix yet, not a position (Oracle drops these too).
             if lat == 0 and lon == 0:
                 continue
             gra = GRA.from_global_int(lat, lon, data["alt"])

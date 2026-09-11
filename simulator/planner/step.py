@@ -8,12 +8,14 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from enum import StrEnum
-from typing import Self
+from typing import TYPE_CHECKING, Self
 
-from simulator.helpers.connections import MAVConnection
 from simulator.helpers.connections.mavlink.enums import Frame
 from simulator.helpers.coordinates import ENU, GRA
-from simulator.runtime.vehicle.mav_manager import MAVLinkManager
+
+if TYPE_CHECKING:
+    from simulator.helpers.connections import MAVConnection
+    from simulator.runtime.vehicle.mav_manager import MAVLinkManager
 
 
 class State(StrEnum):
@@ -166,7 +168,14 @@ class Step(MissionElement, ABC):
             Frame.GLOBAL_INT,
             type_mask,
             *gra_wp.to_global_int_alt_in_meters(),
-            0, 0, 0, 0, 0, 0, 0, 0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
         )
         self.conn.mav.send(msg)
 

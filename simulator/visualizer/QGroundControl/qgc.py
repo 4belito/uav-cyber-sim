@@ -6,21 +6,26 @@ QGroundControl and configures it to connect to multiple ArduPilot UAV instances 
 It modifies the QGroundControl.ini file to set up connection links for each UAV.
 """
 
+from __future__ import annotations
+
 import logging
 import os
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 import folium
 from IPython.display import display  # type: ignore
 
 from simulator.config import QGC_PATH, Color, SimPort
 from simulator.entities import SimVehicle, Vehicle
-from simulator.helpers.coordinates import (
-    GRA,
-    GRAPose,
-)
 from simulator.helpers.processes import create_process
 from simulator.visualizer.visualizer import Visualizer
+
+if TYPE_CHECKING:
+    from simulator.helpers.coordinates import (
+        GRA,
+        GRAPose,
+    )
 
 
 @dataclass

@@ -1,6 +1,6 @@
 """Module defining a Wait step for plans."""
 
-import time
+from __future__ import annotations
 
 from simulator.helpers.connections.mavlink.enums import MsgID
 from simulator.helpers.connections.mavlink.streams import ask_msg
@@ -9,22 +9,30 @@ from simulator.planner.step import Step
 
 
 class Wait(Step):
-    """Step to wait for a specified duration."""
+    """
+    Step that waits `t` **sim** seconds (vehicle boot clock), so the wait is
+    unaffected by `speedup` or host load.
+    """
 
     def __init__(self, name: str, t: float) -> None:
         super().__init__(name)
         self.t = t
-        self._ready_at: float | None = None
+        self._deadline: float | None = None
 
     def exec_fn(self) -> None:
-        """Start the wait timer."""
-        self._ready_at = time.monotonic() + self.t
+        """Ensure a timestamped stream is flowing; the deadline is set on first tick."""
+        msg = ask_msg(self.conn, MsgID.GLOBAL_POSITION_INT, interval=100_000)
+        self.mav_manager.send(msg)
+        self._deadline = None
 
     def check_fn(self) -> bool:
-        """Return True once the wait duration has elapsed."""
-        if self._ready_at is None:
+        """Return True once `t` sim seconds have elapsed."""
+        now = self.mav_manager.state.sim_time_s()
+        if now is None:
             return False
-        return time.monotonic() >= self._ready_at
+        if self._deadline is None:
+            self._deadline = now + self.t
+        return now >= self._deadline
 
 
 class HoldStep(Step):

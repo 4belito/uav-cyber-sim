@@ -36,6 +36,7 @@ from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
 from simulator.config import GCS_TELEM_WINDOW, LOGS_PATH, VehPort
 from simulator.helpers.connections import MAVConnection, create_udp_conn
+from simulator.helpers.coordinates import GRA
 from simulator.helpers.logging.setup_log import setup_logging
 from simulator.helpers.math import connection_id
 from simulator.runtime.mitm.strategies import MITMContext, MITMSpec, MITMStrategy
@@ -47,7 +48,7 @@ Hook: TypeAlias = Callable[[MAVMsg], MAVMsg | None]
 def _describe(msg: MAVMsg) -> str:
     """Key field values for a message, so the debug log shows data, not just a type."""
     if msg.get_type() == "GLOBAL_POSITION_INT":
-        pos = cast(mavlink.MAVLink_global_position_int_message, msg)
+        pos = cast("mavlink.MAVLink_global_position_int_message", msg)
         lat, lon, alt = pos.lat / 1e7, pos.lon / 1e7, pos.alt / 1000
         return f" (lat={lat:.7f}, lon={lon:.7f}, alt={alt:.2f}m)"
     return ""
@@ -123,14 +124,14 @@ class MITMProxy:
         port_offset: int,
         strategy: MITMStrategy,
         gcs_telem_ports: Sequence[int] = (),
+        gra_origin: GRA = GRA(0.0, 0.0, 0.0),
     ) -> None:
         self.sysid = sysid
         self.strategy = strategy
         veh_sysid = connection_id(sysid)
-        # Default to the first slot of this vehicle's GCS telemetry window.
         telem_ports = list(gcs_telem_ports) or [GCS_TELEM_WINDOW + port_offset]
 
-        # --- telemetry link: Logic <-> GCS (primary downlink) ---
+        # Telemetry link (Logic <-> GCS, primary downlink)
         # Logic-facing: receives telemetry from Logic, sends acks back to Logic.
         self.logic_telem = create_udp_conn(
             base_port=VehPort.MITM_TELEM,
@@ -152,7 +153,7 @@ class MITMProxy:
             for port in telem_ports
         ]
 
-        # --- command link: GCS <-> Logic (primary uplink) ---
+        # Command link (GCS <-> Logic, primary uplink)
         # GCS-facing: receives commands from GCS, sends replies back to GCS.
         self.gcs_cmd = create_udp_conn(
             base_port=VehPort.MITM_CMD,
@@ -171,15 +172,18 @@ class MITMProxy:
             src_compid=200,
         )
 
-        # Let the strategy inject its own traffic (command injection, spoofing).
-        # `to_gcs` carries every monitoring GCS, index-aligned with `veh.gcss`
-        # (index 0 is the owner); a strategy picks which one(s) to target.
+        # `to_gcs` is index-aligned with `veh.gcss` (0 = owner).
         strategy.bind(
-            MITMContext(sysid=sysid, to_logic=self.logic_cmd, to_gcs=self.gcs_telems)
+            MITMContext(
+                sysid=sysid,
+                to_logic=self.logic_cmd,
+                to_gcs=self.gcs_telems,
+                gra_origin=gra_origin,
+            )
         )
 
         self.relays: list[_Relay] = [
-            # Primary directions carry the strategy hooks.
+            # Primary directions: strategy hooks.
             _Relay(
                 "downlink",
                 self.logic_telem,
@@ -194,8 +198,7 @@ class MITMProxy:
                 src_sysid=255,
                 hook=strategy.on_uplink,
             ),
-            # Backflow directions are transparent (acks, replies). Each GCS acks
-            # on its own telemetry link, so each needs its own backflow relay.
+            # Backflow: transparent acks/replies, one per GCS telemetry link.
             *(
                 _Relay(
                     f"telem-ack-{i}",
@@ -226,6 +229,7 @@ class MITMProxy:
 
     def stop(self) -> None:
         """Stop all relays and close connections."""
+        self.strategy.close()
         for relay in self.relays:
             relay.stop()
         # Join before closing so no relay touches a socket after it is closed.
@@ -240,7 +244,7 @@ class MITMProxy:
         logging.info("MITM proxy for vehicle %s stopped", self.sysid)
 
 
-def parse_arguments() -> tuple[int, int, MITMSpec, list[int], int]:
+def parse_arguments() -> tuple[int, int, MITMSpec, list[int], int, GRA]:
     """Parse MITM proxy CLI arguments."""
     parser = argparse.ArgumentParser(description="Man-in-the-middle MAVLink proxy")
     parser.add_argument("--sysid", type=int, required=True)
@@ -257,6 +261,12 @@ def parse_arguments() -> tuple[int, int, MITMSpec, list[int], int]:
         default="",
         help="Comma-separated UDP ports of the GCSs monitoring this vehicle",
     )
+    parser.add_argument(
+        "--gra-origin",
+        type=str,
+        default='{"lat": 0.0, "lon": 0.0, "alt": 0.0}',
+        help="JSON-encoded run origin {lat, lon, alt}, for InterventionStrategy",
+    )
     parser.add_argument("--verbose", type=int, default=1)
     args = parser.parse_args()
     spec_data = json.loads(args.spec)
@@ -264,18 +274,26 @@ def parse_arguments() -> tuple[int, int, MITMSpec, list[int], int]:
         strategy_class=spec_data["strategy_class"], kwargs=spec_data["kwargs"]
     )
     telem_ports = [int(p) for p in args.telem_ports.split(",") if p]
-    return (args.sysid, args.port_offset, spec, telem_ports, args.verbose)
+    origin_data = json.loads(args.gra_origin)
+    gra_origin = GRA(origin_data["lat"], origin_data["lon"], origin_data["alt"])
+    return (args.sysid, args.port_offset, spec, telem_ports, args.verbose, gra_origin)
 
 
 def main() -> None:
     """Entry point for a single-vehicle MITM proxy process."""
-    sysid, port_offset, spec, telem_ports, verbose = parse_arguments()
+    sysid, port_offset, spec, telem_ports, verbose, gra_origin = parse_arguments()
     setup_logging(
         LOGS_PATH / "mitm" / f"mitm_{sysid}.log",
         verbose=verbose or 1,
         console_output=True,
     )
-    proxy = MITMProxy(sysid, port_offset, MITMStrategy.build(spec), telem_ports)
+    proxy = MITMProxy(
+        sysid,
+        port_offset,
+        MITMStrategy.build(spec),
+        telem_ports,
+        gra_origin=gra_origin,
+    )
     proxy.run_forever()
 
 

@@ -1,8 +1,10 @@
 """Man-in-the-middle proxy strategies and helpers."""
 
+from __future__ import annotations
+
 from simulator.runtime.mitm.strategies import (
     BlackoutStrategy,
-    HijackStrategy,
+    InterventionStrategy,
     MITMContext,
     MITMSpec,
     MITMStrategy,
@@ -17,7 +19,7 @@ __all__ = [
     "MITMStrategy",
     "PassthroughStrategy",
     "BlackoutStrategy",
-    "HijackStrategy",
+    "InterventionStrategy",
     "SpoofGCSStrategy",
     "SpoofOwnerGCSStrategy",
 ]

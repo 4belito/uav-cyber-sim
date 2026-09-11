@@ -7,11 +7,13 @@ from __future__ import annotations
 
 import logging
 from enum import StrEnum
-from typing import Generic, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar
 
-from simulator.helpers.coordinates import GRA
 from simulator.planner.step import MissionElement, State
-from simulator.runtime.vehicle.mav_manager import MAVLinkManager
+
+if TYPE_CHECKING:
+    from simulator.helpers.coordinates import GRA
+    from simulator.runtime.vehicle.mav_manager import MAVLinkManager
 
 T = TypeVar("T", bound=MissionElement)
 
