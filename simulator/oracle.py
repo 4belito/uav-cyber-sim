@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Literal
 
 import matplotlib.pyplot as plt
 import zmq
+from matplotlib.colors import to_rgb
 
 from simulator.config import DATA_PATH, Color, SimPort, VehPort
 from simulator.helpers.connections import create_zmq_socket, create_zmq_sockets
@@ -562,6 +563,7 @@ class Oracle:
         *,
         oracle: bool = True,
         truth: bool | Iterable[int] = False,
+        waypoints: bool | Iterable[int] = False,
         gcss: Iterable[str] | Literal["all"] = (),
         sysids: Iterable[int] | None = None,
         legend: bool = True,
@@ -591,6 +593,11 @@ class Oracle:
           line diverges from the spoofed dot — while an honest vehicle's line
           sits on its own dots. When the overlay is on, the two are tagged
           `(RID)` and `(real)` in the legend.
+        * `waypoints` — each vehicle's planned mission waypoints (`SimVehicle.
+          waypoints`), drawn as a dashed line with star markers so the flown
+          track can be compared against the plan. `False` (default) omits it;
+          `True` overlays every vehicle; an iterable of sysids overlays only
+          those.
         * `gcss` — what the named GCSs recorded from their telemetry streams, so
           only their own vehicles, and only where `SimGCS.record_positions` was
           on. This is the ground-side view: a MITM that drops telemetry shows up
@@ -649,6 +656,27 @@ class Oracle:
                         (f"Vehicle {sysid} (real)", track, self._color(sysid))
                     )
 
+        waypoints_wanted: set[int] | None
+        if waypoints is True:
+            waypoints_wanted = None  # every vehicle
+        elif waypoints is False:
+            waypoints_wanted = set()  # no overlay
+        else:
+            waypoints_wanted = set(waypoints)
+        waypoint_series: list[tuple[str, ENUs, str]] = []
+        if waypoints_wanted is None or waypoints_wanted:
+            for sysid, veh in sorted(self.vehicles.items()):
+                in_view = wanted is None or sysid in wanted
+                in_waypoints = waypoints_wanted is None or sysid in waypoints_wanted
+                if in_view and in_waypoints and veh.waypoints:
+                    waypoint_series.append(
+                        (
+                            f"Vehicle {sysid} (waypoints)",
+                            veh.waypoints,
+                            self._color(sysid),
+                        )
+                    )
+
         # Marker fixed by scenario position, so a GCS keeps its symbol across plots.
         marker_of = {
             name: GCS_MARKERS[i % len(GCS_MARKERS)]
@@ -684,7 +712,7 @@ class Oracle:
                         )
                     )
 
-        if not series and not truth_series:
+        if not series and not truth_series and not waypoint_series:
             logging.warning("Nothing to plot: no trajectories were recorded")
             return None
 
@@ -721,8 +749,28 @@ class Oracle:
                 alpha=0.9,
                 label=label,
             )
+        for label, track, color in waypoint_series:
+            dark = self._darken(color)
+            ax.plot(  # type: ignore
+                [p.x for p in track],
+                [p.y for p in track],
+                [p.z for p in track],
+                color=dark,
+                linewidth=1.0,
+                linestyle=":",
+                marker="D",
+                markersize=9,
+                markerfacecolor="none",
+                markeredgewidth=1.6,
+                alpha=0.9,
+                label=label,
+            )
         # `_set_axes` only reads track points; the marker slot is filler.
-        axis_series = series + [(lbl, trk, col, "o") for lbl, trk, col in truth_series]
+        axis_series = (
+            series
+            + [(lbl, trk, col, "o") for lbl, trk, col in truth_series]
+            + [(lbl, trk, col, "o") for lbl, trk, col in waypoint_series]
+        )
         self._set_axes(ax, axis_series, xlim=xlim, ylim=ylim, zlim=zlim)
         if legend:
             ax.legend(loc="best", fontsize=8)  # type: ignore
@@ -786,3 +834,15 @@ class Oracle:
         """Plot colour for a vehicle, taken from its own `SimVehicle.color`."""
         veh = self.vehicles.get(sysid)
         return str(veh.color.value) if veh is not None else str(Color.BLACK.value)
+
+    @staticmethod
+    def _darken(color: str, amount: float = 0.75) -> tuple[float, float, float]:
+        """
+        Darken a colour towards black, keeping its hue.
+
+        Used for the waypoint overlay so it reads apart from the same-hued
+        flown-track dots (e.g. yellow, which is too pale to darken by mixing
+        with a fixed grey). `amount` in (0, 1]: 1 keeps the colour unchanged.
+        """
+        r, g, b = to_rgb(color)
+        return (r * amount, g * amount, b * amount)
