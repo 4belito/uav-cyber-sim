@@ -21,8 +21,9 @@ class GCSVehicleConfig(TypedDict):
       uses is `base + veh_port_offset`.
     - `telem_port` — UDP port *this* GCS listens on for the vehicle's telemetry;
       each GCS watching the same vehicle gets its own (one binder per port).
-    - `launch` — whether this GCS owns the vehicle's OS processes (spawns and
-      terminates them). Only the vehicle's first GCS does; the rest just monitor.
+    - `owner` — whether this GCS owns the vehicle: spawns and terminates its OS
+      processes, and is the only one with a command channel (`SimGCS.own`). A
+      monitor (`SimGCS.monitor`) just watches.
 
     Spawn commands (shell strings the owning GCS runs):
 
@@ -43,7 +44,7 @@ class GCSVehicleConfig(TypedDict):
     sysid: int
     veh_port_offset: int
     telem_port: int
-    launch: bool
+    owner: bool
     ardupilot_cmd: str
     logic_cmd: str
     socat_cmd: str

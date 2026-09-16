@@ -235,7 +235,7 @@ class Simulator(Generic[VehT]):
             veh_config = self._build_veh_config(
                 sysid,
                 telem_port=GCS_TELEM_WINDOW + veh.port_offset_required,
-                launch=True,
+                owner=True,
             )
             self.unassigned_procs[sysid] = launch_vehicle(
                 veh_config, self.terminals, self.suppress
@@ -301,7 +301,7 @@ class Simulator(Generic[VehT]):
                     self._build_veh_config(
                         veh.sysid,
                         telem_port=self.veh_telem_ports[veh.sysid][idx],
-                        launch=idx == 0,
+                        owner=idx == 0,
                         intervention=gcs.interventions.get(veh.sysid),
                     )
                 )
@@ -368,7 +368,7 @@ class Simulator(Generic[VehT]):
         self,
         sysid: int,
         telem_port: int,
-        launch: bool,
+        owner: bool,
         intervention: Intervention | None = None,
     ) -> GCSVehicleConfig:
         veh = self.oracle.vehicles[sysid]
@@ -429,7 +429,7 @@ class Simulator(Generic[VehT]):
             "sysid": sysid,
             "veh_port_offset": port_offset,
             "telem_port": telem_port,
-            "launch": launch,
+            "owner": owner,
             "ardupilot_cmd": " ".join(arp_cmd),
             "logic_cmd": (
                 f"python3 -m simulator.logic"

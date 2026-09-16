@@ -74,6 +74,10 @@ class GCS:
         self.vehicles = vehicles
         self.sysids = [vehconfig["sysid"] for vehconfig in vehicles]
         self.n_vehicles = len(self.sysids)
+        # Whether this GCS owns (launches) each vehicle, vs. only monitoring it.
+        self.owns: dict[int, bool] = {
+            vehconfig["sysid"]: vehconfig["owner"] for vehconfig in vehicles
+        }
         self.terminals = set(terminals)
         self.suppress = set(suppress)
         self.vehruntimes = {vehrun.sysid: vehrun for vehrun in self._launch_vehicles()}
@@ -167,12 +171,11 @@ class GCS:
 
         # Only the owning GCS spawns processes; others attach to the running one.
         procs: dict[SimProcess, Popen[bytes]] = {}
-        if veh_config["launch"]:
+        if veh_config["owner"]:
             procs = launch_vehicle(veh_config, self.terminals, self.suppress)
+            logging.info(f"Vehicle {sysid}: 👑 owner")
         else:
-            logging.debug(
-                f"Vehicle {sysid} processes owned by another GCS; monitoring only"
-            )
+            logging.info(f"Vehicle {sysid}: 👀 monitor")
 
         # `telem_port` is this GCS's own slot in the vehicle's telemetry window.
         conn = create_udp_conn(
@@ -182,15 +185,21 @@ class GCS:
             src_sysid=255,  # GCS sysid
             src_compid=190,  # GCS component id
         )
-        # With a MITM interposed, send commands to its listener, not straight to Logic.
-        cmd_base = VehPort.MITM_CMD if veh_config["mitm"] else VehPort.GCS_CMD
-        cmd_conn = create_udp_conn(
-            base_port=cmd_base,
-            offset=veh_config["veh_port_offset"],
-            mode="sender",
-            src_sysid=255,
-            src_compid=190,
-        )
+        # A monitor-only GCS gets no command channel at all: telemetry and
+        # commands are separate connections, and only the owner may command
+        # the vehicle (see SimGCS.intervene), so a monitor has no use for one.
+        cmd_conn = None
+        if veh_config["owner"]:
+            # With a MITM interposed, send commands to its listener, not straight
+            # to Logic.
+            cmd_base = VehPort.MITM_CMD if veh_config["mitm"] else VehPort.GCS_CMD
+            cmd_conn = create_udp_conn(
+                base_port=cmd_base,
+                offset=veh_config["veh_port_offset"],
+                mode="sender",
+                src_sysid=255,
+                src_compid=190,
+            )
         logging.info(f"Vehicle {sysid} connected")
         return VehicleRuntime(
             sysid=sysid, conn=conn, cmd_conn=cmd_conn, processes=procs
@@ -198,18 +207,20 @@ class GCS:
 
     def _monitor_vehicle(self, sysid: int) -> bool:
         """Monitor a vehicle's mission; return True iff it completed successfully."""
-        logging.info(f"Monitoring Vehicle {sysid}")
+        role = "👑 Owning" if self.owns[sysid] else "👀 Monitoring"
+        logging.info(f"{role} Vehicle {sysid}")
         intervention = self.interventions[sysid]
-        runner = (
-            InterventionRunner(
-                sysid,
-                intervention,
-                self.vehruntimes[sysid].cmd_conn,
-                self.gra_origin,
+        cmd_conn = self.vehruntimes[sysid].cmd_conn
+        runner = None
+        if intervention is not None:
+            # SimGCS.intervene() only lets the owner set an intervention, and
+            # only the owner gets a command channel — so this can't be None
+            # here unless that invariant broke somewhere upstream.
+            assert cmd_conn is not None, (
+                f"Vehicle {sysid}: intervention configured but no command "
+                "channel; only the owner GCS should ever have both."
             )
-            if intervention is not None
-            else None
-        )
+            runner = InterventionRunner(sysid, intervention, cmd_conn, self.gra_origin)
         conn = self.conns[sysid]
         # Short timeout keeps the intervention plan ticking when telemetry is quiet.
         timeout = 0.1 if runner is not None else 1.0
@@ -267,13 +278,15 @@ class GCS:
 
     def _remove_vehicle(self, sysid: int):
         """Remove vehicles from the environment."""
+        role = "owner" if self.owns[sysid] else "monitor"
         self.conns[sysid].close()
         del self.conns[sysid]
         del self.vehruntimes[sysid]
+        del self.owns[sysid]
         del self.sysids[self.sysids.index(sysid)]
         self._terminate_veh_processes(sysid)
         self.n_vehicles -= 1
-        logging.info(f"Vehicle {sysid} removed from GCS {self.name}")
+        logging.info(f"Vehicle {sysid} ({role}) removed from GCS {self.name}")
 
     def _terminate_veh_processes(self, sysid: int) -> None:
         runtime = self.vehruntimes.get(sysid)

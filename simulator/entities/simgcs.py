@@ -138,8 +138,13 @@ class SimGCS:
 
         If this GCS was the owner, the first remaining `monitor_gcs` entry (if
         any) is promoted to `owner_gcs` — same as a plain list losing its head.
+        Drops any `intervene`d `Intervention` for `vehicle` too: it doesn't
+        carry over to a promoted owner (which never passed `intervene`'s
+        owner check for it) and must not linger if this GCS later re-attaches
+        as a monitor — a monitor-only GCS has no command channel to run one.
         """
         self.vehicles = [veh for veh in self.vehicles if veh is not vehicle]
+        self.interventions.pop(vehicle.sysid, None)
         if vehicle.owner_gcs is self:
             vehicle.owner_gcs = (
                 vehicle.monitor_gcs.pop(0) if vehicle.monitor_gcs else None
@@ -151,16 +156,27 @@ class SimGCS:
 
     def intervene(self, vehicle: SimVehicle, intervention: Intervention) -> None:
         """
-        Have this GCS intervene on a vehicle it monitors.
+        Have this GCS intervene on a vehicle it owns.
 
         Raises `ValueError` if `vehicle` is not monitored here (`own` / `monitor`
-        it first). Most interventions assume the target flies an `AutoPlan` — see
-        `Intervention` for which parts depend on it. Interventions are per-GCS; a
-        repeat call for the same vehicle replaces the previous one.
+        it first) or if this GCS only monitors it rather than owning it — a
+        monitor-only GCS gets no separate command channel from the owner's, so
+        letting it configure an intervention would be misleading about who is
+        actually driving the vehicle. Most interventions assume the target flies
+        an `AutoPlan` — see `Intervention` for which parts depend on it.
+        Interventions are per-GCS; a repeat call for the same vehicle replaces
+        the previous one.
         """
         if not any(veh is vehicle for veh in self.vehicles):
             raise ValueError(
                 f"GCS {self.name} does not monitor vehicle {vehicle.sysid}; "
                 "own() or monitor() it before setting an intervention."
+            )
+        if vehicle.owner_gcs is not self:
+            owner = vehicle.owner_gcs.name if vehicle.owner_gcs else "no one"
+            raise ValueError(
+                f"GCS {self.name!r} only monitors vehicle {vehicle.sysid} "
+                f"(owned by {owner!r}); only the owner may configure an "
+                "intervention on it."
             )
         self.interventions[vehicle.sysid] = intervention
