@@ -164,18 +164,17 @@ class Oracle:
                 "each sysid can only be added once."
             )
         self.vehicles[vehicle.sysid] = vehicle
-        for gcs in list(vehicle.gcss):
+        for gcs in list(vehicle.all_gcss):
             self._register_gcs(gcs)
-            gcs.add_vehicle(vehicle)  # idempotent
 
     def add_gcs(self, gcs: SimGCS) -> None:
         """
         Add a GCS to the scenario together with the vehicles it monitors.
 
         The vehicles are the ones already linked to the GCS (through
-        `SimGCS(vehicles=...)`, `SimGCS.add_vehicle` or `SimVehicle.assign_gcs`).
-        One already in the scenario is left as is, so it simply ends up
-        monitored by several GCSs; a new one is added.
+        `gcs.own(vehicle)` / `gcs.monitor(vehicle)`). One already in the
+        scenario is left as is, so it simply ends up monitored by several
+        GCSs; a new one is added.
 
         Adding the same GCS twice is a no-op, because a GCS also arrives here
         indirectly: adding one GCS registers every other GCS of the vehicles it

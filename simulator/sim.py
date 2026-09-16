@@ -230,7 +230,7 @@ class Simulator(Generic[VehT]):
         Oracle directly from its logic process.
         """
         for sysid, veh in self.oracle.vehicles.items():
-            if veh.gcss:
+            if veh.owner_gcs is not None:
                 continue
             veh_config = self._build_veh_config(
                 sysid,
@@ -250,20 +250,21 @@ class Simulator(Generic[VehT]):
         own: the k-th takes `GCS_TELEM_WINDOW + k + offset` from the window
         already claimed with the rest of the vehicle's block. Every port is thus
         derivable from the vehicle's offset, and the list is aligned
-        index-by-index with `veh.gcss`.
+        index-by-index with `veh.all_gcss` (owner first).
         """
         for sysid, veh in self.oracle.vehicles.items():
             offset = veh.port_offset_required
-            if len(veh.gcss) > self.max_gcss_per_veh:
+            n_gcss = len(veh.all_gcss)
+            if n_gcss > self.max_gcss_per_veh:
                 raise ValueError(
-                    f"Vehicle {sysid} is monitored by {len(veh.gcss)} GCSs, but "
+                    f"Vehicle {sysid} is monitored by {n_gcss} GCSs, but "
                     f"only {self.max_gcss_per_veh} telemetry ports fit in its "
                     f"window. The ceiling is ArduPilot's instance stride, which "
                     f"cannot be raised — a second window base "
                     f"would be needed instead."
                 )
             self.veh_telem_ports[sysid] = [
-                GCS_TELEM_WINDOW + k + offset for k in range(len(veh.gcss))
+                GCS_TELEM_WINDOW + k + offset for k in range(n_gcss)
             ]
 
     def _save_logic_configs(self):
@@ -294,8 +295,8 @@ class Simulator(Generic[VehT]):
             suppress = self.suppress if gcs.suppress is None else gcs.suppress
             veh_configs: list[GCSVehicleConfig] = []
             for veh in gcs.vehicles:
-                # This GCS's index in veh.gcss -> its telem port + process ownership.
-                idx = next(i for i, g in enumerate(veh.gcss) if g is gcs)
+                # This GCS's index in veh.all_gcss -> telem port + process ownership.
+                idx = next(i for i, g in enumerate(veh.all_gcss) if g is gcs)
                 veh_configs.append(
                     self._build_veh_config(
                         veh.sysid,
@@ -408,7 +409,7 @@ class Simulator(Generic[VehT]):
         telem_ports = ",".join(str(port) for port in self.veh_telem_ports[sysid])
         telem_ports_arg = f" --telem-ports {telem_ports}" if telem_ports else ""
         # Index-aligned with telem_ports, so a strategy can log GCS names, not indices.
-        gcs_names = [g.name for g in veh.gcss]
+        gcs_names = [g.name for g in veh.all_gcss]
         gcs_names_arg = f" --gcs-names '{json.dumps(gcs_names)}'" if gcs_names else ""
         mitm_cmd = (
             (

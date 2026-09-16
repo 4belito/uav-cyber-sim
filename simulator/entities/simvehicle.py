@@ -25,9 +25,15 @@ class SimVehicle(Vehicle):
 
     Fields beyond the base `Vehicle`:
 
-    - `gcss` — the GCSs monitoring this vehicle (zero, one, or several). The
-      first entry owns the vehicle's OS processes; `SimGCS` holds the other side
-      of the relation, and `__post_init__` / `assign_gcs` keep both sides linked.
+    - `owner_gcs` — the GCS that launches and owns this vehicle's OS processes
+      (SITL, logic, ADS-B, MITM); `None` when the vehicle is unmonitored (the
+      Simulator then launches it directly). Exactly one GCS may own a vehicle.
+    - `monitor_gcs` — every other GCS watching this vehicle's telemetry without
+      owning it (zero, one, or several).
+
+      Both are set only through `SimGCS.own` / `SimGCS.monitor` — never at
+      construction, and never directly — so there is exactly one place either
+      relation is ever established. `SimGCS.vehicles` holds the other side.
     - `parm` — SITL default-parameter file(s) for this vehicle, appended to the
       firmware's own. `None` (the default) uses the shared `vehicle.parm` base;
       pass one path or an ordered list to set your own base (later files win).
@@ -49,17 +55,19 @@ class SimVehicle(Vehicle):
     color: Color
     plan: Plan
     waypoints: ENUs
-    gcss: list[SimGCS] = field(default_factory=lambda: [])
     parm: str | Sequence[str] | None = None
     avoidance: bool = True
     port_offset: int | None = None
     mitm: MITMStrategy | None = None
     spoof: SpoofProfile | None = None
+    owner_gcs: SimGCS | None = field(default=None, init=False)
+    monitor_gcs: list[SimGCS] = field(default_factory=lambda: [], init=False)
 
-    def __post_init__(self) -> None:
-        """Back-link any GCS passed straight to the constructor."""
-        for gcs in list(self.gcss):
-            gcs.add_vehicle(self)
+    @property
+    def all_gcss(self) -> list[SimGCS]:
+        """Every GCS monitoring this vehicle, owner first, then `monitor_gcs`."""
+        owner = [self.owner_gcs] if self.owner_gcs is not None else []
+        return owner + self.monitor_gcs
 
     @property
     def parms(self) -> list[str]:
@@ -95,28 +103,6 @@ class SimVehicle(Vehicle):
         """Set the port offset for the vehicle."""
         self.port_offset = offset
 
-    def assign_gcs(self, gcs: SimGCS) -> None:
-        """
-        Have `gcs` monitor this vehicle.
-
-        Updates both sides of the relation and is idempotent.
-        """
-        gcs.add_vehicle(self)
-
-    def unassign_gcs(self, gcs: SimGCS) -> None:
-        """Stop having `gcs` monitor this vehicle, unlinking both sides."""
-        gcs.remove_vehicle(self)
-
-    @property
-    def owner_gcs(self) -> SimGCS | None:
-        """
-        GCS responsible for launching this vehicle's processes.
-
-        The first GCS assigned, or `None` when the vehicle is unmonitored (the
-        Simulator then launches it directly).
-        """
-        return self.gcss[0] if self.gcss else None
-
     @classmethod
     def from_relative(
         cls,
@@ -127,7 +113,6 @@ class SimVehicle(Vehicle):
         enu_origin: ENUPose,
         relative_home: ENUPose,
         relative_path: ENUs,
-        gcss: Sequence[SimGCS] = (),
         mitm: MITMStrategy | None = None,
         parm: str | Sequence[str] | None = None,
         avoidance: bool = True,
@@ -138,12 +123,12 @@ class SimVehicle(Vehicle):
 
         `relative_home` is relative to `enu_origin`; `relative_path` are
         waypoints relative to that home. Both are resolved to absolute ENU here.
+        Link it to a GCS afterward with `gcs.own(vehicle)` / `gcs.monitor(vehicle)`.
         """
         enu_home = enu_origin.to_abs(relative_home)
         enu_waypoints = ENUPose.unpose_all(enu_home.to_abs_all(relative_path))
         return cls(
             sysid=sysid,
-            gcss=list(gcss),
             parm=parm,
             avoidance=avoidance,
             home=enu_home,

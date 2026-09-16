@@ -173,7 +173,7 @@ class MITMProxy:
             src_compid=200,
         )
 
-        # `to_gcs` is index-aligned with `veh.gcss` (0 = owner).
+        # `to_gcs` is index-aligned with `veh.all_gcss` (0 = owner).
         strategy.bind(
             MITMContext(
                 sysid=sysid,
