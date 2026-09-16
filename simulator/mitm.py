@@ -125,6 +125,7 @@ class MITMProxy:
         strategy: MITMStrategy,
         gcs_telem_ports: Sequence[int] = (),
         gra_origin: GRA = GRA(0.0, 0.0, 0.0),
+        gcs_names: Sequence[str] = (),
     ) -> None:
         self.sysid = sysid
         self.strategy = strategy
@@ -179,6 +180,7 @@ class MITMProxy:
                 to_logic=self.logic_cmd,
                 to_gcs=self.gcs_telems,
                 gra_origin=gra_origin,
+                gcs_names=gcs_names,
             )
         )
 
@@ -244,7 +246,7 @@ class MITMProxy:
         logging.info("MITM proxy for vehicle %s stopped", self.sysid)
 
 
-def parse_arguments() -> tuple[int, int, MITMSpec, list[int], int, GRA]:
+def parse_arguments() -> tuple[int, int, MITMSpec, list[int], int, GRA, list[str]]:
     """Parse MITM proxy CLI arguments."""
     parser = argparse.ArgumentParser(description="Man-in-the-middle MAVLink proxy")
     parser.add_argument("--sysid", type=int, required=True)
@@ -267,6 +269,12 @@ def parse_arguments() -> tuple[int, int, MITMSpec, list[int], int, GRA]:
         default='{"lat": 0.0, "lon": 0.0, "alt": 0.0}',
         help="JSON-encoded run origin {lat, lon, alt}, for InterventionStrategy",
     )
+    parser.add_argument(
+        "--gcs-names",
+        type=str,
+        default="[]",
+        help="JSON-encoded list of GCS names, index-aligned with --telem-ports",
+    )
     parser.add_argument("--verbose", type=int, default=1)
     args = parser.parse_args()
     spec_data = json.loads(args.spec)
@@ -276,12 +284,23 @@ def parse_arguments() -> tuple[int, int, MITMSpec, list[int], int, GRA]:
     telem_ports = [int(p) for p in args.telem_ports.split(",") if p]
     origin_data = json.loads(args.gra_origin)
     gra_origin = GRA(origin_data["lat"], origin_data["lon"], origin_data["alt"])
-    return (args.sysid, args.port_offset, spec, telem_ports, args.verbose, gra_origin)
+    gcs_names = list(json.loads(args.gcs_names))
+    return (
+        args.sysid,
+        args.port_offset,
+        spec,
+        telem_ports,
+        args.verbose,
+        gra_origin,
+        gcs_names,
+    )
 
 
 def main() -> None:
     """Entry point for a single-vehicle MITM proxy process."""
-    sysid, port_offset, spec, telem_ports, verbose, gra_origin = parse_arguments()
+    sysid, port_offset, spec, telem_ports, verbose, gra_origin, gcs_names = (
+        parse_arguments()
+    )
     setup_logging(
         LOGS_PATH / "mitm" / f"mitm_{sysid}.log",
         verbose=verbose or 1,
@@ -293,6 +312,7 @@ def main() -> None:
         MITMStrategy.build(spec),
         telem_ports,
         gra_origin=gra_origin,
+        gcs_names=gcs_names,
     )
     proxy.run_forever()
 

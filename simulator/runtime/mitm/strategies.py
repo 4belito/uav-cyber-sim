@@ -72,6 +72,10 @@ class MITMContext:
     `gra_origin` is the run's geodetic origin, threaded in so a strategy that
     reuses the planner machinery (`InterventionStrategy`) can resolve its ENU
     waypoints exactly as the GCS does.
+
+    `gcs_names` is index-aligned with `to_gcs` (and thus with `target_mask` /
+    `target_indices` on `SpoofGCSStrategy`), so a strategy can log which GCS
+    it acted on by name instead of by position.
     """
 
     def __init__(
@@ -80,9 +84,11 @@ class MITMContext:
         to_logic: MAVConnection,
         to_gcs: Sequence[MAVConnection],
         gra_origin: GRA,
+        gcs_names: Sequence[str] = (),
     ) -> None:
         self.sysid = sysid
         self.gra_origin = gra_origin
+        self.gcs_names = list(gcs_names)
         self._to_logic = to_logic
         self._to_gcs = to_gcs
         # srcSystem 255 -> injected commands look GCS-origin; srcSystem <sysid>
@@ -113,6 +119,12 @@ class MITMContext:
             packed = msg.pack(self._gcs_encoder)
             for i in indices:
                 self._to_gcs[i].write(packed)
+
+    def gcs_labels(self, indices: Sequence[int]) -> list[str]:
+        """Resolve GCS `indices` to their names, for logging (falls back to `#i`)."""
+        return [
+            self.gcs_names[i] if i < len(self.gcs_names) else f"#{i}" for i in indices
+        ]
 
 
 class MITMStrategy:
@@ -353,7 +365,7 @@ class SpoofGCSStrategy(MITMStrategy):
             self.spoof_lat,
             self.spoof_lon,
             self.spoof_alt,
-            self.target_indices,
+            self.ctx.gcs_labels(self.target_indices),
         )
         fake_position = self._builder.global_position_int_encode(
             0,  # time_boot_ms

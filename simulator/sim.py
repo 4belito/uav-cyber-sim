@@ -407,6 +407,9 @@ class Simulator(Generic[VehT]):
         # The MITM fans telemetry out, so it needs every monitoring GCS's port.
         telem_ports = ",".join(str(port) for port in self.veh_telem_ports[sysid])
         telem_ports_arg = f" --telem-ports {telem_ports}" if telem_ports else ""
+        # Index-aligned with telem_ports, so a strategy can log GCS names, not indices.
+        gcs_names = [g.name for g in veh.gcss]
+        gcs_names_arg = f" --gcs-names '{json.dumps(gcs_names)}'" if gcs_names else ""
         mitm_cmd = (
             (
                 f"python3 -m simulator.mitm"
@@ -415,6 +418,7 @@ class Simulator(Generic[VehT]):
                 f" --spec '{json.dumps(mitm_strategy.get_spec().to_dict())}'"
                 f"{telem_ports_arg}"
                 f" --gra-origin '{json.dumps(self.gra_origin.unpose()._asdict())}'"
+                f"{gcs_names_arg}"
                 f" --verbose {self.verbose}"
             )
             if mitm_strategy is not None
