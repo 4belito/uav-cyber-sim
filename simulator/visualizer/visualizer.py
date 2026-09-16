@@ -1,55 +1,69 @@
 """Visualizer module."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
-from typing import Generic
+from typing import TYPE_CHECKING, Generic
 
-from simulator.helpers.coordinates import GRAPose
-from simulator.visualizer.vehicle import SimVehicle, V
+from simulator.entities import SimVehicle, VehT
+
+if TYPE_CHECKING:
+    from simulator.helpers.coordinates import GRAPose
 
 
-class Visualizer(ABC, Generic[V]):
-    """Abstract base class for UAV simulation visualizers."""
-
-    name: str
-    delay = False
+class Visualizer(ABC, Generic[VehT]):
+    """Abstract base class for simulation visualizers."""
 
     def __init__(self, gra_origin: GRAPose) -> None:
         self.gra_origin = gra_origin
-        self.vehicles: list[V] = []
-        self.num_vehicles: int = 0
+        self.vehicles: dict[int, VehT] = {}
+
+    @property
+    @abstractmethod
+    def name(self) -> str:
+        """Name of the visualizer."""
+        pass
 
     @abstractmethod
-    def launch(self, port_offsets: list[int]) -> None:
+    def launch(self, port_offsets: dict[int, int]) -> None:
         """Launch the visualizer."""
-        raise NotImplementedError
+        pass
 
     @abstractmethod
-    def get_vehicle(self, vehicle: SimVehicle) -> V:
+    def gra_home(self, vehicle: SimVehicle) -> GRAPose:
+        """Return the home position for a given Vehicle."""
+        pass
+
+    @abstractmethod
+    def get_visvehicle(self, vehicle: SimVehicle) -> VehT:
         """Convert a Vehicle to the visualizer-specific vehicle type."""
-        raise NotImplementedError
+        pass
 
     @abstractmethod
-    def show(self) -> None:
-        """Show a stathic preview visualization."""
-        raise NotImplementedError
+    def preview(self) -> None:
+        """Show a static preview visualization."""
+        pass
 
-    def add_vehicle_cmd(self, i: int) -> str:
-        """Add optional command-line for the ith vehicle."""
-        return ""
+    def add_sitl_args(self, vehicle: SimVehicle) -> list[str]:
+        """Add optional SITL arguments for a vehicle."""
+        return []
 
     def add_vehicle(self, vehicle: SimVehicle) -> None:
         """Add a vehicle to the visualizer."""
-        veh = self.get_vehicle(vehicle)
-        self.vehicles.append(veh)
-        self.num_vehicles += 1
+        visveh = self.get_visvehicle(vehicle)
+        self.vehicles[vehicle.sysid] = visveh
 
-    def remove_vehicle_at(self, index: int) -> bool:
-        """Remove a vehicle by index."""
-        if 0 <= index < len(self.vehicles):
-            del self.vehicles[index]
-            self.num_vehicles -= 1
+    def remove_vehicle(self, sysid: int) -> bool:
+        """Remove a vehicle by system ID."""
+        if sysid in self.vehicles:
+            del self.vehicles[sysid]
             return True
         return False
+
+    @property
+    def num_vehicles(self) -> int:
+        """Return the number of vehicles in the visualizer."""
+        return len(self.vehicles)
 
     def __str__(self):
         return self.name

@@ -1,5 +1,7 @@
 """Init file for connection package."""
 
+from __future__ import annotations
+
 from .mavlink.conn import create_tcp_conn, create_udp_conn, send_heartbeat
 from .mavlink.customtypes.mavconn import MAVConnection
 from .ports import wait_for_port

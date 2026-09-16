@@ -1,42 +1,50 @@
 {
-  "name": "uav-cyber-sim (X11 over SSH)",
-  //"image": "uav-cyber-sim",
+  "name": "uav-cyber-sim",
   "build": {
     "context": "..",
     "dockerfile": "Dockerfile",
     "args": {
-      "UID": "1001",
-      "GID": "1001"
+      // UID/GID intentionally omitted: they are bash-special vars that are never
+      // exported, so localEnv always returns empty and overrides the ARG defaults.
+      // updateRemoteUserUID (below) remaps the ubuntu user at attach time instead.
+      // To use a local net-sim image: export NETSIM_IMAGE=your-image:tag before
+      // opening VS Code. Dockerfile falls back to ubuntu:22.04 when unset.
+      "NETSIM_IMAGE": "${localEnv:NETSIM_IMAGE}"
     }
   },
+  // Mount the local workspace over the baked-in clone so edits are live.
+  // Matches the WORKDIR set in the Dockerfile, keeping the pre-built .venv
+  // (at /home/ubuntu/.venv, via UV_PROJECT_ENVIRONMENT) visible.
+  "workspaceMount": "source=${localWorkspaceFolder},target=/home/ubuntu/uav-cyber-sim,type=bind,consistency=cached",
+  "workspaceFolder": "/home/ubuntu/uav-cyber-sim",
+  // host networking gives full port access on Linux; on macOS/Windows Docker Desktop
+  // it is silently ignored — use forwardPorts below or run on Linux for large fleets
   "runArgs": [
     "--network",
     "host"
   ],
+  "initializeCommand": "mkdir -p .claude",
   "containerEnv": {
-    "DISPLAY": "${env:DISPLAY}",
-    "XAUTHORITY": "/tmp/.Xauthority"
+    "DISPLAY": "${localEnv:DISPLAY}",
+    "LIBGL_ALWAYS_SOFTWARE": "1"
   },
   "mounts": [
-    "type=bind,source=/tmp/.X11-unix,target=/tmp/.X11-unix",
-    "type=bind,source=${env:HOME}/.Xauthority,target=/tmp/.Xauthority"
+    "source=${localWorkspaceFolder}/.claude,target=/home/ubuntu/.claude,type=bind,consistency=cached",
+    "source=${localEnv:HOME}/.Xauthority,target=/home/ubuntu/.Xauthority,type=bind,consistency=cached"
   ],
-  "postAttachCommand": "sudo chown -R ubuntu /workspaces",
-  // "customizations": {
-  //   "vscode": {
-  //     "extensions": [
-  //       "ms-toolsai.jupyter@2025.6.0",
-  //       "ms-python.python"
-  //     ]
-  //   }
-  //},
+  "postStartCommand": "uv sync",
+  "postAttachCommand": "sudo chown -R ubuntu:ubuntu /home/ubuntu/uav-cyber-sim",
   "customizations": {
     "vscode": {
       "extensions": [
+        "anthropic.claude-code",
         "ms-python.python",
         "ms-toolsai.jupyter"
       ]
     }
   },
-  "remoteUser": "ubuntu"
+  "remoteUser": "ubuntu",
+  "containerUser": "ubuntu",
+  "updateRemoteUserUID": true,
+  "userEnvProbe": "loginInteractiveShell"
 }

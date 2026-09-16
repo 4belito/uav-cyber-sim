@@ -1,4 +1,6 @@
-"""Module defining the START_MISSION action for UAV mission planning."""
+"""Module defining the START_MISSION action for vehicle mission planning."""
+
+from __future__ import annotations
 
 import logging
 
@@ -8,11 +10,11 @@ from simulator.planner.step import Step
 
 
 class StartMission(Step):
-    """Step to start the UAV mission."""
+    """Step to start the vehicle mission."""
 
     def exec_fn(self) -> None:
         """Send MISSION_START command to begin executing the mission."""
-        self.conn.mav.command_long_send(
+        msg = self.conn.mav.command_long_encode(
             self.conn.target_system,
             self.conn.target_component,
             Cmd.MISSION_START,
@@ -25,16 +27,15 @@ class StartMission(Step):
             0,
             0,
         )
+        self.mav_manager.send(msg)
 
     def check_fn(self) -> bool:
         """Check if the mission has started by listening for a STATUSTEXT message."""
-        msg = self.conn.recv_match(type="STATUSTEXT")
+        msg = self.mav_manager.state.get("STATUSTEXT")
         if msg:
             text = msg.text.strip().lower()
             if text.startswith("mission"):
-                logging.info(
-                    f"🚀 Vehicle {self.conn.target_system}: Mission has started"
-                )
+                logging.info(f"🚀 Vehicle {self.sysid}: Mission has started")
                 return True
         return False
 

@@ -1,0 +1,13 @@
+# ===============================
+# Overlay: disable ADS-B avoidance
+# ===============================
+# Stacked on top of vehicle.parm (later --defaults files win), so this only
+# flips the avoidance switches and inherits everything else. Use it for a drone
+# that must ignore nearby traffic — e.g. an attacker that flies its path without
+# dodging the vehicle it targets.
+
+# Disable the ADS-B avoidance system
+AVD_ENABLE 0
+
+# No fail-safe action when a collision is predicted (0 = None)
+AVD_F_ACTION 0

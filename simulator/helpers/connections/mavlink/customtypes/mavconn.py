@@ -5,9 +5,12 @@ This module defines Protocols for various MAVLink messages and a typed MAVLink
 connection interface.
 """
 
-from typing import Literal, Protocol, overload
+from __future__ import annotations
 
-import pymavlink.dialects.v20.ardupilotmega as mavlink
+from typing import TYPE_CHECKING, Literal, Protocol, overload
+
+if TYPE_CHECKING:
+    import pymavlink.dialects.v20.ardupilotmega as mavlink
 
 
 class MAVConnection(Protocol):
@@ -30,128 +33,10 @@ class MAVConnection(Protocol):
     @overload
     def recv_match(
         self,
-        type: Literal["HEARTBEAT"],
-        blocking: bool | None = ...,
-    ) -> mavlink.MAVLink_heartbeat_message | None: ...
-
-    @overload
-    def recv_match(
-        self,
-        type: Literal["PARAM_VALUE"],
-        timeout: float | None = ...,
-    ) -> mavlink.MAVLink_param_value_message | None: ...
-
-    @overload
-    def recv_match(
-        self,
-        type: Literal["EXTENDED_SYS_STATE"],
-        timeout: float | None = ...,
-        blocking: bool | None = ...,
-    ) -> mavlink.MAVLink_extended_sys_state_message | None: ...
-
-    @overload
-    def recv_match(
-        self,
-        type: Literal["LOCAL_POSITION_NED"],
-        timeout: float | None = ...,
-        blocking: bool | None = ...,
-    ) -> mavlink.MAVLink_local_position_ned_message | None: ...
-
-    @overload
-    def recv_match(
-        self,
-        type: Literal["EKF_STATUS_REPORT"],
-        timeout: float | None = ...,
-        blocking: bool | None = ...,
-    ) -> mavlink.MAVLink_ekf_status_report_message | None: ...
-
-    @overload
-    def recv_match(
-        self,
-        type: Literal["GPS_RAW_INT"],
-        timeout: float | None = ...,
-        blocking: bool | None = ...,
-    ) -> mavlink.MAVLink_gps_raw_int_message | None: ...
-
-    @overload
-    def recv_match(
-        self,
-        type: Literal["SYS_STATUS"],
-        timeout: float | None = ...,
-        blocking: bool | None = ...,
-    ) -> mavlink.MAVLink_sys_status_message | None: ...
-
-    @overload
-    def recv_match(
-        self,
-        type: Literal["COMMAND_ACK"],
-        timeout: float | None = ...,
-        blocking: bool | None = ...,
-    ) -> mavlink.MAVLink_command_ack_message | None: ...
-
-    @overload
-    def recv_match(
-        self,
-        type: Literal["MISSION_ACK"],
-        timeout: float | None = ...,
-        blocking: bool | None = ...,
-    ) -> mavlink.MAVLink_mission_ack_message | None: ...
-
-    @overload
-    def recv_match(
-        self,
         type: Literal["STATUSTEXT"],
         timeout: float | None = ...,
         blocking: bool | None = ...,
     ) -> mavlink.MAVLink_statustext_message | None: ...
-
-    @overload
-    def recv_match(
-        self,
-        type: Literal["MISSION_REQUEST"],
-        timeout: float | None = ...,
-        blocking: bool | None = ...,
-    ) -> mavlink.MAVLink_mission_request_message | None: ...
-
-    @overload
-    def recv_match(
-        self,
-        type: Literal["MISSION_REQUEST_INT"],
-        timeout: float | None = ...,
-        blocking: bool | None = ...,
-    ) -> mavlink.MAVLink_mission_request_int_message | None: ...
-
-    @overload
-    def recv_match(
-        self,
-        type: Literal["MISSION_ITEM_REACHED"],
-        timeout: float | None = ...,
-        blocking: bool | None = ...,
-    ) -> mavlink.MAVLink_mission_item_reached_message | None: ...
-
-    @overload
-    def recv_match(
-        self,
-        type: Literal["MISSION_ITEM"],
-        timeout: float | None = ...,
-        blocking: bool | None = ...,
-    ) -> mavlink.MAVLink_mission_item_message | None: ...
-
-    @overload
-    def recv_match(
-        self,
-        type: Literal["MISSION_COUNT"],
-        timeout: float | None = ...,
-        blocking: bool | None = ...,
-    ) -> mavlink.MAVLink_mission_count_message | None: ...
-
-    @overload
-    def recv_match(
-        self,
-        type: Literal["MISSION_CURRENT"],
-        timeout: float | None = ...,
-        blocking: bool | None = ...,
-    ) -> mavlink.MAVLink_mission_current_message | None: ...
 
     @overload
     def recv_match(
@@ -164,10 +49,18 @@ class MAVConnection(Protocol):
     @overload
     def recv_match(
         self,
-        type: Literal["OPEN_DRONE_ID_BASIC_ID"],
+        type: Literal["LOCAL_POSITION_NED"],
         timeout: float | None = ...,
         blocking: bool | None = ...,
-    ) -> mavlink.MAVLink_open_drone_id_basic_id_message | None: ...
+    ) -> mavlink.MAVLink_local_position_ned_message | None: ...
+
+    @overload
+    def recv_match(
+        self,
+        type: Literal["COMMAND_ACK"],
+        timeout: float | None = ...,
+        blocking: bool | None = ...,
+    ) -> mavlink.MAVLink_command_ack_message | None: ...
 
     def recv_msg(self) -> mavlink.MAVLink_message | None:
         """Receive the next MAVLink message (non-blocking)."""
@@ -195,6 +88,14 @@ class MAVConnection(Protocol):
         mission_type: int = 0,
     ) -> None:
         """Send the mission count message to the UAV."""
+
+    def mission_request_list_send(
+        self,
+        target_system: int,
+        target_component: int,
+        mission_type: int = 0,
+    ) -> None:
+        """Send MISSION_REQUEST_LIST; ArduPilot replies with MISSION_COUNT."""
 
     def send(self, mavmsg: mavlink.MAVLink_message) -> None:
         """Send the mission item."""

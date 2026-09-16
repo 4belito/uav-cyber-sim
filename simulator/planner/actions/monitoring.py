@@ -1,121 +1,100 @@
 """
-Upload mission action module.
-
-Defines the action to upload a mission from a file located in the `missions/` folder
-to an ArduPilot-based UAV using MAVLink. The mission file should be in `.waypoints`
-format.
-
+Mission monitoring helpers for ArduPilot-based vehicles.
 """
 
-import logging
+from __future__ import annotations
 
-from simulator.helpers.connections.mavlink.enums import MsgID
+import logging
+from typing import Literal
+
+from simulator.helpers.ardupilot.firmware import reset_mode
+from simulator.helpers.connections.mavlink.enums import ModeFlag, MsgID
 from simulator.helpers.connections.mavlink.streams import ask_msg, stop_msg
-from simulator.helpers.coordinates import GRA
 from simulator.planner.action import Action
+from simulator.planner.actions.change_mode import SwitchMode
 from simulator.planner.step import Step
 
 
-class CheckItems(Step):
-    """Request and check all waypoints from the UAV."""
+class CheckEndMission(Step):
+    """Wait for the vehicle to disarm, confirming it has physically stopped."""
 
     def __init__(self, name: str):
         super().__init__(name)
-        self._item_seq = 0
-        self._mission_count: int | None = None
+        self._was_armed: bool = False
 
     def exec_fn(self) -> None:
-        """Request the next waypoint from the UAV."""
-        ask_msg(self.conn, msg_id=MsgID.MISSION_CURRENT, interval=100_000)
-        self.conn.mav.mission_request_list_send(
-            self.conn.target_system, self.conn.target_component
-        )
+        pass  # HEARTBEAT is always streaming; no setup needed
 
     def check_fn(self) -> bool:
-        """Check the next waypoint from the UAV."""
-        if not self._mission_count:
-            msg = self.conn.recv_match(type="MISSION_COUNT")
-            if msg:
-                self._mission_count = msg.count
-                logging.info(
-                    f"📦 Vehicle {self.conn.target_system} has {msg.count} mission items"
-                )
-            else:
-                return False
-
-        curr_msg = self.conn.recv_match(type="MISSION_CURRENT")
-        if not curr_msg or curr_msg.seq == self._item_seq:
+        hb = self.mav_manager.state.get("HEARTBEAT")
+        if hb is None:
             return False
-        while self._item_seq < curr_msg.seq:
+        is_armed = bool(hb.base_mode & ModeFlag.SAFETY_ARMED)
+        if is_armed:
+            self._was_armed = True
+        elif self._was_armed:
             logging.info(
-                f"Vehicle {self.conn.target_system}: ⭐ Reached item: {self._item_seq}"
+                f"Vehicle {self.sysid}: 🏁 Mission complete - vehicle disarmed"
             )
-            self._item_seq += 1
-        self.conn.mav.mission_request_send(
-            self.conn.target_system, self.conn.target_component, self._item_seq
-        )
-        item = self.conn.recv_match(type="MISSION_ITEM", blocking=True)
-        gra_wp = GRA(lat=float(item.x), lon=float(item.y), alt=float(item.z))  # type: ignore
-        self.target_pos = self.origin.to_rel(gra_wp)
-        logging.info(
-            f"Vehicle {self.conn.target_system}: 📍 Target Position: {self.target_pos.short()}"
-        )
-        if self._item_seq == self._mission_count - 1:
             return True
         return False
 
 
-class CheckEndMission(Step):
-    """Check for mission completion."""
+class MonitorItems(Step):
+    """Track mission progress via MISSION_CURRENT.seq."""
+
+    def __init__(self, name: str, last_item_seq: int):
+        super().__init__(name)
+        self._last_seen_seq: int | None = None
+        self._last_item_seq = last_item_seq
 
     def exec_fn(self) -> None:
-        """No execution needed; just checking."""
-        return
+        msg = ask_msg(conn=self.conn, msg_id=MsgID.MISSION_CURRENT, interval=100_000)
+        self.mav_manager.send(msg)
 
     def check_fn(self) -> bool:
-        """Check mission completion."""
-        msg = self.conn.recv_match(type="STATUSTEXT")
-        if msg:
-            text = msg.text.strip().lower()
-            if "disarming" in text:
-                logging.info(f"Vehicle {self.conn.target_system}: Mission completed")
-                stop_msg(self.conn, msg_id=MsgID.GLOBAL_POSITION_INT)
-                return True
+        msg = self.mav_manager.state.get("MISSION_CURRENT")
+        if msg is None:
+            return False
+
+        current_seq = msg.seq
+
+        if self._last_seen_seq is None:
+            self._last_seen_seq = current_seq
+            logging.info(f"Vehicle {self.sysid}: ▶️ Current mission item: {current_seq}")
+            return False
+
+        if current_seq != self._last_seen_seq:
+            completed_seq = self._last_seen_seq
+
+            logging.info(
+                f"Vehicle {self.sysid}: ✅ Completed mission item: {completed_seq}"
+            )
+            logging.info(f"Vehicle {self.sysid}: ▶️ Current mission item: {current_seq}")
+
+            self._last_seen_seq = current_seq
+
+        if current_seq >= self._last_item_seq:
+            logging.info(f"Vehicle {self.sysid}: ▶️ Final mission item active")
+            self.mav_manager.send(
+                stop_msg(conn=self.conn, msg_id=MsgID.MISSION_CURRENT)
+            )
+            return True
+
         return False
 
 
-def make_monitoring() -> Action[Step]:
-    """Monitor mission items."""
+def make_monitoring(
+    item_count: int, firmware: Literal["ArduCopter", "ArduPlane"]
+) -> Action[Step]:
+    """Monitor mission progress and wait for the vehicle to disarm."""
     name = Action.Names.MONITOR_MISSION
     monitoring = Action[Step](name=name, emoji=name.emoji)
-    monitoring.add(CheckItems(name="check items"))
+    monitoring.add(MonitorItems(name="monitor items", last_item_seq=item_count))
     monitoring.add(CheckEndMission(name="check end mission"))
+
+    # Switch to STABILIZE/MANUAL to reset the ArduPilot state machine.
+    monitoring.add(
+        SwitchMode(name="Switch to manual", flight_mode=reset_mode(firmware))
+    )
     return monitoring
-
-
-class ReachedItem(Step):
-    """
-    Check if a mission item is reached.
-    Ardupilot does not send MISSION_ITEM_REACHED for all mission items.
-    CheckItems is more reliable for monitoring mission progress.
-    """
-
-    def __init__(self, name: str, item: int = 0):
-        super().__init__(name)
-        self._item = item
-
-    def exec_fn(self) -> None:
-        """No execution needed; just checking."""
-        ask_msg(conn=self.conn, msg_id=MsgID.GLOBAL_POSITION_INT, interval=100_000)
-
-    def check_fn(self) -> bool:
-        """Check if a item is reached."""
-        msg = self.conn.recv_match(type="MISSION_ITEM_REACHED")
-        # logging.debug(f"Vehicle {conn.target_system}: MISSION_ITEM_REACHED: {msg}")
-        if msg:
-            if msg.seq == self._item:
-                logging.info(
-                    f"Vehicle {self.conn.target_system}: ⭐ Reached item: {msg.seq}"
-                )
-                return True
-        return False

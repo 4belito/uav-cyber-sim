@@ -1,25 +1,19 @@
 """
 Mission execution module defining core classes for steps and actions used
-in UAV plans.
+in vehicle plans.
 """
 
 from __future__ import annotations
 
 import logging
 from enum import StrEnum
-from typing import Generic, TypeVar
+from typing import TYPE_CHECKING, Generic, TypeVar
 
-from simulator.helpers.connections import MAVConnection
-from simulator.helpers.coordinates import GRA
 from simulator.planner.step import MissionElement, State
 
-# TODO: Check binding of conn in Action and Step,
-# i think conn can be passed when actions/steps are instantiated
-
-# TODO: Treat concurrency Actions better usigng block and timeout
-
-# TODO: Check if NOT_STARTED and DONE may be combined into a single state
-
+if TYPE_CHECKING:
+    from simulator.helpers.coordinates import GRA
+    from simulator.runtime.vehicle.mav_manager import MAVLinkManager
 
 T = TypeVar("T", bound=MissionElement)
 
@@ -31,7 +25,7 @@ class Action(MissionElement, Generic[T]):
     """
 
     class Names(StrEnum):
-        """Enumerates standard UAV action types used in mission plans."""
+        """Enumerates standard vehicle action types used in mission plans."""
 
         PREARM = "PREARM"
         ARM = "ARM"
@@ -84,7 +78,6 @@ class Action(MissionElement, Generic[T]):
         self.steps.append(step)
         if not self.current:
             self.current = step
-            self.onair = step.onair
         self.target_pos = step.target_pos
         if self.state == State.DONE:
             self.state = State.IN_PROGRESS
@@ -108,10 +101,8 @@ class Action(MissionElement, Generic[T]):
     def _start_action(self):
         self.state = State.IN_PROGRESS
         logging.debug(
-            (
-                f"▶️ Vehicle {self.sysid}: {self.class_name} Started: "
-                f"{self.emoji} {self.name}"
-            )
+            f"▶️ Vehicle {self.sysid}: {self.class_name} Started: "
+            f"{self.emoji} {self.name}"
         )
 
     def _progress_action(self):
@@ -119,10 +110,8 @@ class Action(MissionElement, Generic[T]):
         if step is None or (step.state == State.DONE and step.next is None):
             self.state = State.DONE
             logging.info(
-                (
-                    f"✅ Vehicle {self.sysid}: {self.class_name} Done: "
-                    f"{self.emoji} {self.name}"
-                )
+                f"✅ Vehicle {self.sysid}: {self.class_name} Done: "
+                f"{self.emoji} {self.name}"
             )
         elif step.state == State.DONE:
             self.current = step.next
@@ -152,8 +141,6 @@ class Action(MissionElement, Generic[T]):
         """Update current position and onair status based on a Step."""
         if step.target_pos is not None:
             self.target_pos = step.target_pos
-        if step.onair is not None:
-            self.onair = step.onair
         if step.curr_pos is not None:
             self.curr_pos = step.curr_pos
 
@@ -164,11 +151,13 @@ class Action(MissionElement, Generic[T]):
         self.current = self.steps[0] if self.steps else None
         super().reset()
 
-    def bind(self, connection: MAVConnection, origin: GRA) -> None:
+    def bind(
+        self, origin: GRA, mav_manager: MAVLinkManager, home_heading: float = 0.0
+    ) -> None:
         """Bind the action to the MAVLink connection."""
         for step in self.steps:
-            step.bind(connection, origin)
-        super().bind(connection, origin)
+            step.bind(origin, mav_manager, home_heading)
+        super().bind(origin, mav_manager, home_heading)
         logging.debug(
             f"🔗 Vehicle {self.sysid}: {self.class_name} '{self.name}' is now connected"
         )

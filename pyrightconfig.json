@@ -1,5 +1,17 @@
 {
     "typeCheckingMode": "strict",
+    "include": [
+        "simulator"
+    ],
+    "exclude": [
+        "**/ardupilot/**",
+        "**/ardupilot_gazebo/**",
+        "**/.git",
+        "**/__pycache__",
+        "**/node_modules",
+        "**/.*",
+        ".venv"
+    ],
     "reportMissingTypeStubs": false,
     "ignoreMissingImports": [
         "pymavlink"

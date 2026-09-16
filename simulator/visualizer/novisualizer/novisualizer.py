@@ -1,11 +1,16 @@
 """Minimal visualizer that sets home locations without GUI rendering."""
 
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from simulator.helpers.coordinates import ENUPose, GRAPose
-from simulator.visualizer.vehicle import SimVehicle, Vehicle
+from simulator.entities.simvehicle import SimVehicle, Vehicle
 from simulator.visualizer.visualizer import Visualizer  # ConfigVis,
+
+if TYPE_CHECKING:
+    from simulator.helpers.coordinates import ENUPose, GRAPose
 
 
 @dataclass
@@ -15,33 +20,30 @@ class NovisVehicle(Vehicle):
     home: ENUPose
 
 
-NovisVehicles = list[NovisVehicle]
-
-
 class NoVisualizer(Visualizer[NovisVehicle]):
     """No-op visualizer for headless simulation."""
 
-    name = "novis"
-
-    def __init__(
-        self,
-        gra_origin: GRAPose,
-    ):
+    def __init__(self, gra_origin: GRAPose, model: str = "quad"):
         super().__init__(gra_origin)
+        self.model = model
 
-    def get_vehicle(self, vehicle: SimVehicle) -> NovisVehicle:
+    @property
+    def name(self) -> str:
+        """Name of the visualizer."""
+        return "novis"
+
+    def get_visvehicle(self, vehicle: SimVehicle) -> NovisVehicle:
         """Convert a Vehicle to a NovisVehicle with GRA home position."""
-        return NovisVehicle(home=vehicle.home)
+        return NovisVehicle(model=vehicle.model, home=vehicle.home)
 
-    def add_vehicle_cmd(self, i: int) -> str:
-        """Add GRA location to the vehicle command."""
-        homes_str = self.gra_origin.to_abs(self.vehicles[i].home).to_str()
-        return f" --custom-location={homes_str}"
+    def gra_home(self, vehicle: SimVehicle) -> GRAPose:
+        """Return the home position for a given Vehicle."""
+        return self.gra_origin.to_abs(vehicle.home)
 
-    def launch(self, port_offsets: list[int], verbose: int = 1):
+    def launch(self, port_offsets: dict[int, int]):
         """Print a message indicating that no visualizer will be launched."""
         logging.info("🙈 Running without visualization.")
 
-    def show(self):
+    def preview(self):
         """Print the vehicles."""
         print(self.vehicles)

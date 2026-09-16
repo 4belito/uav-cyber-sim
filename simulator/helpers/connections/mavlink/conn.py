@@ -1,38 +1,52 @@
 """Utility functions for MAVLink connections and messaging."""
 
+from __future__ import annotations
+
 import logging
 import time
-from typing import Literal, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 from pymavlink import mavutil
 
-from simulator.helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 from simulator.helpers.connections.mavlink.enums import Autopilot, Type
 
+if TYPE_CHECKING:
+    from simulator.helpers.connections.mavlink.customtypes.mavconn import MAVConnection
 
-def connect(device: str, src_sysid: int, src_compid: int) -> MAVConnection:
+mavutil.set_dialect("ardupilotmega")  # type: ignore[attr-defined]
+
+
+def connect(
+    device: str,
+    src_sysid: int,
+    src_compid: int,
+    baud: int = 115200,
+) -> MAVConnection:
     """
     Wrap `mavlink_connection` with a type cast to `MAVConnection`
     to enable clean static typing.
     Pass source_system and source_component to ensure correct sysid assignment.
     """
-    return cast(
-        MAVConnection,
-        mavutil.mavlink_connection(  # type: ignore[arg-type]
-            device, source_system=src_sysid, source_component=src_compid
-        ),
+    conn = mavutil.mavlink_connection(  # type: ignore[arg-type]
+        device,
+        source_system=src_sysid,
+        source_component=src_compid,
+        baud=baud,
     )
+    return cast("MAVConnection", conn)
 
 
 # taken from mavproxy
 def send_heartbeat(
     conn: MAVConnection,
     sys_type: Type = Type.ONBOARD_CONTROLLER,
-    ardupilot: Autopilot = Autopilot.GENERIC,
+    autopilot: Autopilot = Autopilot.GENERIC,
+    base_mode: int = 0,
+    custom_mode: int = 0,
+    system_status: int = 0,
 ) -> None:
     """Send a GCS heartbeat message to the UAV."""
-    # Set the source system ID for this connection
-    conn.mav.heartbeat_send(sys_type, ardupilot, 0, 0, 0)
+    conn.mav.heartbeat_send(sys_type, autopilot, base_mode, custom_mode, system_status)
 
 
 def create_udp_conn(
@@ -41,12 +55,19 @@ def create_udp_conn(
     mode: Literal["receiver", "sender"],
     src_sysid: int,
     src_compid: int,
+    wait_hb: bool = True,
 ) -> MAVConnection:
-    """Create a MAVLink-over-UDP connection."""
+    """
+    Create a MAVLink-over-UDP connection.
+
+    Pass wait_hb=False for receiver sockets where no initial heartbeat is
+    expected (e.g. command-channel listeners that only receive on demand).
+    """
     port = base_port + offset
     if mode == "receiver":
-        conn = connect(f"udp:127.0.0.1:{port}", src_sysid, src_compid)  # recv+send
-        conn.wait_heartbeat()
+        conn = connect(f"udp:127.0.0.1:{port}", src_sysid, src_compid)
+        if wait_hb:
+            conn.wait_heartbeat()
     else:  # mode == "sender"
         conn = connect(f"udpout:127.0.0.1:{port}", src_sysid, src_compid)  # send-only
     return conn

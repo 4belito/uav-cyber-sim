@@ -1,6 +1,6 @@
 """
 Mission execution module defining core classes for steps and actions used
-in UAV plans.
+in vehicle plans.
 """
 
 from __future__ import annotations
@@ -8,10 +8,14 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from enum import StrEnum
-from typing import Self
+from typing import TYPE_CHECKING, Self
 
-from simulator.helpers.connections import MAVConnection
+from simulator.helpers.connections.mavlink.enums import Frame
 from simulator.helpers.coordinates import ENU, GRA
+
+if TYPE_CHECKING:
+    from simulator.helpers.connections import MAVConnection
+    from simulator.runtime.vehicle.mav_manager import MAVLinkManager
 
 
 class State(StrEnum):
@@ -40,27 +44,21 @@ class MissionElement(ABC):
     """
 
     def __init__(self, name: str = "action name", emoji: str = "📝") -> None:
-        # General Properties(Step and Action shared)
         self.class_name = self.__class__.__name__
         self.name = name
         self.emoji = emoji
         self.state = State.NOT_STARTED
-
-        ## Building properties
         self.prev: Self | None = None
         self.next: Self | None = None
-
-        ## live property(after building)
-        self.conn: MAVConnection
         self.origin: GRA
-        self.sysid: int
-        self.onair: bool | None = None  # Default onair status
-        self.target_pos: ENU | None = None  # Default target (global) position
-        self.curr_pos: ENU | None = None  # Default current (global) position
+        self.home_heading: float = 0.0
+        self.mav_manager: MAVLinkManager
+        self.target_pos: ENU | None = None
+        self.curr_pos: ENU | None = None
 
     @abstractmethod
     def act(self):
-        """Execute the mission lement action; override in subclasses."""
+        """Execute the mission element action; override in subclasses."""
         pass
 
     def reset(self):
@@ -70,17 +68,30 @@ class MissionElement(ABC):
     def __repr__(self) -> str:
         return f"{self.state.emoji} <{self.class_name} '{self.emoji} {self.name}'>"
 
-    def bind(self, connection: MAVConnection, origin: GRA) -> None:
-        """
-        Binds the mission element to a MAVLink connection and sets verbosity
-        level.
-        """
-        self.conn = connection  # Set later from the parent Action
+    def bind(
+        self, origin: GRA, mav_manager: MAVLinkManager, home_heading: float = 0.0
+    ) -> None:
+        """Bind the mission element to a MAVLink connection and origin pose."""
         self.origin = origin
-        self.sysid = connection.target_system
+        self.home_heading = home_heading
+        self.mav_manager = mav_manager
         logging.debug(
             f"🔗 Vehicle {self.sysid}: {self.class_name} '{self.name}' is now connected"
         )
+
+    @property
+    def conn(self) -> MAVConnection:
+        """Convenience property to access the MAVLink connection."""
+        assert self.mav_manager is not None, (
+            "Mission must be bound to access connection"
+        )
+        return self.mav_manager.conn
+
+    @property
+    def sysid(self) -> int:
+        """Convenience property to access the vehicle sysid."""
+        assert self.mav_manager is not None, "Mission must be bound to access sysid"
+        return self.mav_manager.data_logger.sysid
 
 
 class Step(MissionElement, ABC):
@@ -132,7 +143,7 @@ class Step(MissionElement, ABC):
             except Exception as exc:
                 logging.error(
                     "❌ Vehicle %s: %s %s check failed: %s",
-                    self.conn.target_system,
+                    self.sysid,
                     self.class_name,
                     self.name,
                     exc,
@@ -143,9 +154,42 @@ class Step(MissionElement, ABC):
         elif self.state == State.FAILED:
             logging.warning("⚠️ Already failed! Cannot perform this step again!")
 
+    _POSITION_TYPE_MASK: int = 0b110111111000
+
+    def send_position_target(
+        self, target: ENU, type_mask: int = _POSITION_TYPE_MASK
+    ) -> None:
+        """Encode and send SET_POSITION_TARGET_GLOBAL_INT for a local ENU target."""
+        gra_wp = self.origin.to_abs(target)
+        msg = self.conn.mav.set_position_target_global_int_encode(
+            10,
+            self.conn.target_system,
+            self.conn.target_component,
+            Frame.GLOBAL_INT,
+            type_mask,
+            *gra_wp.to_global_int_alt_in_meters(),
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+        )
+        self.conn.mav.send(msg)
+
+    def get_enu_position(self) -> ENU | None:
+        """Get the current ENU position of the vehicle."""
+        msg = self.mav_manager.state.get("GLOBAL_POSITION_INT")
+        if msg:
+            gra_pos = GRA.from_global_int(msg.lat, msg.lon, msg.alt)
+            pos = self.origin.to_rel(gra_pos)
+            return pos
+        return None
+
     def reset(self):
         """Reset the step state and clear current position."""
         super().reset()
         self.curr_pos = None
-        self.onair = None
         self.target_pos = None

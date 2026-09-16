@@ -1,5 +1,5 @@
 """
-Defines the Plan class for sequencing UAV actions into structured missions.
+Defines the Plan class for sequencing vehicle actions into structured missions.
 Supports static and dynamic waypoint modes and includes predefined plans.
 """
 
@@ -7,9 +7,9 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
-from typing import Any, Callable, ClassVar, TypeVar
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 
-from simulator.helpers.connections.mavlink.enums import CopterMode
+from simulator.helpers.ardupilot.firmware import guided_mode
 from simulator.helpers.coordinates import ENU, XY, ENUs, XYs
 from simulator.planner.action import Action
 from simulator.planner.actions import (
@@ -20,8 +20,13 @@ from simulator.planner.actions import (
 )
 from simulator.planner.step import Step
 
-P = TypeVar("P", bound="Plan")
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
+    from simulator.config import Firmware
+
+P = TypeVar("P", bound="Plan")
+# TODO: Substitute Any with a more specific type
 ActionSequence = Action[Action[Step]]
 
 
@@ -38,7 +43,7 @@ class PlanSpec:
 
 
 class Plan(ActionSequence, ABC):
-    """A high-level mission plan composed of sequential UAV actions."""
+    """A high-level mission plan composed of sequential vehicle actions."""
 
     _REGISTRY: ClassVar[dict[str, type[Plan]]] = {}
 
@@ -56,9 +61,9 @@ class Plan(ActionSequence, ABC):
         """Build a Plan from JSON-serializable arguments."""
         raise NotImplementedError
 
-    def extend(self, action_suqnece: ActionSequence) -> None:
+    def extend(self, action_sequence: ActionSequence) -> None:
         """Append another plan's steps to this plan."""
-        for action in action_suqnece.steps:
+        for action in action_sequence.steps:
             self.add(action)
 
     def get_spec(self) -> PlanSpec:
@@ -106,9 +111,9 @@ class Plan(ActionSequence, ABC):
             coords = XY.list(
                 [
                     (0, 0),
-                    (xlen, 0),
-                    (xlen, ylen),
                     (0, ylen),
+                    (-xlen, ylen),
+                    (-xlen, 0),
                     (0, 0),
                 ]
             )
@@ -117,15 +122,18 @@ class Plan(ActionSequence, ABC):
     @classmethod
     def arm(
         cls,
+        firmware: Firmware,
         name: str = "ARM",
         navigation_speed: float = 5,
     ) -> ActionSequence:
         """Create a plan to execute a mission in auto mode."""
         actions = ActionSequence(name, emoji="🔐")
-        actions.add(make_pre_arm())
-        actions.add(make_set_mode(CopterMode.GUIDED))
+        actions.add(make_pre_arm(firmware=firmware))
+        actions.add(make_set_mode(guided_mode(firmware)))
         if navigation_speed != 5:
-            actions.add(make_change_nav_speed(speed=navigation_speed))
+            actions.add(
+                make_change_nav_speed(speed=navigation_speed, firmware=firmware)
+            )
         actions.add(make_arm())
         return actions
 

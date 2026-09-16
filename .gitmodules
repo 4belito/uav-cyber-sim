@@ -1,0 +1,6 @@
+[submodule "ardupilot"]
+	path = ardupilot
+	url = https://github.com/4belito/ardupilot.git
+[submodule "ardupilot_gazebo"]
+	path = ardupilot_gazebo
+	url = https://github.com/4belito/ardupilot_gazebo.git

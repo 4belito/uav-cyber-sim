@@ -3,23 +3,18 @@
 from __future__ import annotations
 
 import math
-from typing import (
-    Generator,
-    Iterable,
-    Iterator,
-    NamedTuple,
-    Self,
-    Type,
-)
+from collections.abc import Generator, Iterable, Iterator
+from typing import TYPE_CHECKING, NamedTuple, Self
 
 import folium
 import numpy as np
 from geopy import distance
-from matplotlib.axes import Axes
 from pymap3d import enu2geodetic, geodetic2enu  # type: ignore
 
-from simulator.config import Color
-from simulator.helpers.connections import MAVConnection
+if TYPE_CHECKING:
+    from matplotlib.axes import Axes
+
+    from simulator.config import Color
 
 # TODO: Check repetitions of similar methods across classes
 
@@ -37,7 +32,7 @@ class XY(NamedTuple):
     y: float
 
     @classmethod
-    def list(cls: Type[Self], data: list[tuple[float, float]]) -> list[Self]:
+    def list(cls: type[Self], data: list[tuple[float, float]]) -> list[Self]:
         """Create XY instances from a list of (x, y) tuples."""
         return [cls(*pair) for pair in data]
 
@@ -93,7 +88,7 @@ class XYZ(NamedTuple):
     z: float
 
     @classmethod
-    def list(cls: Type[Self], data: list[tuple[float, float, float]]) -> list[Self]:
+    def list(cls: type[Self], data: list[tuple[float, float, float]]) -> list[Self]:
         """Create XYZ instances from a list of (x, y, z) tuples."""
         return [cls(*pair) for pair in data]
 
@@ -134,13 +129,21 @@ class LLA(NamedTuple):
     alt: float
 
     @classmethod
-    def list(cls: Type[Self], data: list[tuple[float, float, float]]) -> list[Self]:
+    def list(cls: type[Self], data: list[tuple[float, float, float]]) -> list[Self]:
         """Create LLA instances from a list of (lat, lon, alt) tuples."""
         return [cls(*pair) for pair in data]
 
     def pose(self, heading: float = 0.0) -> LLAPose:
         """Convert this LLA point into an LLAPose with the given heading."""
         return LLAPose(self.lat, self.lon, self.alt, heading)
+
+    def to_global_int(self) -> tuple[int, int, int]:
+        """MAVLink GLOBAL_POSITION_INT fields: lat_e7, lon_e7, alt_mm."""
+        return int(self.lat * 1e7), int(self.lon * 1e7), int(self.alt * 1e3)
+
+    def to_global_int_alt_in_meters(self) -> tuple[int, int, float]:
+        """MAVLink fields with altitude in meters instead of mm."""
+        return int(self.lat * 1e7), int(self.lon * 1e7), self.alt
 
     @classmethod
     def distance(cls, a: Self, b: Self) -> float:
@@ -169,7 +172,7 @@ class XYZPose(NamedTuple):
 
     @classmethod
     def list(
-        cls: Type[Self], data: list[tuple[float, float, float, float]]
+        cls: type[Self], data: list[tuple[float, float, float, float]]
     ) -> list[Self]:
         """Create XYZPose instances from (x, y, z, heading) tuples."""
         return [cls(*pair) for pair in data]
@@ -210,6 +213,14 @@ class LLAPose(NamedTuple):
     def unpose(self) -> LLA:
         """Drop heading and return the LLA point."""
         return LLA(self.lat, self.lon, self.alt)
+
+    def to_global_int(self) -> tuple[int, int, int]:
+        """MAVLink GLOBAL_POSITION_INT fields: lat_e7, lon_e7, alt_mm."""
+        return int(self.lat * 1e7), int(self.lon * 1e7), int(self.alt * 1e3)
+
+    def to_global_int_alt_in_meters(self) -> tuple[int, int, float]:
+        """MAVLink fields with altitude in meters instead of mm."""
+        return int(self.lat * 1e7), int(self.lon * 1e7), self.alt
 
     @classmethod
     def nan(cls) -> Self:
@@ -314,22 +325,6 @@ class ENU(XYZ):
         for p in abss:
             yield self.to_rel(p)
 
-    @classmethod
-    def get_rel_position(cls, conn: MAVConnection) -> ENU | None:
-        """Request and return the UAV's current local NED position."""
-        ## Check this to make blocking optional parameter
-        msg = conn.recv_match(type="LOCAL_POSITION_NED", blocking=True, timeout=0.001)
-        if msg:
-            return cls.from_ned(msg.x, msg.y, msg.z)
-        return None
-
-    def get_position(self, conn: MAVConnection) -> ENU | None:
-        """Alias for get_rel_position."""
-        rel_pos = self.get_rel_position(conn)
-        if rel_pos is None:
-            return None
-        return self.to_abs(rel_pos)
-
     def short(self, decimal_places: int = 2) -> ENU:
         """Return a copy of this ENU with coordinates rounded if needed."""
         return ENU(*(format_component(component, decimal_places) for component in self))
@@ -376,26 +371,6 @@ class GRA(LLA):
         alt = alt_mm / 1e3
         return GRA(lat, lon, alt)
 
-    def to_global_int(self) -> tuple[int, int, int]:
-        """
-        Convert a GRA to MAVLink GLOBAL_POSITION_INT message fields.
-        with alt in mm (it agrees with relative altitude).
-        """
-        lat = int(self.lat * 1e7)
-        lon = int(self.lon * 1e7)
-        alt = int(self.alt * 1e3)
-        return lat, lon, alt
-
-    def to_global_int_alt_in_meters(self) -> tuple[int, int, float]:
-        """
-        Convert a GRA to MAVLink GLOBAL_POSITION_INT message fields
-        with alt in meters (it agrees with absolute altitude).
-        """
-        lat = int(self.lat * 1e7)
-        lon = int(self.lon * 1e7)
-        alt = self.alt  # Altitude in meters
-        return lat, lon, alt
-
     @staticmethod
     def from_msn_item_int(lat_e7: int, lon_e7: int, alt_mm: int) -> GRA:
         """Create a GRA from MAVLink GLOBAL_POSITION_INT message fields."""
@@ -429,24 +404,6 @@ class GRA(LLA):
             location=[self.lat, self.lon], popup=label, icon=folium.Icon(color=color)
         ).add_to(map_obj)
 
-    @classmethod
-    def get_position(cls, conn: MAVConnection) -> GRA | None:
-        """
-        Request and return the UAV's current global position.
-        It requires GLOBAL_POSITION_INT mesages to be emited from ardupilot.
-        """
-        msg = conn.recv_match(type="GLOBAL_POSITION_INT", blocking=True, timeout=0.001)
-        if msg:
-            return cls.from_global_int(msg.lat, msg.lon, msg.alt)  # type: ignore
-        return None
-
-    def get_enu_position(self, conn: MAVConnection) -> ENU | None:
-        """Get the ENU position of the UAV relative to this GRA origin."""
-        gra_pos = GRA.get_position(conn)
-        if gra_pos is None:
-            return None
-        return self.to_rel(gra_pos)
-
     def short(self, decimal_places: int = 6, alt_decimal_places: int = 2) -> GRA:
         """Return a copy of this GRA with coordinates rounded if needed."""
         lat = format_component(self.lat, decimal_places)
@@ -467,7 +424,7 @@ class ENUPose(XYZPose):
         if isinstance(point, ENU):
             point = point.pose()
         x, y, z, h = point
-        x_rot, y_rot = XY(x, y).rotate(self.heading)
+        x_rot, y_rot = XY(x, y).rotate(-self.heading)
         return ENUPose.add(self, ENUPose(x_rot, y_rot, z, h))
 
     def to_rel(self, point: ENU | ENUPose) -> ENUPose:
@@ -475,7 +432,7 @@ class ENUPose(XYZPose):
         if isinstance(point, ENU):
             point = point.pose()
         p = ENUPose.sub(point, self)
-        x_rot, y_rot = XY(p.x, p.y).rotate(-self.heading)
+        x_rot, y_rot = XY(p.x, p.y).rotate(self.heading)
         return ENUPose(x_rot, y_rot, p.z, p.heading)
 
     def to_str(self) -> str:
@@ -505,6 +462,16 @@ class ENUPose(XYZPose):
     def unpose_all(poses: Iterable[ENUPose]) -> list[ENU]:
         """Vectorize `unpose` over a sequence of ENUPose."""
         return [p.unpose() for p in poses]
+
+    @staticmethod
+    def resolve_path(
+        origin: ENUPose,
+        relative_home: ENUPose,
+        relative_path: list[ENU],
+    ) -> list[ENU]:
+        """Absolute waypoints from an origin, a relative home, and a relative path."""
+        abs_home = origin.to_abs(relative_home)
+        return ENUPose.unpose_all(abs_home.to_abs_all(relative_path))
 
     def draw(self, ax: Axes, label: str, color: str, alpha: float = 1.0):
         """Draws an ENUPose on a matplotlib Axes with an arrow and label."""
@@ -542,7 +509,7 @@ class GRAPose(LLAPose):
         if isinstance(p, ENU):
             p = p.pose()
         # rotate local offset by origin heading, then apply on globe
-        x_rot, y_rot = XY(p.x, p.y).rotate(self.heading)
+        x_rot, y_rot = XY(p.x, p.y).rotate(-self.heading)
         lat, lon, alt = map(
             float,
             enu2geodetic(  # type: ignore
@@ -576,7 +543,7 @@ class GRAPose(LLAPose):
             ),
         )
         # rotate back into the origin's local frame
-        xl, yl = XY(e, n).rotate(-self.heading)
+        xl, yl = XY(e, n).rotate(self.heading)
         h_rel = (p.heading - self.heading) % 360
         return ENUPose(xl, yl, u, h_rel)
 
@@ -607,6 +574,19 @@ class GRAPose(LLAPose):
     def unpose_all(poses: Iterable[GRAPose]) -> GRAs:
         """Vectorize `unpose` over a sequence of GRAPose."""
         return [p.unpose() for p in poses]
+
+    @staticmethod
+    def resolve_path(
+        origin: GRAPose,
+        relative_home: ENUPose,
+        relative_path: list[ENU],
+    ) -> GRAs:
+        """
+        Absolute GRA waypoints from a GRAPose origin, relative home,
+        and relative path.
+        """
+        gra_home = origin.to_abs(relative_home)
+        return GRAPose.unpose_all(gra_home.to_abs_all(relative_path))
 
 
 # === Type aliases for grouped data (inputs are usually Iterable) ===

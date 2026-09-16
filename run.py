@@ -25,7 +25,7 @@ from simulator.visualizer import (
     SimVehicle,
     Visualizer,
 )
-from simulator.visualizer.vehicle import Vehicle
+from simulator.entities.simvehicle import Vehicle
 
 VISUALIZER_CHOICES = ("novis", "gazebo", "QGroundControl")
 GAZEBO_WORLD = "simulator/visualizer/gazebo/worlds/runway.world"

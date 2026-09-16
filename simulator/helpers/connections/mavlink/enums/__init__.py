@@ -1,9 +1,10 @@
 """Init file for enums package."""
 
+from __future__ import annotations
+
 from .autopilot import Autopilot
 from .cmd import Cmd
 from .cmdcond import CmdCond
-from .cmdcustom import CmdCustom
 from .cmddo import CmdDo
 from .cmdnav import CmdNav
 from .cmdset import CmdSet
@@ -16,7 +17,9 @@ from .missionresult import MissionResult
 from .modeflag import ModeFlag
 from .msgid import MsgID
 from .paramtype import ParamType
+from .planemode import PlaneMode
 from .sensorflag import SensorFlag
+from .state import State
 from .type import Type
 
 __all__ = [
@@ -35,7 +38,8 @@ __all__ = [
     "ModeFlag",
     "MsgID",
     "ParamType",
+    "PlaneMode",
     "SensorFlag",
+    "State",
     "Type",
-    "CmdCustom",
 ]

@@ -2,16 +2,18 @@
 Gazebo Simulator Module.
 
 This module defines a Gazebo-based simulator that extends the base Simulator class.
-It dynamically generates UAV model files, launches ArduPilot and logic processes,
-and modifies Gazebo world files to include drones and waypoint markers.
+It dynamically generates Vehicle model files, launches ArduPilot and logic processes,
+and modifies Gazebo world files to include vehicles and waypoint markers.
 
 Main Features:
-- Supports custom models and color-coded UAVs
-- Dynamically generates `model.sdf` files for each UAV
-- Updates existing Gazebo world files to include UAVs and waypoint markers
+- Supports custom models and color-coded Vehicles
+- Dynamically generates `model.sdf` files for each Vehicle
+- Updates existing Gazebo world files to include Vehicles and waypoint markers
 - Launches Gazebo with the customized world file
 
 """
+
+from __future__ import annotations
 
 import logging
 import os
@@ -21,12 +23,19 @@ import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
-from simulator.config import ARDUPILOT_GAZEBO_MODELS, ENV_CMD_GAZ, Color
+import jinja2
+
+from simulator.config import (
+    ARDUPILOT_GAZEBO_MODELS,
+    RUNTIME_GAZEBO_MODELS,
+    RUNTIME_GAZEBO_WORLDS,
+    Color,
+)
+from simulator.entities.simvehicle import SimVehicle, Vehicle
 from simulator.helpers.coordinates import XYZRPY, ENUPose, GRAPose
 from simulator.helpers.math import heading_to_yaw
 from simulator.helpers.processes import create_process
 from simulator.visualizer.gazebo.preview import GazMarker, GazMarkers, show_markers
-from simulator.visualizer.vehicle import SimVehicle, Vehicle
 from simulator.visualizer.visualizer import Visualizer
 
 Trace = tuple[
@@ -41,6 +50,7 @@ COLOR_MAP: dict[Color, str] = {
     Color.ORANGE: "1.0 0.5 0.0 1",
     Color.YELLOW: "1.0 1.0 0.0 1",
     Color.WHITE: "1.0 1.0 1.0 1",
+    Color.BLACK: "0.0 0.0 0.0 1",
 }
 
 
@@ -49,22 +59,15 @@ class GazVehicle(Vehicle):
     """Represents a vehicle with a model and a trajectory."""
 
     home: ENUPose
-    model: str
     color: Color
     mtraj: GazMarkers
 
 
-GazVehicles = list[GazVehicle]
-
-
 class Gazebo(Visualizer[GazVehicle]):
     """
-    Gazebo-specific simulator that launches UAVs in a Gazebo world.
-    It configures drone models, world markers, and coordinates with ArduPilot logic.
+    Gazebo-specific simulator that launches Vehicles in a Gazebo world.
+    It configures vehicle models, world markers, and coordinates with ArduPilot logic.
     """
-
-    name = "Gazebo"
-    delay = False
 
     def __init__(
         self,
@@ -72,31 +75,39 @@ class Gazebo(Visualizer[GazVehicle]):
         world_path: str,
     ):
         super().__init__(gra_origin)
-        self.world_path = world_path
+        self.world_path = Path(world_path)
         self.markers: GazMarkers = []
 
-    def add_vehicle_cmd(self, i: int) -> str:
-        """Add gazebo model (only iris TODO: add others)."""
-        return f" -f gazebo-iris --custom-location={self.gra_origin.to_str()}"
+    @property
+    def name(self) -> str:
+        """Name of the visualizer."""
+        return "Gazebo"
 
-    def launch(self, port_offsets: list[int]):
-        """Launch the Gazebo simulator with the specified UAV and waypoints."""
-        base_models = [f"{veh.model}_{veh.color}" for veh in self.vehicles]
-        self._generate_drone_models_from_bases(
-            base_models, base_port_in=9002, port_step=10
+    def gra_home(self, vehicle: SimVehicle) -> GRAPose:
+        """Return the home position for a given Vehicle."""
+        return self.gra_origin.unpose().pose(vehicle.home.heading)
+
+    def launch(self, port_offsets: dict[int, int]):
+        """Launch the Gazebo simulator with the specified Vehicle and waypoints."""
+        self._generate_vehicle_models_from_bases(
+            base_port_in=9002, port_offsets=port_offsets
         )
         updated_world = self._update_world(self.world_path)
+
         create_process(
             f"gazebo {updated_world}",
             visible=False,
-            env_cmd=ENV_CMD_GAZ,
             suppress_output=True,
+            env=self._build_gazebo_env(),
+            # Own process group, so a Jupyter-kernel interrupt doesn't kill the
+            # Gazebo window; clean() tears it down explicitly.
+            new_process_group=True,
         )
         logging.info(
             "🖥️  Gazebo launched for realistic simulation and 3D visualization."
         )
 
-    def show(
+    def preview(
         self,
         title: str = "Trajectories",
         frames: tuple[float, float, float] = (0.2, 0.2, 0.2),
@@ -105,7 +116,7 @@ class Gazebo(Visualizer[GazVehicle]):
         """Render a 3D interactive plot of waypoint trajectories using Plotly."""
         show_markers(self.markers, title=title, frames=frames, ground=ground)
 
-    def get_vehicle(
+    def get_visvehicle(
         self,
         vehicle: SimVehicle,
         radius: float = 0.2,
@@ -114,17 +125,16 @@ class Gazebo(Visualizer[GazVehicle]):
         """Convert a Vehicle to a GazVehicle with markers for its trajectory."""
         markertraj: GazMarkers = []
         for i, pos in enumerate(vehicle.waypoints):
-            markertraj.append(
-                GazMarker(
-                    name=str(i),
-                    group=f"traj_{vehicle.sysid}",
-                    pos=pos,
-                    color=vehicle.color,
-                    radius=radius,
-                    alpha=alpha,
-                )
+            gaz_marker = GazMarker(
+                name=str(i),
+                group=f"traj_{vehicle.sysid}",
+                pos=pos,
+                color=vehicle.color,
+                radius=radius,
+                alpha=alpha,
             )
-            self.markers.extend(markertraj)
+            markertraj.append(gaz_marker)
+            self.markers.append(gaz_marker)
         return GazVehicle(
             model=vehicle.model,
             color=vehicle.color,
@@ -132,35 +142,92 @@ class Gazebo(Visualizer[GazVehicle]):
             mtraj=markertraj,
         )
 
-    def _generate_drone_models_from_bases(
-        self,
-        base_models: list[str],
-        base_port_in: int = 9002,
-        port_step: int = 10,
-    ) -> None:
-        template_path = Path(ARDUPILOT_GAZEBO_MODELS) / "drone"
-        output_dir = Path(ARDUPILOT_GAZEBO_MODELS)
-        output_dir.mkdir(parents=True, exist_ok=True)
+    def _build_gazebo_env(self) -> dict[str, str]:
+        runtime = str(RUNTIME_GAZEBO_MODELS)
+        base = str(ARDUPILOT_GAZEBO_MODELS)
 
-        for i in range(self.num_vehicles):
-            name = f"drone{i + 1}"
-            new_model_path = output_dir / name
+        env = os.environ.copy()
+        env.update(
+            {
+                "GAZEBO_MODEL_PATH": f"{runtime}:{base}",
+                "GAZEBO_PLUGIN_PATH": "/usr/lib/x86_64-linux-gnu/gazebo-11/plugins",
+                "GAZEBO_RESOURCE_PATH": "/usr/share/gazebo-11",
+                "LD_LIBRARY_PATH": "/usr/lib/x86_64-linux-gnu/gazebo-11/plugins",
+            }
+        )
+
+        return env
+
+    @staticmethod
+    def _render_color_model(model_name: str, color: Color) -> None:
+        """
+        Render all color_template/*.j2 files into runtime_models/{model}/{color}/.
+
+        Preserves subdirectory structure; strips the .j2 suffix from output names.
+        Non-template files (e.g. model.config) are copied as-is.
+        Called only when color_template/ exists. Models with hand-crafted per-color
+        SDFs don't need this.
+        """
+        src = ARDUPILOT_GAZEBO_MODELS / model_name / "color_template"
+        out = RUNTIME_GAZEBO_MODELS / model_name / color.value
+
+        env = jinja2.Environment(loader=jinja2.FileSystemLoader(str(src)))
+        context = {"color": color.value}
+
+        for path in src.rglob("*"):
+            if not path.is_file():
+                continue
+            rel = path.relative_to(src)
+            if path.suffix == ".j2":
+                dest = out / rel.with_suffix("")
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_text(
+                    env.get_template(rel.as_posix()).render(**context),
+                    encoding="utf-8",
+                )
+            else:
+                dest = out / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy(path, dest)
+
+    def _generate_vehicle_models_from_bases(
+        self,
+        port_offsets: dict[int, int],
+        base_port_in: int = 9002,
+    ) -> None:
+
+        RUNTIME_GAZEBO_MODELS.mkdir(parents=True, exist_ok=True)
+
+        seen: set[tuple[str, Color]] = set()
+        for veh in self.vehicles.values():
+            model_name = veh.model(self.name)
+            key = (model_name, veh.color)
+            if key not in seen:
+                seen.add(key)
+                template = ARDUPILOT_GAZEBO_MODELS / model_name / "color_template"
+                if template.exists():
+                    self._render_color_model(model_name, veh.color)
+
+        for sysid, veh in self.vehicles.items():
+            model_name = veh.model(self.name)
+            template_path = ARDUPILOT_GAZEBO_MODELS / model_name / "ardupilot"
+            name = f"vehicle_{sysid}"
+            new_model_path = RUNTIME_GAZEBO_MODELS / name
             if new_model_path.exists():
                 shutil.rmtree(new_model_path)
             shutil.copytree(template_path, new_model_path)
 
             sdf_path = new_model_path / "model.sdf"
-            with open(sdf_path, "r", encoding="utf-8") as f:
+            with open(sdf_path, encoding="utf-8") as f:
                 sdf = f.read()
 
             sdf = re.sub(r'<model name="[^"]+">', f'<model name="{name}">', sdf)
-            sdf = re.sub(
-                r"<include>\s*<uri>model://[^<]+</uri>\s*</include>",
-                f"<include>\n  <uri>model://{base_models[i]}</uri>\n</include>",
-                sdf,
+            sdf = sdf.replace(
+                f"<uri>model://{model_name}/physics</uri>",
+                f"<uri>model://{model_name}/{veh.color.value}</uri>",
             )
 
-            port_in = base_port_in + i * port_step
+            port_in = base_port_in + port_offsets[sysid]
             port_out = port_in + 1
             sdf = re.sub(
                 r"<fdm_port_in>\d+</fdm_port_in>",
@@ -176,8 +243,9 @@ class Gazebo(Visualizer[GazVehicle]):
             with open(sdf_path, "w", encoding="utf-8") as f:
                 f.write(sdf)
 
-    def _update_world(self, world_path: str) -> str:
-        updated_world_path = os.path.expanduser(world_path[:-6] + "_updated.world")
+    def _update_world(self, world_path: Path) -> Path:
+        RUNTIME_GAZEBO_WORLDS.mkdir(parents=True, exist_ok=True)
+        out_path = RUNTIME_GAZEBO_WORLDS / world_path.name
         tree = ET.parse(world_path)
         root = tree.getroot()
         world_elem = root.find("world")
@@ -185,18 +253,11 @@ class Gazebo(Visualizer[GazVehicle]):
         if world_elem is None:
             raise ValueError("Could not find 'world' element in the XML.")
 
-        self._remove_old_models(world_elem)
         self._add_markers_elements(world_elem)
-        self._add_drone_elements(world_elem)
+        self._add_vehicle_elements(world_elem)
 
-        tree.write(updated_world_path)
-        return updated_world_path
-
-    def _remove_old_models(self, world_elem: ET.Element) -> None:
-        for model in world_elem.findall("model"):
-            model_name = model.attrib.get("name", "")
-            if model_name in {"green_waypoint", "red_waypoint", "drone", "iris_demo"}:
-                world_elem.remove(model)
+        tree.write(out_path)
+        return out_path
 
     def _add_markers_elements(self, world_elem: ET.Element):
         for mark in self.markers:
@@ -221,12 +282,12 @@ class Gazebo(Visualizer[GazVehicle]):
         ET.SubElement(model, "allow_auto_disable").text = "1"
         return model
 
-    def _add_drone_elements(self, world_elem: ET.Element) -> None:
-        for i, veh in enumerate(self.vehicles):
+    def _add_vehicle_elements(self, world_elem: ET.Element) -> None:
+        for sysid, veh in self.vehicles.items():
             x, y, z, h = veh.home
             pose = XYZRPY(x, y, z, 0, 0, heading_to_yaw(h))
-            drone_elem = self._generate_drone_element(f"drone{i + 1}", pose)
-            world_elem.append(drone_elem)
+            vehicle_elem = self._generate_vehicle_element(f"vehicle_{sysid}", pose)
+            world_elem.append(vehicle_elem)
 
     def _add_inertial(self, link: ET.Element) -> None:
         inertial = ET.SubElement(link, "inertial")
@@ -271,7 +332,7 @@ class Gazebo(Visualizer[GazVehicle]):
         ET.SubElement(visual, "transparency").text = str(w.alpha)
         ET.SubElement(visual, "cast_shadows").text = "1"
 
-    def _generate_drone_element(self, instance_name: str, pose: XYZRPY) -> ET.Element:
+    def _generate_vehicle_element(self, instance_name: str, pose: XYZRPY) -> ET.Element:
         model = ET.Element("model", name=instance_name)
         ET.SubElement(model, "pose").text = f"{pose}"
         include = ET.SubElement(model, "include")
