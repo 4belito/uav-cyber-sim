@@ -281,9 +281,7 @@ class Oracle:
                         self.stop_sys[sysid].set()
                         if sysid in self._seen_in_grid:
                             self.grid.remove_sysid(sysid)
-                            logging.info(
-                                f"Vehicle {sysid} completed mission and exited"
-                            )
+                            logging.info(f"Vehicle {sysid} process exited")
                     if sender_id[0] == "gcs":
                         name = sender_id[1]
                         self.stop_gcs[name].set()

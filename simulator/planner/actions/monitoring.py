@@ -21,11 +21,25 @@ class CheckEndMission(Step):
     def __init__(self, name: str):
         super().__init__(name)
         self._was_armed: bool = False
+        self._crash_text: str | None = None
 
     def exec_fn(self) -> None:
-        pass  # HEARTBEAT is always streaming; no setup needed
+        pass  # HEARTBEAT/STATUSTEXT are always streaming; no setup needed
 
     def check_fn(self) -> bool:
+        # ArduPilot's crash detector auto-disarms exactly like a normal landing,
+        # so the armed->disarmed transition alone can't tell success from a crash.
+        # It broadcasts a "Crash"-prefixed STATUSTEXT just before disarming.
+        # Drain the transactional queue rather than peeking the latest-cached
+        # message: STATUSTEXT can arrive in a burst, and a plain state.get()
+        # would silently lose the crash text if a later message overwrote it
+        # before this step's next poll.
+        while (
+            status := self.mav_manager.state.wait_for("STATUSTEXT", timeout=0)
+        ) is not None:
+            if status.text.startswith("Crash"):
+                self._crash_text = status.text
+
         hb = self.mav_manager.state.get("HEARTBEAT")
         if hb is None:
             return False
@@ -33,6 +47,8 @@ class CheckEndMission(Step):
         if is_armed:
             self._was_armed = True
         elif self._was_armed:
+            if self._crash_text is not None:
+                raise RuntimeError(f"vehicle crashed ({self._crash_text})")
             logging.info(
                 f"Vehicle {self.sysid}: 🏁 Mission complete - vehicle disarmed"
             )

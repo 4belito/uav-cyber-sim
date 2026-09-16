@@ -212,9 +212,11 @@ def start_logic(config: LogicConfig):
                     except Exception as e:
                         logging.error(f"Error sending RID data: {e}")
                         pass
-            if logic.plan.state == State.DONE:
+            if logic.plan.state in (State.DONE, State.FAILED):
                 if gcs_telem_ports:  # unmonitored vehicle: no one to ack
-                    logic.send_done_msgs(cs_conns)
+                    logic.send_done_msgs(
+                        cs_conns, success=logic.plan.state == State.DONE
+                    )
                 break
 
             logic.act()
@@ -260,15 +262,23 @@ class VehicleLogic:
         self.plan.act()
         time.sleep(0.01)  # Avoid busy loop if plan.act() returns immediately
 
-    def send_done_msgs(self, cs_conns: Sequence[MAVConnection]) -> None:
+    def send_done_msgs(
+        self, cs_conns: Sequence[MAVConnection], success: bool = True
+    ) -> None:
         """
-        Notify every monitoring GCS that the mission is done.
+        Notify every monitoring GCS that the mission has ended.
 
         Each link is acked independently, so a vehicle watched by several GCSs
-        only finishes once they have all seen ``LOGIC_DONE``.
+        only finishes once they have all seen the completion text. ``success``
+        distinguishes a normal end-of-plan from a plan that ended in
+        ``State.FAILED`` (e.g. the vehicle crashed), so the GCS can log/handle
+        the two cases differently.
         """
-        done_msg = mavlink.MAVLink_statustext_message(severity=6, text=b"LOGIC_DONE")
-        logging.info(f"GCS ← Logic {self.sysid}: Sending LOGIC_DONE")
+        text = b"LOGIC_DONE" if success else b"LOGIC_FAILED"
+        done_msg = mavlink.MAVLink_statustext_message(
+            severity=6 if success else 3, text=text
+        )
+        logging.info(f"GCS ← Logic {self.sysid}: Sending {text.decode()}")
         for cs_conn in cs_conns:
             self.send_msg_until_ack(cs_conn, done_msg, CustomCmd.LOGIC_DONE)
 

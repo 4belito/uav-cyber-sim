@@ -183,8 +183,9 @@ class BlackoutStrategy(MITMStrategy):
 
     To avoid deadlocking the simulation, the attacker keeps the link *looking*
     alive: ``HEARTBEAT`` (the GCS blocks on ``wait_heartbeat`` at startup) and
-    the ``LOGIC_DONE`` completion signal are still forwarded. Everything else —
-    position, mission state, attitude, and all GCS commands — is suppressed.
+    the ``LOGIC_DONE``/``LOGIC_FAILED`` completion signal are still forwarded.
+    Everything else — position, mission state, attitude, and all GCS commands —
+    is suppressed.
     """
 
     #: Downlink message types always forwarded so the sim can run/terminate.
@@ -199,8 +200,11 @@ class BlackoutStrategy(MITMStrategy):
         msg_type = msg.get_type()
         if msg_type == "HEARTBEAT":
             return msg
-        # Let the LOGIC_DONE completion handshake through; drop other statustext.
-        if msg_type == "STATUSTEXT" and getattr(msg, "text", "") == "LOGIC_DONE":
+        # Let the completion handshake through; drop other statustext.
+        if msg_type == "STATUSTEXT" and getattr(msg, "text", "") in (
+            "LOGIC_DONE",
+            "LOGIC_FAILED",
+        ):
             return msg
         return None
 

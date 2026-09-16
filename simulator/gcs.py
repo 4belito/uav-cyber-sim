@@ -107,6 +107,7 @@ class GCS:
         sysids_snapshot = tuple(self.sysids)
 
         # A GCS may monitor no vehicle at all -> nothing to wait for, DONE at once.
+        results: list[bool] = []
         if sysids_snapshot:
             with futures.ThreadPoolExecutor(
                 max_workers=len(sysids_snapshot)
@@ -117,8 +118,15 @@ class GCS:
                 ]
 
                 for f in futures.as_completed(futures_list):
-                    f.result()
-        logging.info("All Vehicles assigned have completed their missions")
+                    results.append(f.result())
+
+        n_failed = results.count(False)
+        if n_failed:
+            logging.warning(
+                f"⚠️ {n_failed}/{len(results)} Vehicles failed their mission"
+            )
+        else:
+            logging.info("All Vehicles assigned have completed their missions")
         self._done_sock.send_string("DONE")  # type: ignore
         logging.info("DONE message sent to Oracle")
         self._wait_until_ack()
@@ -188,7 +196,8 @@ class GCS:
             sysid=sysid, conn=conn, cmd_conn=cmd_conn, processes=procs
         )
 
-    def _monitor_vehicle(self, sysid: int):
+    def _monitor_vehicle(self, sysid: int) -> bool:
+        """Monitor a vehicle's mission; return True iff it completed successfully."""
         logging.info(f"Monitoring Vehicle {sysid}")
         intervention = self.interventions[sysid]
         runner = (
@@ -205,6 +214,7 @@ class GCS:
         # Short timeout keeps the intervention plan ticking when telemetry is quiet.
         timeout = 0.1 if runner is not None else 1.0
         telem_logger = DataLogger(path=DATA_PATH / "gcs_msgs", sysid=sysid)
+        success = True
         try:
             while True:
                 msg = conn.recv_match(blocking=True, timeout=timeout)
@@ -232,12 +242,20 @@ class GCS:
 
                     if msg_type == "STATUSTEXT":
                         statustext = cast("mavlink.MAVLink_statustext_message", msg)
-                        if statustext.text == "LOGIC_DONE":
+                        if statustext.text in ("LOGIC_DONE", "LOGIC_FAILED"):
                             conn.mav.command_ack_send(
                                 command=CustomCmd.LOGIC_DONE,
                                 result=mavlink.MAV_RESULT_ACCEPTED,
                             )
-                            logging.info(f"✅ Vehicle {sysid} completed its mission")
+                            success = statustext.text == "LOGIC_DONE"
+                            if success:
+                                logging.info(
+                                    f"✅ Vehicle {sysid} completed its mission"
+                                )
+                            else:
+                                logging.warning(
+                                    f"💥 Vehicle {sysid} failed its mission (crashed)"
+                                )
                             break
 
                 if runner is not None:
@@ -245,6 +263,7 @@ class GCS:
         finally:
             self._remove_vehicle(sysid)
             logging.debug(f"Monitor thread finished for Vehicle {sysid}")
+        return success
 
     def _remove_vehicle(self, sysid: int):
         """Remove vehicles from the environment."""
