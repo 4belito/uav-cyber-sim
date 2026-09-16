@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from simulator.runtime.mitm.strategies import (
     BlackoutStrategy,
+    CloakPositionStrategy,
     InterventionStrategy,
     MITMContext,
     MITMSpec,
@@ -22,4 +23,5 @@ __all__ = [
     "InterventionStrategy",
     "SpoofGCSStrategy",
     "SpoofOwnerGCSStrategy",
+    "CloakPositionStrategy",
 ]

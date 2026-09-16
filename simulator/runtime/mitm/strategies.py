@@ -36,12 +36,13 @@ from typing import TYPE_CHECKING, Any, ClassVar, TypeAlias, TypeVar, cast
 
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
+from simulator.helpers.coordinates import GRA
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
-    from simulator.entities.intervention import Intervention
+    from simulator.entities.intervention import Intervention, Trigger
     from simulator.helpers.connections import MAVConnection
-    from simulator.helpers.coordinates import GRA
     from simulator.runtime.gcs_intervention import InterventionRunner
 
 MAVMsg: TypeAlias = mavlink.MAVLink_message
@@ -398,4 +399,107 @@ class SpoofOwnerGCSStrategy(SpoofGCSStrategy):
                 "spoof_lon": spoof_lon,
                 "spoof_alt": spoof_alt,
             },
+        )
+
+
+@MITMStrategy.register("cloak_position")
+class CloakPositionStrategy(MITMStrategy):
+    """
+    Let the drone's real position through until a `Trigger` fires, then freeze
+    the GCS's view of it right there, `altitude_offset` metres higher.
+
+    Reuses the exact same `Trigger` a GCS `Intervention` would use (typically
+    a `ProximityTrigger` around the same point, with a wider `radius` so this
+    fires first) rather than reimplementing its distance/timing logic, so the
+    MITM's notion of "near" always matches the real guard's exactly. While the
+    trigger doesn't hold, telemetry passes through unmodified, so the attack
+    is undetectable from the trajectory alone until it matters. The instant it
+    first holds, every subsequent `GLOBAL_POSITION_INT` downlink is replaced
+    with the report the vehicle sent at that triggering instant, lat/lon
+    unchanged but altitude raised by `altitude_offset` — so it also reads as
+    "cleared the obstacle by climbing," not just "stopped moving." From the
+    GCS's point of view the drone approaches and then holds a few metres
+    higher, forever; a real `ProximityTrigger` driven by that frozen position
+    never crosses its own `radius` (horizontal-only, so the altitude offset
+    doesn't affect it either way) and so never engages. The vehicle itself is
+    untouched — Logic reads its own SITL connection directly, so the real
+    AUTO mission flies on into the obstacle regardless.
+
+    Only `Trigger.holds()` is used, not the reversible engage/release
+    semantics some triggers have (`TriggerContext.engaged` is always `False`)
+    — this strategy only ever asks "has it fired yet," once and for good.
+    """
+
+    def __init__(
+        self,
+        trigger: Trigger | Mapping[str, Any],
+        altitude_offset: float = 3.0,
+    ) -> None:
+        super().__init__()
+        # Local import: keeps the planner chain out of every MITM process.
+        from simulator.entities.intervention import Trigger as _Trigger
+
+        self.trigger = (
+            trigger if isinstance(trigger, _Trigger) else _Trigger.build(dict(trigger))
+        )
+        self.altitude_offset = altitude_offset
+        self._gra_origin: GRA | None = None
+        self._frozen: MAVMsg | None = None
+        # Builder used only to construct the offset message (packed by the relay).
+        self._builder = mavlink.MAVLink(None, srcSystem=255, srcComponent=200)
+        self._spec = MITMSpec(
+            strategy_class="cloak_position",
+            kwargs={
+                "trigger": self.trigger.to_dict(),
+                "altitude_offset": altitude_offset,
+            },
+        )
+
+    def bind(self, ctx: MITMContext) -> None:
+        """Capture the run's geodetic origin, needed to resolve the real position."""
+        super().bind(ctx)
+        self._gra_origin = ctx.gra_origin
+
+    def on_downlink(self, msg: MAVMsg) -> MAVMsg | None:
+        """Pass real telemetry through until triggered, then replay the frozen fix."""
+        if msg.get_type() != "GLOBAL_POSITION_INT":
+            return msg
+        if self._frozen is not None:
+            return self._frozen
+        position = cast("mavlink.MAVLink_global_position_int_message", msg)
+        if self._gra_origin is None or not self._trigger_holds(position):
+            return msg
+        self._frozen = self._raise_altitude(position)
+        logging.info(
+            "MITM cloak: trigger fired - freezing the GCS's view %.1fm above "
+            "the real position here",
+            self.altitude_offset,
+        )
+        return self._frozen
+
+    def _trigger_holds(
+        self, position: mavlink.MAVLink_global_position_int_message
+    ) -> bool:
+        from simulator.entities.intervention import TriggerContext
+
+        assert self._gra_origin is not None
+        pos_enu = self._gra_origin.to_rel(
+            GRA.from_global_int(position.lat, position.lon, position.alt)
+        )
+        return self.trigger.holds(TriggerContext(position=pos_enu))
+
+    def _raise_altitude(
+        self, position: mavlink.MAVLink_global_position_int_message
+    ) -> MAVMsg:
+        offset_mm = int(self.altitude_offset * 1000)
+        return self._builder.global_position_int_encode(
+            position.time_boot_ms,
+            position.lat,
+            position.lon,
+            position.alt + offset_mm,
+            position.relative_alt + offset_mm,
+            position.vx,
+            position.vy,
+            position.vz,
+            position.hdg,
         )
