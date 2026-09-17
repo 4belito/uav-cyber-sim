@@ -17,6 +17,8 @@ source .venv/bin/activate  # or prefix commands with: uv run
 
 Dev container is available in [.devcontainer/Dockerfile](.devcontainer/Dockerfile) with full ArduPilot/Gazebo toolchain pre-built.
 
+A prebuilt image can also be run directly via the [Makefile](Makefile) (`make pull`, `make run`, or `make vnc-run` for a remote TurboVNC display) instead of building the dev container locally.
+
 ## Running Simulations
 
 ```bash
@@ -30,7 +32,7 @@ python run.py --visualizer gazebo
 python run.py --visualizer QGroundControl
 ```
 
-Jupyter notebooks in the root are the primary way to run simulations — numbered by complexity (`1-*` through `7-*`).
+Jupyter notebooks in the root are the primary way to run simulations, numbered by complexity/theme: `1-*`/`2-*` single-vehicle basics, `3-*` fleets, `4-*`/`5-*` GCS monitoring and intervention, `6-*` collision avoidance, `7-*` pursuit-evasion, `8-*` Remote ID spoofing, `9-*` through `12-*` MITM attacks (passthrough, blackout, fleet hijack, GCS spoofing).
 
 ## Linting and Type Checking
 
@@ -58,8 +60,9 @@ Pylance runs in **strict mode** (`python.analysis.typeCheckingMode: strict` in [
 
 ### Process Model
 
-Each simulated vehicle spawns multiple OS processes:
+Each simulated vehicle spawns multiple OS processes, launched in order MITM -> socat -> ADS-B -> Logic -> SITL:
 
+- **MITM proxy** (`simulator/mitm.py`, optional): Interposed on the vehicle's GCS<->Logic MAVLink links when the vehicle config enables it; a `MITMStrategy` can inspect, modify, or drop messages
 - **SITL**: ArduPilot software-in-the-loop firmware (TCP port `5760 + offset`)
 - **Logic** (`simulator/logic.py`): Bidirectional MAVLink proxy; executes the vehicle's mission plan
 - **ADS-B Injector** (`simulator/adsb_injector.py`): Injects nearby traffic into ArduPilot
@@ -70,14 +73,18 @@ A single **Oracle** (`simulator/oracle.py`) coordinates all vehicles via ZMQ ROU
 ### Communication Stack
 
 ```text
-ArduPilot SITL <--TCP--> Logic <--UDP--> GCS
+ArduPilot SITL <--TCP--> Logic <--UDP--> [MITM proxy, optional] <--UDP--> GCS
                                 |
                               ZMQ PUB/SUB --> Oracle --> ZMQ ROUTER/DEALER
 ```
 
 Port allocation is managed in [simulator/config.py](simulator/config.py) with per-vehicle offsets:
 
-- ARP: `5760 + offset`, ADSB: `5761 + offset`, RID: `5764-5765 + offset`, GCS: `5766 + offset`
+- ARP: `5760 + offset` (plus `ARP2`/`ARP3` at `5762`/`5763` for SITL's SERIAL1/SERIAL2)
+- ADSB: `5761 + offset`
+- RID: `5764-5765 + offset`
+- GCS_CMD: `5766 + offset`
+- MITM_TELEM/MITM_CMD: `5767`/`5768 + offset` (only used when the MITM proxy is enabled for that vehicle)
 
 ### Key Classes
 
@@ -86,7 +93,8 @@ Port allocation is managed in [simulator/config.py](simulator/config.py) with pe
 | `Simulator` | `simulator/sim.py` | Orchestrates all processes; call `.launch()` |
 | `Oracle` | `simulator/oracle.py` | Global coordinator; call `.run()` to execute missions |
 | `SimVehicle` | `simulator/entities/simvehicle.py` | Vehicle definition with plan |
-| `GCS` | `simulator/gcs.py` | Ground control station monitoring |
+| `SimGCS` | `simulator/entities/simgcs.py` | GCS entity; explicit vehicle ownership via `.own()` (launches/controls) vs `.monitor()` (watches only) |
+| `GCS` | `simulator/gcs.py` | Ground control station process: telemetry monitoring |
 | `Logic` | `simulator/logic.py` | Per-vehicle MAVLink proxy + plan executor |
 
 ### Mission Planning
@@ -96,6 +104,7 @@ Plans live in [simulator/planner/plans/](simulator/planner/plans/):
 - `AutoPlan` — autonomous waypoint missions
 - `GuidedPlan` — guided mode (manual waypoint injection)
 - `PursuitPlan` — pursuit-evasion game scenario
+- `InterventionPlan` — a GCS takes over an already-flying vehicle (no arm/takeoff), then holds, lands, or resumes the original mission
 
 Plans are composed of `Action` sequences (arm, takeoff, upload_mission, start_mission, land, etc.) defined in [simulator/planner/actions/](simulator/planner/actions/).
 
@@ -127,3 +136,5 @@ Detailed architecture notes, confirmed behaviors, known bugs and fixes live in [
 - [`copter-iris-sitl.md`](docs/context/copter-iris-sitl.md) — copter-iris frame: iris.json physics, copter-iris.parm, ROMFS auto-rebuild, trajectory equivalence vs gazebo-iris
 - [`gazebo-models.md`](docs/context/gazebo-models.md) — color template system (Jinja2), OGRE material scripts, physics/ardupilot/color_template layout, URI replacement pitfall
 - [`known-issues.md`](docs/context/known-issues.md) — fixed bugs and their root causes
+
+When a session uncovers something non-obvious worth preserving here — a bug's root cause, a subtle hardware/firmware/simulator behavior, a workaround for a specific issue — proactively ask the user for permission to add or update the relevant `docs/context/*.md` file before ending the task. Don't update these files silently or without being asked.
