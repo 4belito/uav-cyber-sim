@@ -29,6 +29,7 @@ ALL_PROCESSES = [
     "simulator.adsb_injector",
     "simulator.logic",
     "simulator.gcs",
+    "simulator.mitm",
 ]
 
 ALL_FOLDERS = [
