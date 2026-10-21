@@ -42,8 +42,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
     from simulator.entities.intervention import Intervention, Trigger
+    from simulator.entities.riddata import RIDData
     from simulator.helpers.connections import MAVConnection
     from simulator.runtime.gcs_intervention import InterventionRunner
+    from simulator.runtime.mitm.rid_sniffer import RIDSniffer
 
 MAVMsg: TypeAlias = mavlink.MAVLink_message
 S = TypeVar("S", bound="MITMStrategy")
@@ -76,6 +78,10 @@ class MITMContext:
     `gcs_names` is index-aligned with `to_gcs` (and thus with `target_mask` /
     `target_indices` on `SpoofGCSStrategy`), so a strategy can log which GCS
     it acted on by name instead of by position.
+
+    `port_offset` is the victim vehicle's per-UAV port offset, letting a
+    strategy locate the victim's ZMQ feeds (e.g. its `RID_DOWN` Remote ID
+    stream, which `HijackPursuitStrategy` eavesdrops via `RIDSniffer`).
     """
 
     def __init__(
@@ -85,10 +91,12 @@ class MITMContext:
         to_gcs: Sequence[MAVConnection],
         gra_origin: GRA,
         gcs_names: Sequence[str] = (),
+        port_offset: int = 0,
     ) -> None:
         self.sysid = sysid
         self.gra_origin = gra_origin
         self.gcs_names = list(gcs_names)
+        self.port_offset = port_offset
         self._to_logic = to_logic
         self._to_gcs = to_gcs
         # srcSystem 255 -> injected commands look GCS-origin; srcSystem <sysid>
@@ -180,6 +188,125 @@ class MITMStrategy:
         return strategy_cls(**spec.kwargs)
 
 
+class StealthModeMask:
+    """
+    Hides an attacker-induced flight-mode change from the GCS.
+
+    The giveaway of a man-in-the-middle hijack is the vehicle's ``HEARTBEAT``
+    reporting a new ``custom_mode`` (e.g. ArduCopter AUTO ``3`` -> GUIDED ``4``)
+    once the attacker switches it to GUIDED. Dropping ``HEARTBEAT`` outright
+    would stall the GCS (it blocks on ``wait_heartbeat`` and treats the link as
+    dead), so instead this mask *rewrites* the mode fields on downlink heartbeats
+    back to the last mode the vehicle reported before the hijack fired.
+
+    A second, firmware-dependent tell is the ``STATUSTEXT`` some autopilots emit
+    on a mode change (ArduPlane and some copter configs announce the new mode by
+    name, e.g. ``"GUIDED"``). ArduCopter SITL in the default config does not emit
+    one — the heartbeat mask alone hides the switch there — but to stay airtight
+    across firmwares the mask also *drops* any downlink ``STATUSTEXT`` that names
+    the hijack mode once engaged (``hijack_mode_name``).
+
+    Conceptually this is the downlink analogue of the uplink
+    :data:`~simulator.runtime.vehicle.gcs_cmd_forwarder.GCS_FORWARD_TYPES`
+    allowlist: rather than selecting which message *types* pass, it scrubs the
+    fields (and drops the texts) within always-forwarded types that would betray
+    the attack.
+
+    Usage: feed every downlink message to :meth:`observe` while inactive to keep
+    the cover mode current, call :meth:`engage` the moment the hijack fires, and
+    route every subsequent downlink message through :meth:`mask` thereafter
+    (which returns ``None`` for a message that must be dropped). Engagement is a
+    one-way latch — once masking, it freezes the pre-hijack cover mode for good,
+    which stays correct even if the attacker later releases control (the real
+    mode returns to the cover mode and heartbeats then pass through unchanged).
+    """
+
+    def __init__(self, hijack_mode_name: str | None = None) -> None:
+        # Encoder used to re-pack the rewritten heartbeat. srcSystem is set from
+        # the observed heartbeat so the forged beacon keeps the vehicle's id.
+        self._encoder = mavlink.MAVLink(None, srcComponent=200)
+        # Uppercased name of the mode the attacker switches into; any STATUSTEXT
+        # mentioning it is a mode-change announcement that would leak the hijack.
+        self._hijack_mode_name = hijack_mode_name.upper() if hijack_mode_name else None
+        self._active = False
+        self._cover_base_mode: int | None = None
+        self._cover_custom_mode: int | None = None
+
+    def observe(self, msg: MAVMsg) -> None:
+        """Record the latest pre-hijack mode from a benign heartbeat."""
+        if self._active or msg.get_type() != "HEARTBEAT":
+            return
+        heartbeat = cast("mavlink.MAVLink_heartbeat_message", msg)
+        self._cover_base_mode = int(heartbeat.base_mode)
+        self._cover_custom_mode = int(heartbeat.custom_mode)
+
+    def engage(self) -> None:
+        """Freeze the current cover mode and start masking subsequent heartbeats."""
+        self._active = True
+        logging.info(
+            "MITM stealth: masking flight mode as base=%s custom=%s",
+            self._cover_base_mode,
+            self._cover_custom_mode,
+        )
+
+    @property
+    def active(self) -> bool:
+        """Whether the mask is currently rewriting downlink messages."""
+        return self._active
+
+    def mask(self, msg: MAVMsg) -> MAVMsg | None:
+        """
+        Scrub a downlink message so it cannot betray the hijack.
+
+        Returns the (possibly rewritten) message to forward it, or ``None`` to
+        drop it. While inactive, every message passes untouched. Once engaged:
+
+        - a ``HEARTBEAT`` whose mode diverges from the cover mode is re-encoded
+          with the frozen cover mode (one matching the cover mode passes as-is);
+        - a ``STATUSTEXT`` that names the hijack mode is dropped;
+        - every other message passes untouched.
+        """
+        if not self._active:
+            return msg
+        msg_type = msg.get_type()
+        if msg_type == "STATUSTEXT":
+            return None if self._names_hijack_mode(msg) else msg
+        if msg_type != "HEARTBEAT":
+            return msg
+        heartbeat = cast("mavlink.MAVLink_heartbeat_message", msg)
+        if (
+            self._cover_custom_mode is None
+            or self._cover_base_mode is None
+            or (
+                heartbeat.custom_mode == self._cover_custom_mode
+                and heartbeat.base_mode == self._cover_base_mode
+            )
+        ):
+            return msg
+        self._encoder.srcSystem = heartbeat.get_srcSystem()
+        forged = self._encoder.heartbeat_encode(
+            heartbeat.type,
+            heartbeat.autopilot,
+            self._cover_base_mode,
+            self._cover_custom_mode,
+            heartbeat.system_status,
+            heartbeat.mavlink_version,
+        )
+        # Clear any cached raw buffer so the relay re-packs the rewritten fields.
+        forged._msgbuf = None
+        return forged
+
+    def _names_hijack_mode(self, msg: MAVMsg) -> bool:
+        """Return True if a STATUSTEXT names the hijack mode (and must be dropped)."""
+        if self._hijack_mode_name is None:
+            return False
+        text = str(getattr(msg, "text", "")).upper()
+        if self._hijack_mode_name not in text:
+            return False
+        logging.info("MITM stealth: dropping mode-change STATUSTEXT %r", msg.text)
+        return True
+
+
 @MITMStrategy.register("passthrough")
 class PassthroughStrategy(MITMStrategy):
     """Forward every message unmodified (default)."""
@@ -248,9 +375,21 @@ class InterventionStrategy(MITMStrategy):
     Same target assumptions as a GCS intervention (`Intervention`): only a
     seq-based `MissionTrigger` needs the victim on an `AutoPlan`. Nothing
     enforces it.
+
+    With ``stealth=True`` the hijack is hidden from the GCS: once the runner
+    takes control (switching the victim into GUIDED), a
+    :class:`StealthModeMask` rewrites downlink heartbeats back to the
+    pre-hijack mode and drops any GUIDED mode-change ``STATUSTEXT``, so the GCS
+    keeps seeing the mission mode while the attacker flies the vehicle.
     """
 
-    def __init__(self, intervention: Intervention | Mapping[str, Any]) -> None:
+    _GUIDED_MODE_NAME = "GUIDED"  # name scrubbed from mode-change STATUSTEXTs
+
+    def __init__(
+        self,
+        intervention: Intervention | Mapping[str, Any],
+        stealth: bool = False,
+    ) -> None:
         super().__init__()
         # Local import: keeps the planner chain out of every MITM process.
         from simulator.entities.intervention import Intervention as _Intervention
@@ -263,9 +402,11 @@ class InterventionStrategy(MITMStrategy):
         # Rebuild now so a malformed intervention fails fast in the notebook.
         self._intervention = _Intervention.from_dict(iv_dict)
         self._runner: InterventionRunner | None = None
+        self.stealth = stealth
+        self._mode_mask = StealthModeMask(hijack_mode_name=self._GUIDED_MODE_NAME)
         self._spec = MITMSpec(
             strategy_class="intervention",
-            kwargs={"intervention": iv_dict},
+            kwargs={"intervention": iv_dict, "stealth": stealth},
         )
 
     def bind(self, ctx: MITMContext) -> None:
@@ -287,10 +428,174 @@ class InterventionStrategy(MITMStrategy):
     def on_downlink(self, msg: MAVMsg) -> MAVMsg | None:
         """Feed telemetry to the intervention runner and advance it one tick."""
         runner = self._runner
+        if not self.stealth:
+            if runner is not None:
+                runner.feed(msg)
+                runner.tick()
+            return msg  # visible hijack: telemetry still flows to the GCS
+        # Stealth: keep the cover mode current until the runner takes over, then
+        # engage the mask so the GUIDED switch never reaches the GCS.
+        if not self._mode_mask.active:
+            self._mode_mask.observe(msg)
         if runner is not None:
             runner.feed(msg)
             runner.tick()
-        return msg  # visible hijack: telemetry still flows to the GCS
+            if runner.engaged and not self._mode_mask.active:
+                self._mode_mask.engage()
+        return self._mode_mask.mask(msg)
+
+
+@MITMStrategy.register("hijack_pursuit")
+class HijackPursuitStrategy(MITMStrategy):
+    """
+    Attacker-driven pursuit: steer the victim to chase another vehicle.
+
+    Mirrors :class:`~simulator.planner.plans.pursuit.PursuitPlan`, but the guided
+    setpoints originate from the man-in-the-middle rather than a cooperative
+    plan. On trigger the attacker switches the victim to GUIDED and then, in a
+    background loop, streams ``SET_POSITION_TARGET_GLOBAL_INT`` toward the
+    target's most recently overheard Remote ID position. The attacker learns the
+    target's position passively via a
+    :class:`~simulator.runtime.mitm.rid_sniffer.RIDSniffer` — it overhears the
+    same Remote ID feed the victim's own logic receives, so the Oracle needs no
+    changes.
+
+    Takes typed kwargs: ``target_sysid`` (vehicle to pursue), ``trigger_seq``
+    (default 1; fires once ``MISSION_CURRENT.seq >= trigger_seq``),
+    ``update_interval`` (seconds between setpoints, default 1.0), and
+    ``stealth`` (default ``False``; when ``True`` a :class:`StealthModeMask`
+    hides the GUIDED-mode switch from the GCS).
+
+    Note: the target's Remote ID only reaches the victim's feed while the two are
+    within the Oracle's transmission range — the same constraint the cooperative
+    pursuit lives under.
+    """
+
+    _GUIDED_CUSTOM_MODE = 4  # ArduCopter GUIDED
+    _GUIDED_MODE_NAME = "GUIDED"  # name scrubbed from mode-change STATUSTEXTs
+    _POSITION_TYPE_MASK = 0b110111111000  # position only (ignore vel/accel/yaw)
+
+    def __init__(
+        self,
+        target_sysid: int,
+        trigger_seq: int = 1,
+        update_interval: float = 1.0,
+        stealth: bool = False,
+    ) -> None:
+        super().__init__()
+        self.target_sysid = target_sysid
+        self.trigger_seq = trigger_seq
+        self.update_interval = update_interval
+        self.stealth = stealth
+        self._fired = False
+        self._mode_mask = StealthModeMask(hijack_mode_name=self._GUIDED_MODE_NAME)
+        self._stop = threading.Event()
+        self._sniffer: RIDSniffer | None = None
+        self._pursue_thread: threading.Thread | None = None
+        # Builder used only to construct message objects (packed by the context).
+        self._builder = mavlink.MAVLink(None, srcSystem=255, srcComponent=200)
+        self._spec = MITMSpec(
+            strategy_class="hijack_pursuit",
+            kwargs={
+                "target_sysid": target_sysid,
+                "trigger_seq": trigger_seq,
+                "update_interval": update_interval,
+                "stealth": stealth,
+            },
+        )
+
+    def bind(self, ctx: MITMContext) -> None:
+        """Attach a RID sniffer to the victim's feed and start overhearing."""
+        super().bind(ctx)
+        from simulator.runtime.mitm.rid_sniffer import RIDSniffer as _RIDSniffer
+
+        self._sniffer = _RIDSniffer(ctx.port_offset)
+        self._sniffer.start()
+
+    def on_downlink(self, msg: MAVMsg) -> MAVMsg | None:
+        """Begin pursuit once the trigger seq is reached; keep telemetry flowing."""
+        if not self._fired:
+            if self.stealth:
+                self._mode_mask.observe(msg)
+            if msg.get_type() == "MISSION_CURRENT":
+                mission_current = cast(
+                    "mavlink.MAVLink_mission_current_message", msg
+                )
+                if mission_current.seq >= self.trigger_seq:
+                    self._begin_pursuit()
+                    self._fired = True
+                    if self.stealth:
+                        self._mode_mask.engage()
+        # Telemetry still flows to the GCS; under stealth the GUIDED-mode switch
+        # is scrubbed from heartbeats so the hijack is not betrayed.
+        return self._mode_mask.mask(msg) if self.stealth else msg
+
+    def _begin_pursuit(self) -> None:
+        if self.ctx is None:
+            logging.error("HijackPursuitStrategy not bound; cannot inject")
+            return
+        logging.info(
+            "MITM hijack-pursuit: vehicle %s -> pursuing sysid %s",
+            self.ctx.sysid,
+            self.target_sysid,
+        )
+        set_mode = self._builder.set_mode_encode(
+            self.ctx.sysid,
+            mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
+            self._GUIDED_CUSTOM_MODE,
+        )
+        self.ctx.inject_to_logic(set_mode)
+        self._pursue_thread = threading.Thread(target=self._pursue_loop, daemon=True)
+        self._pursue_thread.start()
+
+    def _pursue_loop(self) -> None:
+        while not self._stop.is_set():
+            if self._sniffer is not None:
+                rid = self._sniffer.latest(self.target_sysid)
+                if rid is not None:
+                    self._inject_target(rid)
+                else:
+                    logging.debug(
+                        "MITM hijack-pursuit: no RID yet for sysid %s",
+                        self.target_sysid,
+                    )
+            self._stop.wait(self.update_interval)
+
+    def _inject_target(self, rid: RIDData) -> None:
+        if self.ctx is None:
+            return
+        lat_e7, lon_e7, alt_m = rid.gra_pos.to_global_int_alt_in_meters()
+        logging.info(
+            "MITM hijack-pursuit: redirecting vehicle %s to target %s at "
+            "(%.7f, %.7f, %.1f)",
+            self.ctx.sysid,
+            self.target_sysid,
+            rid.gra_pos.lat,
+            rid.gra_pos.lon,
+            alt_m,
+        )
+        setpoint = self._builder.set_position_target_global_int_encode(
+            10,  # time_boot_ms
+            self.ctx.sysid,  # target_system
+            1,  # target_component (autopilot)
+            mavlink.MAV_FRAME_GLOBAL_INT,
+            self._POSITION_TYPE_MASK,
+            lat_e7,
+            lon_e7,
+            alt_m,
+            0, 0, 0,  # vx, vy, vz
+            0, 0, 0,  # afx, afy, afz
+            0, 0,  # yaw, yaw_rate
+        )
+        self.ctx.inject_to_logic(setpoint)
+
+    def close(self) -> None:
+        """Stop the pursuit loop and release the RID sniffer."""
+        self._stop.set()
+        if self._pursue_thread is not None:
+            self._pursue_thread.join(timeout=1.0)
+        if self._sniffer is not None:
+            self._sniffer.stop()
 
 
 #: Generous bound on distinguishable GCS-per-vehicle count for `target_mask`.
