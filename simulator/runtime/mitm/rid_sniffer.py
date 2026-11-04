@@ -17,12 +17,15 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from typing import TYPE_CHECKING
 
 import zmq
 
 from simulator.config import VehPort
-from simulator.entities.riddata import RIDData
 from simulator.helpers.connections import create_zmq_socket
+
+if TYPE_CHECKING:
+    from simulator.entities.riddata import RIDData
 
 
 class RIDSniffer:

