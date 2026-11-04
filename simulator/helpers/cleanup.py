@@ -50,6 +50,31 @@ ALL_FOLDERS = [
 ]
 
 
+def graceful_terminate(patterns: list[str], grace: float = 2.0) -> None:
+    """
+    Send SIGTERM to matching processes and wait up to `grace`s for them to go.
+
+    Lets a process that catches SIGTERM (see `simulator.runtime.shutdown.
+    SignalShutdown`) wind down its work loops and flush before a harder
+    `kill_processes` sweep arrives. Processes without a handler just exit on the
+    default SIGTERM action; any still alive once `grace` elapses are left for
+    the SIGKILL sweep. Matching is by `pkill -f`, so a pattern reaches the real
+    process regardless of any `xterm`/`bash -c` wrapper it was launched in.
+    """
+    for pattern in patterns:
+        subprocess.run(["pkill", "-TERM", "-f", pattern], check=False)
+
+    deadline = time.monotonic() + grace
+    while time.monotonic() < deadline:
+        still_alive = any(
+            subprocess.run(["pgrep", "-f", p], capture_output=True).returncode == 0
+            for p in patterns
+        )
+        if not still_alive:
+            break
+        time.sleep(0.05)
+
+
 def kill_processes(victims: list[str], wait_timeout: float = 2.0) -> None:
     """Kill all related processes and wait until they are gone."""
     for process in victims:

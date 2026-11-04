@@ -26,6 +26,7 @@ from simulator.external.sitl import resolve_sitl_build
 from simulator.helpers.cleanup import (
     ALL_PROCESSES,
     clean_adsb_ptys,
+    graceful_terminate,
     kill_processes,
 )
 from simulator.helpers.logging.setup_log import setup_logging
@@ -213,9 +214,15 @@ class Simulator(Generic[VehT]):
         left untouched, so trajectories recorded so far stay plottable; `clean()`
         is the one that wipes those, and is still what you want before a *new*
         run in the same kernel.
+
+        The GCS processes are asked to stop *gracefully* first (SIGTERM), so one
+        torn down mid-run by a timeout still flushes its recorded trajectories
+        (see `GCS.close`) before the SIGKILL sweep below takes everything down.
         """
         # Release the Oracle's in-process sockets before hunting port holders.
         self.oracle.close()
+        # Give the GCSs a moment to catch SIGTERM and flush before the hard kill.
+        graceful_terminate([f"python3 -m simulator.{SimProcess.GCS}"])
         kill_processes(ALL_PROCESSES)
         clean_adsb_ptys()
         logging.info("🛑 Simulation stopped")

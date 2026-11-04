@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from .cleanup import ALL_PROCESSES, clean, kill_processes
+from .cleanup import ALL_PROCESSES, clean, graceful_terminate, kill_processes
 from .codegen import write_init_file
 from .logging.data_logger import DataLogger
 from .logging.log_reader import read_true_track
@@ -12,6 +12,7 @@ from .processes import SimProcess, create_process, terminate_process_group
 __all__ = [
     "setup_logging",
     "kill_processes",
+    "graceful_terminate",
     "clean",
     "write_init_file",
     "create_process",

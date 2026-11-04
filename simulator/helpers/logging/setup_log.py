@@ -9,6 +9,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
+logging.getLogger("matplotlib").setLevel(logging.WARNING)
+
+
 def setup_logging(filepath: Path, verbose: int = 1, console_output: bool = True):
     """Set up logging configuration with flexible output options."""
     # Use process ID to create unique log files for each process

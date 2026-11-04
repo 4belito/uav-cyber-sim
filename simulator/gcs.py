@@ -31,6 +31,7 @@ from simulator.helpers.processes import SimProcess, terminate_process_group
 from simulator.params.simulation import HEARTBEAT_FREQUENCY
 from simulator.runtime.gcs_intervention import InterventionRunner
 from simulator.runtime.gcs_runtime import VehicleRuntime
+from simulator.runtime.shutdown import SignalShutdown
 from simulator.runtime.vehicle_launcher import launch_vehicle
 
 if TYPE_CHECKING:
@@ -52,10 +53,11 @@ def main():
         console_output=True,
     )
     gcs = GCS(**gcs_config)
+    gcs.install_signal_handlers()
     gcs.run()
 
 
-class GCS:
+class GCS(SignalShutdown):
     """Ground Control Station for monitoring vehicles and logging trajectories."""
 
     def __init__(
@@ -68,6 +70,7 @@ class GCS:
         gra_origin: dict[str, float],
         record_positions: bool = True,
     ) -> None:
+        super().__init__()
         self.name = name
         # Origin for resolving an intervention's ENU waypoints to geodetic targets.
         self.gra_origin = GRA(**gra_origin)
@@ -106,35 +109,57 @@ class GCS:
         self.paths: dict[int, GRAs] = {sysid: [] for sysid in self.sysids}
         logging.info(f" GCS {self.name} started with {self.n_vehicles} Vehicles")
 
-    def run(self):
-        """Run the GCS monitoring loop until all Vehicles complete their missions."""
-        sysids_snapshot = tuple(self.sysids)
+    def run(self) -> None:
+        """
+        Run the GCS monitoring loop until all Vehicles complete their missions.
 
-        # A GCS may monitor no vehicle at all -> nothing to wait for, DONE at once.
-        results: list[bool] = []
-        if sysids_snapshot:
-            with futures.ThreadPoolExecutor(
-                max_workers=len(sysids_snapshot)
-            ) as executor:
-                futures_list = [
-                    executor.submit(self._monitor_vehicle, sysid)
-                    for sysid in sysids_snapshot
-                ]
+        On a normal finish every monitored vehicle has reported done, so the GCS
+        reports DONE to the Oracle and waits for its ACK. On shutdown (a timeout
+        delivers SIGTERM — see `SignalShutdown`) the monitor loops break early
+        and the handshake is skipped, since the Oracle is already winding down
+        and no ACK would come. Either way `close` runs last, flushing the
+        recorded trajectories.
+        """
+        try:
+            sysids_snapshot = tuple(self.sysids)
 
-                for f in futures.as_completed(futures_list):
-                    results.append(f.result())
+            # A GCS may monitor no vehicle at all -> nothing to wait for.
+            results: list[bool] = []
+            if sysids_snapshot:
+                with futures.ThreadPoolExecutor(
+                    max_workers=len(sysids_snapshot)
+                ) as executor:
+                    futures_list = [
+                        executor.submit(self._monitor_vehicle, sysid)
+                        for sysid in sysids_snapshot
+                    ]
 
-        n_failed = results.count(False)
-        if n_failed:
-            logging.warning(
-                f"⚠️ {n_failed}/{len(results)} Vehicles failed their mission"
-            )
-        else:
-            logging.info("All Vehicles assigned have completed their missions")
-        self._done_sock.send_string("DONE")  # type: ignore
-        logging.info("DONE message sent to Oracle")
-        self._wait_until_ack()
+                    for f in futures.as_completed(futures_list):
+                        results.append(f.result())
 
+            n_failed = results.count(False)
+            if n_failed:
+                logging.warning(
+                    f"⚠️ {n_failed}/{len(results)} Vehicles failed their mission"
+                )
+            else:
+                logging.info("All Vehicles assigned have completed their missions")
+
+            if not self.stopping:
+                self._done_sock.send_string("DONE")  # type: ignore
+                logging.info("DONE message sent to Oracle")
+                self._wait_until_ack()
+        finally:
+            self.run_close_once()
+
+    def close(self) -> None:
+        """
+        Flush recorded trajectories and release the Oracle socket.
+
+        Runs on every exit — a completed run or a signalled shutdown — so a
+        timed-out hijack that never reported `LOGIC_DONE` still leaves a
+        `trajectories_<name>.pkl` to plot.
+        """
         if self.record_positions:
             trajectory_file = DATA_PATH / f"trajectories_{self.name}.pkl"
             with open(trajectory_file, "wb") as file:
@@ -227,7 +252,7 @@ class GCS:
         telem_logger = DataLogger(path=DATA_PATH / "gcs_msgs", sysid=sysid)
         success = True
         try:
-            while True:
+            while not self.stopping:
                 msg = conn.recv_match(blocking=True, timeout=timeout)
                 if msg is not None:
                     msg_type = msg.get_type()
