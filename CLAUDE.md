@@ -32,7 +32,7 @@ python run.py --visualizer gazebo
 python run.py --visualizer QGroundControl
 ```
 
-Jupyter notebooks in the root are the primary way to run simulations, numbered by complexity/theme: `1-*`/`2-*` single-vehicle basics, `3-*` fleets, `4-*`/`5-*` GCS monitoring and intervention, `6-*` collision avoidance, `7-*` pursuit-evasion, `8-*` Remote ID spoofing, `9-*` through `12-*` MITM attacks (passthrough, blackout, fleet hijack, GCS spoofing).
+Jupyter notebooks in the root are the primary way to run simulations, numbered by complexity/theme: `1-*`/`2-*` single-vehicle basics, `3-*` fleets, `4-*`/`5-*` GCS monitoring and intervention, `6-*` collision avoidance, `7-*` pursuit-evasion, `8-*` Remote ID spoofing, `9-*` through `16-*` MITM attacks (passthrough, blackout, fleet hijack, GCS spoofing, hijack-pursuit, stealth hijack, ghost-mission/naive data injection).
 
 ## Linting and Type Checking
 
@@ -135,6 +135,7 @@ Detailed architecture notes, confirmed behaviors, known bugs and fixes live in [
 - [`ardupilot-sitl.md`](docs/context/ardupilot-sitl.md) — parm files, Gazebo Zephyr axis alignment, TECS/L1 tuning, plane-zephyr SITL physics model, frame-string routing, JSON model ROMFS gotcha, AUTOLAND parameters (WP_DIST/WP_ALT/DIR_OFF)
 - [`copter-iris-sitl.md`](docs/context/copter-iris-sitl.md) — copter-iris frame: iris.json physics, copter-iris.parm, ROMFS auto-rebuild, trajectory equivalence vs gazebo-iris
 - [`gazebo-models.md`](docs/context/gazebo-models.md) — color template system (Jinja2), OGRE material scripts, physics/ardupilot/color_template layout, URI replacement pitfall
+- [`mitm-attacks.md`](docs/context/mitm-attacks.md) — MITM attack taxonomy: strategy classes (passthrough/blackout/intervention/hijack-pursuit/spoof-gcs/cloak-position/ghost-mission), StealthModeMask, and attack-family → notebook map
 - [`known-issues.md`](docs/context/known-issues.md) — fixed bugs and their root causes
 
 When a session uncovers something non-obvious worth preserving here — a bug's root cause, a subtle hardware/firmware/simulator behavior, a workaround for a specific issue — proactively ask the user for permission to add or update the relevant `docs/context/*.md` file before ending the task. Don't update these files silently or without being asked.
